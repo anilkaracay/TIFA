@@ -30,6 +30,8 @@ pnpm-debug.log*
 # System
 .DS_Store
 Thumbs.db
+*.db
+*-journal
 
 # Editor
 .idea

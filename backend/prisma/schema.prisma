@@ -1,0 +1,60 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Company {
+  id          String    @id @default(cuid())
+  externalId  String?   @unique
+  name        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Invoices issued by this company (vendor)
+  issuedInvoices  Invoice[] @relation("CompanyIssuedInvoices")
+
+  // Invoices where this company is the debtor (buyer)
+  debtorInvoices  Invoice[] @relation("CompanyDebtorInvoices")
+}
+
+model Invoice {
+  id             String    @id @default(cuid())
+  externalId     String    // ERP invoice id
+  companyId      String
+  debtorId       String
+  company        Company   @relation("CompanyIssuedInvoices", fields: [companyId], references: [id])
+  debtor         Company   @relation("CompanyDebtorInvoices", fields: [debtorId], references: [id])
+
+  // On-chain mapping
+  invoiceIdOnChain String?   // bytes32 hex string
+  tokenId          String?   // tokenId as string (bigint)
+  tokenAddress     String?   // contract address
+
+  currency       String
+  amount         String
+  dueDate        DateTime
+  status         String      // DRAFT, ISSUED, TOKENIZED, FINANCED, PARTIALLY_PAID, PAID, DEFAULTED
+  cumulativePaid String      @default("0")
+  isFinanced     Boolean     @default(false)
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  payments       InvoicePayment[]
+}
+
+model InvoicePayment {
+  id         String   @id @default(cuid())
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  amount     String
+  currency   String
+  paidAt     DateTime
+  psp        String?
+  txHash     String?
+  createdAt  DateTime @default(now())
+}
