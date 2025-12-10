@@ -1,0 +1,7 @@
+packages:
+  - 'contracts'
+  - 'backend'
+  - 'agent'
+  - 'frontend'
+  - 'subgraph'
+  - 'docs'

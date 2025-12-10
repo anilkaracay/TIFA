@@ -1,0 +1,79 @@
+"""
+TIFA Subgraph Schema
+Tracks invoices, lifecycle events, collateral positions and settlements.
+"""
+type Invoice @entity {
+  id: ID!                     # invoiceId (bytes32 as hex)
+  tokenId: BigInt
+  tokenAddress: Bytes
+
+  issuer: Bytes!
+  debtor: Bytes!
+
+  amount: BigInt!
+  currency: Bytes!
+
+  dueDate: BigInt!
+  status: String!
+
+  cumulativePaid: BigInt!
+  isFinanced: Boolean!
+
+  createdAt: BigInt!
+  updatedAt: BigInt!
+
+  payments: [InvoicePayment!]! @derivedFrom(field: "invoice")
+  lifecycleEvents: [InvoiceLifecycleEvent!]! @derivedFrom(field: "invoice")
+  collateralPosition: CollateralPosition @derivedFrom(field: "invoice")
+}
+
+type InvoicePayment @entity {
+  id: ID!                     # txHash-logIndex
+  invoice: Invoice!
+  amount: BigInt!
+  cumulativePaid: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type InvoiceLifecycleEvent @entity {
+  id: ID!                     # txHash-logIndex
+  invoice: Invoice!
+  oldStatus: String!
+  newStatus: String!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type CollateralPosition @entity {
+  id: ID!                     # invoiceId
+  invoice: Invoice!
+  tokenId: BigInt!
+  company: Bytes!
+  maxCreditLine: BigInt!
+  usedCredit: BigInt!
+  ltvBps: Int!
+  liquidated: Boolean!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type SettlementRule @entity {
+  id: ID!                     # ruleId (bytes32 as hex)
+  invoice: Invoice!
+  payer: Bytes!
+  recipients: [Bytes!]!
+  bpsSplit: [Int!]!
+  currency: Bytes!
+  active: Boolean!
+  createdAt: BigInt!
+}
+
+type SettlementExecution @entity {
+  id: ID!                     # txHash-logIndex
+  rule: SettlementRule!
+  invoice: Invoice!
+  grossAmount: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}

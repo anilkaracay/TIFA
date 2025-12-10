@@ -1,0 +1,12 @@
+{
+    "name": "tifa-monorepo",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "build": "pnpm -r run build",
+        "test": "pnpm -r run test",
+        "dev": "pnpm -r run dev",
+        "clean": "pnpm -r run clean"
+    },
+    "packageManager": "pnpm@9.0.0"
+}

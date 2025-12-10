@@ -1,0 +1,110 @@
+specVersion: 1.0.0
+schema:
+  file: ./schema.graphql
+
+dataSources:
+  - kind: ethereum
+    name: InvoiceToken
+    network: base-sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000001"
+      abi: InvoiceToken
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Invoice
+        - InvoiceLifecycleEvent
+      abis:
+        - name: InvoiceToken
+          file: ./abis/InvoiceToken.json
+      eventHandlers:
+        - event: InvoiceMinted(indexed bytes32,indexed uint256,indexed address,address,uint256,uint256,address)
+          handler: handleInvoiceMinted
+        - event: InvoiceStatusUpdated(indexed bytes32,indexed uint256,uint8,uint8)
+          handler: handleInvoiceStatusUpdated
+      file: ./src/invoiceToken.ts
+
+  - kind: ethereum
+    name: InvoiceRegistry
+    network: base-sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000002"
+      abi: InvoiceRegistry
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Invoice
+        - InvoicePayment
+        - InvoiceLifecycleEvent
+      abis:
+        - name: InvoiceRegistry
+          file: ./abis/InvoiceRegistry.json
+      eventHandlers:
+        - event: InvoiceRegistered(indexed bytes32,indexed uint256,address,address)
+          handler: handleInvoiceRegistered
+        - event: InvoiceLifecycleUpdated(indexed bytes32,uint8,uint8,uint256)
+          handler: handleInvoiceLifecycleUpdated
+        - event: PaymentRecorded(indexed bytes32,uint256,uint256,uint256)
+          handler: handlePaymentRecorded
+      file: ./src/invoiceRegistry.ts
+
+  - kind: ethereum
+    name: FinancingPool
+    network: base-sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000003"
+      abi: FinancingPool
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - CollateralPosition
+        - Invoice
+      abis:
+        - name: FinancingPool
+          file: ./abis/FinancingPool.json
+      eventHandlers:
+        - event: CollateralLocked(indexed bytes32,indexed uint256,indexed address,uint256,uint256)
+          handler: handleCollateralLocked
+        - event: CreditDrawn(indexed bytes32,uint256,address)
+          handler: handleCreditDrawn
+        - event: CreditRepaid(indexed bytes32,uint256,uint256)
+          handler: handleCreditRepaid
+        - event: CollateralReleased(indexed bytes32,indexed uint256,address)
+          handler: handleCollateralReleased
+        - event: CollateralLiquidated(indexed bytes32,indexed uint256,uint256)
+          handler: handleCollateralLiquidated
+      file: ./src/financingPool.ts
+
+  - kind: ethereum
+    name: SettlementRouter
+    network: base-sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000004"
+      abi: SettlementRouter
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - SettlementRule
+        - SettlementExecution
+        - Invoice
+      abis:
+        - name: SettlementRouter
+          file: ./abis/SettlementRouter.json
+      eventHandlers:
+        - event: SettlementRuleCreated(indexed bytes32,indexed bytes32,address,address[],uint256[])
+          handler: handleSettlementRuleCreated
+        - event: SettlementExecuted(indexed bytes32,indexed bytes32,uint256,address)
+          handler: handleSettlementExecuted
+      file: ./src/settlementRouter.ts

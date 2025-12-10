@@ -1,0 +1,9 @@
+{
+    "name": "@tifa/docs",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "echo 'Run docs dev server here'"
+    },
+    "devDependencies": {}
+}
