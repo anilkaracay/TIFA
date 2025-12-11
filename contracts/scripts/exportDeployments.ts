@@ -6,6 +6,7 @@ const DEPLOYMENTS_DIR = path.join(__dirname, "../deployments/baseSepolia");
 // Target paths in backend and agent packages
 const BACKEND_TARGET = path.join(__dirname, "../../backend/src/onchain/deployments.json");
 const AGENT_TARGET = path.join(__dirname, "../../agent/src/onchain/deployments.json");
+const FRONTEND_TARGET = path.join(__dirname, "../../frontend/lib/deployments.json");
 
 async function main() {
     if (!fs.existsSync(DEPLOYMENTS_DIR)) {
@@ -29,7 +30,7 @@ async function main() {
     console.log(`Exporting ${Object.keys(exported).length} contracts...`);
 
     // Ensure directories exist
-    [BACKEND_TARGET, AGENT_TARGET].forEach(target => {
+    [BACKEND_TARGET, AGENT_TARGET, FRONTEND_TARGET].forEach(target => {
         const dir = path.dirname(target);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });

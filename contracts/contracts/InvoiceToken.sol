@@ -60,7 +60,8 @@ contract InvoiceToken is ERC721, AccessControl {
     function mintInvoice(
         InvoiceCoreData calldata data,
         string calldata metaURI
-    ) external onlyRole(MINTER_ROLE) returns (uint256 tokenId) {
+    ) external returns (uint256 tokenId) {
+        require(data.issuer == msg.sender, "InvoiceToken: issuer mismatch");
         require(_invoiceToTokenId[data.invoiceId] == 0, "InvoiceToken: ID already used");
 
         _tokenIdTracker += 1;

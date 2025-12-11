@@ -7,7 +7,13 @@ export const provider = new ethers.providers.JsonRpcProvider(env.BASE_SEPOLIA_RP
 
 // Initialize wallet with private key
 // WARNING: In production, consider more secure key management (AWS KMS, etc.)
-export const signer = new ethers.Wallet(env.PRIVATE_KEY, provider);
+export const signer = env.PRIVATE_KEY
+    ? new ethers.Wallet(env.PRIVATE_KEY, provider)
+    : ethers.Wallet.createRandom().connect(provider);
+
+if (!env.PRIVATE_KEY) {
+    console.warn("⚠️  WARNING: No PRIVATE_KEY found. Using generated wallet:", signer.address);
+}
 
 // Helper to load contract instances
 export function loadContract(name: keyof typeof deployments) {

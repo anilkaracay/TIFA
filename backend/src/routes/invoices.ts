@@ -64,13 +64,20 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             limit: z.coerce.number().optional().default(50)
         }).parse(req.query);
 
+        // Build where clause
+        const where: any = {};
+        if (query.companyId && query.companyId !== 'all') { // Handle 'all' if passed by frontend
+            where.companyId = query.companyId;
+        }
+        if (query.status && query.status !== 'all') {
+            where.status = query.status;
+        }
+
         const invoices = await prisma.invoice.findMany({
-            where: {
-                companyId: query.companyId,
-                status: query.status
-            },
+            where,
             take: query.limit,
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
+            include: { payments: true }
         });
 
         return invoices;
@@ -131,6 +138,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // POST /invoices/:id/tokenize
     app.post('/:id/tokenize', async (req, reply) => {
         const { id } = req.params as { id: string };
+        console.log(`[Tokenize] Request for ${id}`);
         const invoice = await prisma.invoice.findUnique({ where: { id } });
 
         if (!invoice) return reply.code(404).send({ error: 'Invoice not found' });
@@ -138,15 +146,30 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
         try {
             console.log(`Tokenizing invoice ${invoice.externalId}...`);
+
+            // MOCK MODE: If no private key or explicitly enabled
+            if (!process.env.PRIVATE_KEY) {
+                console.log("⚠️ Mock Mode: Simulating tokenization...");
+                await new Promise(r => setTimeout(r, 2000)); // Simulate simplified delay
+
+                const mockTokenId = Math.floor(Math.random() * 10000).toString();
+                const mockTxHash = "0x" + Math.random().toString(16).slice(2).repeat(4); // Fake hash
+
+                const updated = await prisma.invoice.update({
+                    where: { id },
+                    data: {
+                        status: 'TOKENIZED',
+                        tokenId: mockTokenId,
+                        invoiceIdOnChain: ethers.utils.id(invoice.externalId),
+                        tokenAddress: "0xMockInvoiceTokenAddress"
+                    }
+                });
+                return { ...updated, txHash: mockTxHash };
+            }
+
             const InvoiceToken = loadContract("InvoiceToken");
-
-            // Calculate ID and prepare data
-            // In Ethers v5, use utils.keccak256(utils.toUtf8Bytes(str)) or utils.id(str)
+            // ... Real logic ...
             const invoiceIdOnChain = ethers.utils.id(invoice.externalId);
-
-            // Assuming wallet address for company/debtor valid, or using signer as placeholder
-            const issuerInfo = await prisma.company.findUnique({ where: { id: invoice.companyId } });
-            // For hackathon simplicity, if we don't have real wallet addresses in DB, use msg.sender (signer)
             const issuerAddress = signer.address;
             const debtorAddress = signer.address;
 
@@ -156,20 +179,17 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 debtor: debtorAddress,
                 amount: invoice.amount,
                 dueDate: Math.floor(new Date(invoice.dueDate).getTime() / 1000),
-                currency: "0x0000000000000000000000000000000000000000" // ETH/Native placeholder
+                currency: "0x0000000000000000000000000000000000000000"
             };
 
             const tx = await InvoiceToken.mintInvoice(invoiceData, "ipfs://placeholder");
             console.log(`Mint tx sent: ${tx.hash}`);
             const receipt = await tx.wait();
 
-            // Find Log
             const event = receipt.events?.find((e: any) => e.event === "InvoiceMinted");
             const tokenId = event?.args?.tokenId.toString();
 
             if (!tokenId) throw new Error("Token ID not found in events");
-
-            console.log(`Minted Token ID: ${tokenId}`);
 
             const updated = await prisma.invoice.update({
                 where: { id },
@@ -205,6 +225,27 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
         try {
             console.log(`Financing invoice ${invoice.externalId}...`);
+
+            // MOCK MODE: If no private key or explicitly enabled
+            if (!process.env.PRIVATE_KEY) {
+                console.log("⚠️ Mock Mode: Simulating financing...");
+                await new Promise(r => setTimeout(r, 2000));
+
+                const mockTxHash = "0x" + Math.random().toString(16).slice(2).repeat(4);
+
+                await prisma.invoice.update({
+                    where: { id },
+                    data: { isFinanced: true, status: 'FINANCED' }
+                });
+
+                return {
+                    invoiceId: id,
+                    approved: true,
+                    approvedAmount: requestedAmount.toString(),
+                    txHash: mockTxHash
+                };
+            }
+
             const InvoiceToken = loadContract("InvoiceToken");
             const FinancingPool = loadContract("FinancingPool");
 

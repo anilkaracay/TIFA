@@ -5,7 +5,10 @@
     "scripts": {
         "codegen": "graph codegen",
         "build": "graph build",
-        "test": "echo \"No tests for subgraph\""
+        "test": "echo \"No tests for subgraph\"",
+        "create-local": "graph create --node http://localhost:8020/ tifa",
+        "remove-local": "graph remove --node http://localhost:8020/ tifa",
+        "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 tifa"
     },
     "devDependencies": {
         "@graphprotocol/graph-cli": "^0.60.0",

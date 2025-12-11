@@ -1,10 +1,6 @@
 "use client";
 
 import useSWR from "swr";
-// Adjust import path based on actual structure. 
-// Assuming lib is at /frontend/lib, and this file is at /frontend/app/analytics/page.tsx
-// Next.js uses @/ alias usually but user used explicit relative path "../../lib/subgraphClient"
-// Since our lib is at root `lib` in previous step (729+), relative path from app/analytics is ../../lib
 import { fetchAnalytics } from "../../lib/subgraphClient";
 import { Pie } from "react-chartjs-2";
 import {
@@ -17,6 +13,7 @@ import {
     Tooltip,
     Legend,
 } from "chart.js";
+import { Card } from "../../components/ui/Card";
 
 ChartJS.register(
     LineElement,
@@ -33,9 +30,9 @@ export default function AnalyticsPage() {
         refreshInterval: 15000,
     });
 
-    if (isLoading) return <p>Loading analytics...</p>;
-    if (error) return <p>Failed to load analytics.</p>;
-    if (!data) return <p>No analytics data.</p>;
+    if (isLoading) return <p style={{ padding: "20px", color: "var(--text-muted)" }}>Loading analytics...</p>;
+    if (error) return <p style={{ padding: "20px", color: "#f87171" }}>Failed to load analytics.</p>;
+    if (!data) return <p style={{ padding: "20px", color: "var(--text-muted)" }}>No analytics data.</p>;
 
     const invoices = data.invoices || [];
     const financed = data.financed || [];
@@ -64,15 +61,19 @@ export default function AnalyticsPage() {
             {
                 data: Object.values(statusCounts),
                 backgroundColor: ["#3b82f6", "#a855f7", "#22c55e", "#f97316", "#ef4444", "#6b7280"],
+                borderColor: "transparent",
             },
         ],
     };
 
     return (
-        <main style={{ padding: "32px", color: "#e5e7eb", background: "#020617", minHeight: "100vh" }}>
-            <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "16px" }}>
-                TIFA Analytics Dashboard 📊
-            </h1>
+        <div>
+            <header style={{ marginBottom: "24px" }}>
+                <h1 style={{ fontSize: "28px", fontWeight: 700 }}>Analytics Dashboard</h1>
+                <p style={{ color: "var(--text-muted)", marginTop: "4px" }}>
+                    Live on-chain metrics & event feed.
+                </p>
+            </header>
 
             {/* Metrics Row */}
             <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
@@ -85,57 +86,59 @@ export default function AnalyticsPage() {
 
             {/* Charts */}
             <div style={{ display: "flex", gap: "24px", marginBottom: "32px" }}>
-                <div style={{ width: "40%" }}>
-                    <h2>Status Distribution</h2>
-                    <Pie data={pieData} />
-                </div>
+                <Card style={{ width: "40%" }}>
+                    <h2 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "16px", color: "var(--text)" }}>Status Distribution</h2>
+                    <Pie data={pieData} options={{ plugins: { legend: { labels: { color: "#9ca3af" } } } }} />
+                </Card>
             </div>
 
             {/* Event Feed */}
-            <h2 style={{ marginBottom: "12px" }}>📡 Live Event Feed</h2>
-            <div
-                style={{
-                    background: "#0f172a",
-                    padding: "16px",
-                    borderRadius: "8px",
-                    border: "1px solid #1e293b",
-                }}
-            >
+            <h2 style={{ marginBottom: "12px", fontSize: "18px", fontWeight: 600 }}>📡 Live Event Feed</h2>
+            <Card style={{ padding: 0, overflow: "hidden" }}>
                 {events.map((ev: any) => (
                     <div
                         key={ev.id}
                         style={{
-                            padding: "8px 0",
-                            borderBottom: "1px solid #1e293b",
+                            padding: "12px 16px",
+                            borderBottom: "1px solid var(--border)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center"
                         }}
                     >
-                        <strong>{ev.eventType}</strong> — Invoice {ev.invoiceId} —{" "}
-                        <span style={{ color: "#94a3b8" }}>{ev.txHash}</span>
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
-                            {new Date(Number(ev.timestamp) * 1000).toLocaleString()}
+                        <div>
+                            <strong style={{ color: "var(--accent)" }}>{ev.eventType}</strong>
+                            <span style={{ color: "var(--text-muted)", margin: "0 8px" }}>—</span>
+                            Invoice {ev.invoiceId}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--text-muted)" }}>{ev.txHash}</div>
+                            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
+                                {new Date(Number(ev.timestamp) * 1000).toLocaleString()}
+                            </div>
                         </div>
                     </div>
                 ))}
-            </div>
-        </main>
+                {events.length === 0 && <div style={{ padding: "16px", color: "var(--text-muted)" }}>No events yet.</div>}
+            </Card>
+        </div>
     );
 }
 
 // Metric card component
 function MetricCard({ title, value }: { title: string; value: any }) {
     return (
-        <div
+        <Card
             style={{
-                background: "#0f172a",
-                padding: "16px",
-                borderRadius: "8px",
                 flex: 1,
-                border: "1px solid #1e293b",
                 textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center"
             }}
         >
-            <div style={{ fontSize: "14px", color: "#94a3b8" }}>{title}</div>
-            <div style={{ fontSize: "24px", fontWeight: 700 }}>{value}</div>
-        </div>
+            <div style={{ fontSize: "14px", color: "var(--text-muted)", marginBottom: "8px" }}>{title}</div>
+            <div style={{ fontSize: "28px", fontWeight: 700, color: "var(--text)" }}>{value}</div>
+        </Card>
     );
 }

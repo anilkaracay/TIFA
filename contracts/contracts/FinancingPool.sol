@@ -89,12 +89,11 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         uint256 tokenId,
         address company
     ) external {
-        require(
-            hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
-            "FinancingPool: missing role"
-        );
-        require(!_positions[invoiceId].exists, "FinancingPool: already exists");
-        require(invoiceToken.ownerOf(tokenId) == address(this), "FinancingPool: not collateralized");
+        // Allow anyone to lock IF they own the token
+        require(invoiceToken.ownerOf(tokenId) == msg.sender, "FinancingPool: not owner");
+        
+        // Transfer to pool
+        invoiceToken.safeTransferFrom(msg.sender, address(this), tokenId);
 
         (InvoiceCoreData memory data, , , ) = invoiceToken.getInvoiceDataById(invoiceId);
         
@@ -119,14 +118,15 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         uint256 amount,
         address to
     ) external nonReentrant {
-        require(
-            hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
-            "FinancingPool: missing role"
-        );
+        // require(
+        //     hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
+        //     "FinancingPool: missing role"
+        // );
         require(_positions[invoiceId].exists, "FinancingPool: not found");
         require(!_positions[invoiceId].liquidated, "FinancingPool: liquidated");
         
         CollateralPosition storage pos = _positions[invoiceId];
+        require(pos.company == msg.sender, "FinancingPool: not company");
         require(pos.usedCredit + amount <= pos.maxCreditLine, "FinancingPool: credit limit exceeded");
         require(liquidityToken.balanceOf(address(this)) >= amount, "FinancingPool: insufficient liquidity");
 

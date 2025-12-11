@@ -1,9 +1,16 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import "../styles/globals.css";
+import Layout from "../components/Layout";
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'TIFA',
-    description: 'Tokenized Invoices & Autonomous Finance Agent',
+    title: 'TIFA - Trade Invoice Finance Agent',
+    description: 'AI-Native RWA Finance Platform',
 }
+
+import { Providers } from "./providers";
 
 export default function RootLayout({
     children,
@@ -12,7 +19,11 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
-            <body>{children}</body>
+            <body className={inter.className}>
+                <Providers>
+                    <Layout>{children}</Layout>
+                </Providers>
+            </body>
         </html>
     )
 }
