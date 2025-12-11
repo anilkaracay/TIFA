@@ -263,7 +263,23 @@ export default function HomePage() {
                         return;
                     }
 
-                    setMessage(`Success! Funds sent to wallet. Tx: ${tx}`);
+                    // Rich Success Message
+                    setMessage(
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#10b981" }}>🎉 Credit Drawn Successfully!</h3>
+                            <div style={{ fontSize: "14px", color: "var(--text)", lineHeight: "1.6" }}>
+                                <p><strong>💸 Financed Amount:</strong> {formatAmount((Number(requestedAmount) / 100).toString(), inv.currency || "TRY")}</p>
+                                <p><strong>📊 LTV Rate:</strong> 60% (Safe Limit)</p>
+                                <p><strong>👛 Destination Wallet:</strong> <span style={{ fontFamily: "monospace" }}>{address}</span></p>
+                                <p>
+                                    <strong>🔗 Transaction:</strong>{" "}
+                                    <a href={`https://sepolia.basescan.org/tx/${tx}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                                        View on BaseScan
+                                    </a>
+                                </p>
+                            </div>
+                        </div>
+                    );
                     await mutate();
                 } catch (e: any) {
                     console.error("Draw Credit failed:", e);
