@@ -3,11 +3,22 @@ import { SubgraphInvoice } from "./subgraphClient";
 
 export function daysOverdue(dueDate: string | number): number {
     const now = new Date();
-    // Subgraph timestamps are seconds, but dueDate usually passed as seconds if strict
-    // However, the Subgraph schema defined dueDate as BigInt (uint256). 
-    // If we store it as seconds (standard EVM), we multiply by 1000.
-    // Let's assume input from subgraph is stringified seconds.
-    const d = new Date(Number(dueDate) * 1000);
+    let d: Date;
+
+    // Handle ISO string or Numeric/String timestamp
+    if (typeof dueDate === 'string' && dueDate.includes('-')) {
+        // Assume ISO "2025-12-31T..."
+        d = new Date(dueDate);
+    } else {
+        // Assume seconds (EVM standard)
+        d = new Date(Number(dueDate) * 1000);
+    }
+
+    if (isNaN(d.getTime())) {
+        console.warn(`[Logic] Invalid dueDate: ${dueDate}`);
+        return 0; // Safe default
+    }
+
     return differenceInDays(now, d);
 }
 
@@ -70,16 +81,15 @@ export function determineAction(inv: SubgraphInvoice): {
     }
 
     // Financing Logic
-    // Auto-finance if:
-    // 1. Status is TOKENIZED (ready)
-    // 2. Not already financed
-    // 3. Not overdue
-    // 4. (Optional) Risk score < 50
     if (inv.status === "TOKENIZED" && !inv.isFinanced && overdue <= 0) {
         const risk = computeRiskScore(inv);
         if (risk < 50) {
             return { shouldFinance: true };
+        } else {
+            // console.log(`[Logic] Skipped due to risk: ${risk}`);
         }
+    } else {
+        // console.log(`[Logic] Skipped conditions: Status=${inv.status}, Financed=${inv.isFinanced}, Overdue=${overdue}`);
     }
 
     return {};

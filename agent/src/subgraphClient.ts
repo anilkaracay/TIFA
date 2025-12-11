@@ -1,27 +1,6 @@
-import { GraphQLClient, gql } from 'graphql-request';
 import { env } from './env';
 
-const client = new GraphQLClient(env.SUBGRAPH_URL);
-
-const ACTIVE_INVOICES_QUERY = gql`
-  query ActiveInvoices {
-    invoices(where: { status_not: "PAID" }, first: 200) {
-      id
-      invoiceIdOnChain: id
-      externalId: id
-      tokenId
-      tokenAddress
-      amount
-      cumulativePaid
-      dueDate
-      status
-      isFinanced
-      issuer
-      debtor
-    }
-  }
-`;
-
+// We reuse the interface but fetch from backend REST now
 export interface SubgraphInvoice {
   id: string;
   invoiceIdOnChain: string;
@@ -39,10 +18,18 @@ export interface SubgraphInvoice {
 
 export async function fetchActiveInvoices(): Promise<SubgraphInvoice[]> {
   try {
-    const data = await client.request<{ invoices: SubgraphInvoice[] }>(ACTIVE_INVOICES_QUERY);
-    return data.invoices;
+    // Fetch from Backend API
+    const res = await fetch(`${env.BACKEND_URL || 'http://localhost:4000'}/invoices?status=all&limit=200`);
+    const invoices = await res.json() as SubgraphInvoice[];
+
+    // Backend returns "isFinanced" as boolean, ensuring types match if needed
+    // Filter locally if needed, but backend status=all returns all. 
+    // Agent logic filters for active ones usually. 
+    // Let's filter out PAID ones just in case backend returns them.
+    return invoices.filter((i: any) => i.status !== 'PAID');
+
   } catch (error) {
-    console.error("Error fetching from subgraph:", error);
+    console.error("Error fetching invoices from backend:", error);
     return [];
   }
 }

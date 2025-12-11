@@ -1,38 +1,18 @@
-import { GraphQLClient, gql } from "graphql-request";
-
-const SUBGRAPH_URL =
-    process.env.NEXT_PUBLIC_SUBGRAPH_URL || "http://localhost:8000/subgraphs/name/tifa";
-
-export const client = new GraphQLClient(SUBGRAPH_URL);
-
-// Metrics query
-export const METRICS_QUERY = gql`
-  query AnalyticsMetrics {
-    invoices {
-      id
-      status
-      amount
-      createdAt
-    }
-    financed: collateralPositions {
-      id
-      invoice {
-        id
-      }
-      timestamp
-    }
-    events: invoiceEvents(orderBy: timestamp, orderDirection: desc, first: 15) {
-      id
-      eventType
-      invoiceId
-      tokenId
-      amount
-      timestamp
-      txHash
-    }
-  }
-`;
+const rawUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+// Extract URL using regex to handle malformed env vars (newlines, literal \n, etc.)
+const match = rawUrl.match(/^(https?:\/\/[^\s\\]+)/);
+const BACKEND_URL = match ? match[1] : "http://localhost:4000";
 
 export async function fetchAnalytics() {
-    return client.request(METRICS_QUERY);
+  try {
+    console.log("Fetching analytics from:", `${BACKEND_URL}/analytics`);
+    const res = await fetch(`${BACKEND_URL}/analytics`);
+    if (!res.ok) throw new Error(`Status: ${res.status}`);
+    const json = await res.json();
+    console.log("Analytics data:", json);
+    return json;
+  } catch (e) {
+    console.error("fetchAnalytics failed:", e);
+    throw e;
+  }
 }

@@ -29,6 +29,8 @@ async function tick() {
 
             if (nextStatus || shouldFinance) {
                 console.log(`[Agent] Invoice ${inv.externalId}: Risk=${risk}/100 -> Action: ${nextStatus ? `Set Status ${nextStatus}` : ''} ${shouldFinance ? 'REQ FINANCE' : ''}`);
+            } else {
+                console.log(`[Agent] Invoice ${inv.externalId}: Risk=${risk}/100 -> No Action (Status: ${inv.status}, Financed: ${inv.isFinanced})`);
             }
 
             if (nextStatus) {
