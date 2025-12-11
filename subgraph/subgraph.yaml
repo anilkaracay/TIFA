@@ -7,7 +7,7 @@ dataSources:
     name: InvoiceToken
     network: base-sepolia
     source:
-      address: "0x0000000000000000000000000000000000000001"
+      address: "0x843a450f972a3FC6Ed652C7585870f00D825db91"
       abi: InvoiceToken
       startBlock: 0
     mapping:
@@ -31,7 +31,7 @@ dataSources:
     name: InvoiceRegistry
     network: base-sepolia
     source:
-      address: "0x0000000000000000000000000000000000000002"
+      address: "0x5E15Ba894AC71E0f031A5de6E7046F50f8F97958"
       abi: InvoiceRegistry
       startBlock: 0
     mapping:
@@ -58,7 +58,7 @@ dataSources:
     name: FinancingPool
     network: base-sepolia
     source:
-      address: "0x0000000000000000000000000000000000000003"
+      address: "0x9c9A84c92110d6831c7dc27389f0CD68636CEdFf"
       abi: FinancingPool
       startBlock: 0
     mapping:
@@ -88,7 +88,7 @@ dataSources:
     name: SettlementRouter
     network: base-sepolia
     source:
-      address: "0x0000000000000000000000000000000000000004"
+      address: "0x1ba69423198c7f1924DccD785077BFF5E35efE7f"
       abi: SettlementRouter
       startBlock: 0
     mapping:
