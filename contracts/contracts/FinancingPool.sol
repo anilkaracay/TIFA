@@ -203,4 +203,46 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
     function isCollateralized(bytes32 invoiceId) external view returns (bool) {
         return _positions[invoiceId].exists;
     }
+
+    /**
+     * @dev Recovery function: If NFT is already in Pool but position doesn't exist,
+     * this function can create the position. Only callable by the company address.
+     * This handles edge cases where NFT was transferred but lockCollateral failed.
+     */
+    function recoverLockCollateral(
+        bytes32 invoiceId,
+        uint256 tokenId,
+        address company
+    ) external {
+        // Only company can recover their own position
+        require(msg.sender == company, "FinancingPool: not company");
+        
+        // Verify NFT is actually owned by Pool
+        require(invoiceToken.ownerOf(tokenId) == address(this), "FinancingPool: NFT not in pool");
+        
+        // Verify position doesn't already exist
+        require(!_positions[invoiceId].exists, "FinancingPool: position already exists");
+
+        // Get invoice data
+        (InvoiceCoreData memory data, , , ) = invoiceToken.getInvoiceDataById(invoiceId);
+        
+        // Verify invoiceId matches
+        require(data.invoiceId == invoiceId, "FinancingPool: invoiceId mismatch");
+        
+        uint256 maxCreditLine = (data.amount * defaultLtvBps) / 10_000;
+
+        // Create position
+        _positions[invoiceId] = CollateralPosition({
+            invoiceId: invoiceId,
+            tokenId: tokenId,
+            company: company,
+            maxCreditLine: maxCreditLine,
+            usedCredit: 0,
+            ltvBps: defaultLtvBps,
+            liquidated: false,
+            exists: true
+        });
+
+        emit CollateralLocked(invoiceId, tokenId, company, maxCreditLine, defaultLtvBps);
+    }
 }

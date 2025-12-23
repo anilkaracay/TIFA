@@ -76,5 +76,35 @@ export function startEventListeners() {
         }
     });
 
+    FinancingPool.on("CreditRepaid", async (invoiceId, amount, remainingDebt, event) => {
+        console.log(`[Event] CreditRepaid: ${invoiceId}, Amt: ${amount}, Remaining: ${remainingDebt}`);
+        try {
+            const cleanInvoiceId = ethers.utils.parseBytes32String(invoiceId);
+
+            // Fetch current invoice to get cumulativePaid
+            const inv = await prisma.invoice.findUnique({ where: { id: cleanInvoiceId } });
+            if (!inv) return;
+
+            // Treat repayment as "payment towards invoice"
+            const currentPaid = BigInt(inv.cumulativePaid || "0");
+            const newPaid = currentPaid + BigInt(amount.toString());
+
+            const newStatus = BigInt(remainingDebt.toString()) === 0n ? 'PAID' : 'PARTIALLY_PAID';
+
+            await prisma.invoice.update({
+                where: { id: cleanInvoiceId },
+                data: {
+                    status: newStatus,
+                    cumulativePaid: newPaid.toString(),
+                    // If fully repaid, we might consider isFinanced = false? 
+                    // Or keep it true but status PAID? Let's keep isFinanced true as history.
+                }
+            });
+            console.log(`DB updated (${newStatus}) for ${cleanInvoiceId}. Paid: ${newPaid}`);
+        } catch (e) {
+            console.error("Error handling CreditRepaid:", e);
+        }
+    });
+
     console.log("Listeners attached.");
 }

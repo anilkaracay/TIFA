@@ -16,7 +16,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
             invoiceToken.address,
             invoiceRegistry.address,
             testToken.address,
-            6500 // 65% LTV
+            6000 // 60% LTV
         ],
         log: true,
     });

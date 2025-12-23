@@ -4,6 +4,7 @@
   --bg-card: #1e293b;
   --bg-card: #1e293b;
   --bg-panel: #0f172a;
+  --bg-hover: #1e293b;
   --text: #f8fafc;
   --text-muted: #94a3b8;
   --border: #334155;
@@ -18,4 +19,24 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

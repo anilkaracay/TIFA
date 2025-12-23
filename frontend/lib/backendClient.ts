@@ -17,6 +17,8 @@ export interface Invoice {
     invoiceIdOnChain?: string;
     createdAt: string;
     updatedAt: string;
+    usedCredit?: string; // Debt amount in cents
+    maxCreditLine?: string; // Max credit line in cents
 }
 
 export type InvoicePayment = {

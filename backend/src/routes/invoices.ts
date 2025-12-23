@@ -80,7 +80,33 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             include: { payments: true }
         });
 
-        return invoices;
+        // Fetch debt information from contract for financed invoices
+        const FinancingPool = loadContract("FinancingPool");
+        const invoicesWithDebt = await Promise.all(
+            invoices.map(async (inv) => {
+                if (inv.invoiceIdOnChain && inv.isFinanced) {
+                    try {
+                        const position = await FinancingPool.getPosition(inv.invoiceIdOnChain);
+                        if (position.exists) {
+                            return {
+                                ...inv,
+                                usedCredit: position.usedCredit.toString(), // Debt amount in cents
+                                maxCreditLine: position.maxCreditLine.toString()
+                            };
+                        }
+                    } catch (e) {
+                        console.error(`Error fetching debt for invoice ${inv.id}:`, e);
+                    }
+                }
+                return {
+                    ...inv,
+                    usedCredit: "0",
+                    maxCreditLine: "0"
+                };
+            })
+        );
+
+        return invoicesWithDebt;
     });
 
     // GET /invoices/:id
@@ -173,11 +199,15 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const issuerAddress = signer.address;
             const debtorAddress = signer.address;
 
+            // Convert amount to cents (2 decimals)
+            // invoice.amount is in TRY units (e.g., "50000"), convert to cents (5000000)
+            const amountInCents = BigInt(Math.floor(parseFloat(invoice.amount) * 100));
+
             const invoiceData = {
                 invoiceId: invoiceIdOnChain,
                 issuer: issuerAddress,
                 debtor: debtorAddress,
-                amount: invoice.amount,
+                amount: amountInCents.toString(),
                 dueDate: Math.floor(new Date(invoice.dueDate).getTime() / 1000),
                 currency: "0x0000000000000000000000000000000000000000"
             };
@@ -221,7 +251,10 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (invoice.isFinanced) return reply.code(400).send({ error: 'Already financed' });
         if (!invoice.invoiceIdOnChain || !invoice.tokenId) return reply.code(400).send({ error: 'Missing on-chain data' });
 
-        const requestedAmount = body.amount ? BigInt(body.amount) : BigInt(invoice.amount) * 7000n / 10000n; // default 70%
+        // Calculate requested amount: 60% of invoice amount (matching LTV rate)
+        // Convert invoice.amount (string like "100000") to cents and apply 60% LTV
+        const invoiceAmountInCents = BigInt(Math.floor(parseFloat(invoice.amount) * 100));
+        const requestedAmount = body.amount ? BigInt(body.amount) : invoiceAmountInCents * 6000n / 10000n; // 60% LTV
 
         try {
             console.log(`Financing invoice ${invoice.externalId}...`);
@@ -249,24 +282,57 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const InvoiceToken = loadContract("InvoiceToken");
             const FinancingPool = loadContract("FinancingPool");
 
-            // 1. Approve/Transfer NFT to Financing Pool
-            // Using safeTransferFrom from signer to pool
-            console.log("Transferring NFT to Pool...");
-            const txTransfer = await InvoiceToken["safeTransferFrom(address,address,uint256)"](
-                signer.address,
-                FinancingPool.address,
-                invoice.tokenId
-            );
-            await txTransfer.wait();
+            // Check current owner and position status
+            const currentOwner = await InvoiceToken.ownerOf(invoice.tokenId);
+            const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
+            
+            let positionExists = position.exists;
 
-            // 2. Lock Collateral
-            console.log("Locking Collateral...");
-            const txLock = await FinancingPool.lockCollateral(
-                invoice.invoiceIdOnChain,
-                invoice.tokenId,
-                signer.address // company receives excess? or who receives credit?
-            );
-            await txLock.wait();
+            if (currentOwner === FinancingPool.address) {
+                // NFT is already in Pool
+                if (!positionExists) {
+                    // Recovery needed: NFT in Pool but no position
+                    console.log("NFT is in Pool but position doesn't exist. Recovering...");
+                    const txRecover = await FinancingPool.recoverLockCollateral(
+                        invoice.invoiceIdOnChain,
+                        invoice.tokenId,
+                        signer.address
+                    );
+                    await txRecover.wait();
+                    console.log("Position recovered successfully.");
+                    positionExists = true;
+                } else {
+                    console.log("NFT already in Pool with existing position.");
+                }
+            } else {
+                // Normal flow: Transfer and lock
+                // 1. Approve/Transfer NFT to Financing Pool
+                console.log("Transferring NFT to Pool...");
+                const txTransfer = await InvoiceToken["safeTransferFrom(address,address,uint256)"](
+                    signer.address,
+                    FinancingPool.address,
+                    invoice.tokenId
+                );
+                await txTransfer.wait();
+
+                // 2. Lock Collateral
+                console.log("Locking Collateral...");
+                const txLock = await FinancingPool.lockCollateral(
+                    invoice.invoiceIdOnChain,
+                    invoice.tokenId,
+                    signer.address // company receives excess? or who receives credit?
+                );
+                await txLock.wait();
+                positionExists = true;
+            }
+
+            // Verify position exists before drawing credit
+            if (!positionExists) {
+                const finalCheck = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
+                if (!finalCheck.exists) {
+                    throw new Error("Failed to create position. NFT may be in invalid state.");
+                }
+            }
 
             // 3. Draw Credit
             console.log(`Drawing Credit (${requestedAmount.toString()})...`);
