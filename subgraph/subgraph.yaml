@@ -68,6 +68,7 @@ dataSources:
       entities:
         - CollateralPosition
         - Invoice
+        - PoolMetrics
       abis:
         - name: FinancingPool
           file: ./abis/FinancingPool.json
@@ -82,6 +83,14 @@ dataSources:
           handler: handleCollateralReleased
         - event: CollateralLiquidated(indexed bytes32,indexed uint256,uint256)
           handler: handleCollateralLiquidated
+        - event: InterestAccrued(indexed bytes32,uint256,uint256)
+          handler: handleInterestAccrued
+        - event: InterestPaid(indexed bytes32,uint256,uint256,uint256)
+          handler: handleInterestPaid
+        - event: SharePriceUpdated(uint256,uint256)
+          handler: handleSharePriceUpdated
+        - event: ProtocolFeesWithdrawn(indexed address,uint256)
+          handler: handleProtocolFeesWithdrawn
       file: ./src/financingPool.ts
 
   - kind: ethereum

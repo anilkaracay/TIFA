@@ -51,9 +51,14 @@ export function computeRiskScore(inv: SubgraphInvoice): number {
     return Math.max(0, Math.min(score, 100));
 }
 
-export function determineAction(inv: SubgraphInvoice): {
+export function determineAction(inv: SubgraphInvoice, poolState?: {
+    canFinance: boolean;
+    reason?: string;
+}): {
     nextStatus?: string;
     shouldFinance?: boolean;
+    financeBlocked?: boolean;
+    financeBlockReason?: string;
 } {
     const overdue = daysOverdue(inv.dueDate);
     const amount = BigInt(inv.amount);
@@ -83,6 +88,15 @@ export function determineAction(inv: SubgraphInvoice): {
     // Financing Logic
     if (inv.status === "TOKENIZED" && !inv.isFinanced && overdue <= 0) {
         const risk = computeRiskScore(inv);
+        
+        // Check pool liquidity protection
+        if (poolState && !poolState.canFinance) {
+            return {
+                financeBlocked: true,
+                financeBlockReason: poolState.reason || "Pool liquidity protection active",
+            };
+        }
+        
         if (risk < 50) {
             return { shouldFinance: true };
         } else {

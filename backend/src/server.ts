@@ -11,7 +11,7 @@ async function main() {
     await app.register(cors, {
         origin: '*',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control']
     });
 
     await app.register(swagger, {

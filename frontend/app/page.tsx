@@ -7,7 +7,7 @@ import { useAccount, useWriteContract, usePublicClient } from "wagmi";
 import Deployments from "../lib/deployments.json";
 import { stringToHex } from "viem";
 
-import { fetchInvoicesForCompany, createInvoice, Invoice } from "../lib/backendClient";
+import { fetchInvoicesForCompany, createInvoice, Invoice, fetchPoolOverview, PoolOverview } from "../lib/backendClient";
 import { fetchCompanies, fetchCashflow, Company, CashflowResponse } from "../lib/companyClient";
 import { formatAmount, formatDate, statusColor } from "../lib/format";
 import { Card } from "../components/ui/Card";
@@ -51,6 +51,18 @@ export default function HomePage() {
     const { data: cashflow } = useSWR<CashflowResponse>(
         selectedCompanyId ? ["cashflow", selectedCompanyId] : null,
         () => cashflowFetcher(selectedCompanyId!)
+    );
+
+    // 4. Fetch Pool Overview (for everyone)
+    const { data: poolOverview, mutate: mutatePoolOverview } = useSWR<PoolOverview>(
+        "pool-overview",
+        () => fetchPoolOverview(),
+        {
+            refreshInterval: 5000, // Refresh every 5 seconds
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 2000,
+        }
     );
 
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -610,9 +622,15 @@ export default function HomePage() {
                         disabled={
                             actionLoadingId === inv.id ||
                             inv.status !== "TOKENIZED" ||
-                            inv.isFinanced
+                            inv.isFinanced ||
+                            (poolOverview && parseFloat(poolOverview.availableLiquidityFormatted) <= 0)
                         }
                         onClick={() => handleFinance(inv)}
+                        title={
+                            poolOverview && parseFloat(poolOverview.availableLiquidityFormatted) <= 0
+                                ? "Insufficient pool liquidity"
+                                : undefined
+                        }
                     >
                         Finance
                     </Button>
@@ -843,6 +861,113 @@ export default function HomePage() {
                 <div style={{ padding: "12px", marginBottom: "16px", background: "#f87171", color: "#fff", borderRadius: "8px" }}>
                     Error loading companies: {companyError.message}. Is Backend running at port 4000?
                 </div>
+            )}
+
+            {/* Pool Overview Card */}
+            {poolOverview && (
+                <Card style={{ 
+                    marginBottom: "24px",
+                    background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)",
+                    border: "2px solid rgba(59, 130, 246, 0.2)",
+                    padding: "28px",
+                }}>
+                    <div style={{ 
+                        display: "flex", 
+                        justifyContent: "space-between", 
+                        alignItems: "center",
+                        marginBottom: "24px"
+                    }}>
+                        <h2 style={{ 
+                            fontSize: "24px", 
+                            fontWeight: 700,
+                            background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                        }}>
+                            💧 Pool Overview
+                        </h2>
+                        <div style={{
+                            padding: "6px 12px",
+                            background: "rgba(59, 130, 246, 0.15)",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "#3b82f6"
+                        }}>
+                            Live
+                        </div>
+                    </div>
+                    <div style={{ 
+                        display: "grid", 
+                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
+                        gap: "20px" 
+                    }}>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Total Liquidity (TVL)</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700 }}>{formatAmount(poolOverview.totalLiquidityFormatted, "TRY")}</p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Borrowed</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700 }}>{formatAmount(poolOverview.totalBorrowedFormatted, "TRY")}</p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Available Liquidity</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700, color: parseFloat(poolOverview.availableLiquidityFormatted) > 0 ? "#22c55e" : "#ef4444" }}>
+                                {formatAmount(poolOverview.availableLiquidityFormatted, "TRY")}
+                            </p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Utilization</p>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <div style={{ flex: 1, height: "8px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "4px", overflow: "hidden" }}>
+                                    <div style={{ 
+                                        height: "100%", 
+                                        width: `${Math.min(100, parseFloat(poolOverview.utilizationPercent))}%`,
+                                        background: parseFloat(poolOverview.utilizationPercent) > 75 ? "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)" : "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)",
+                                        transition: "width 0.3s ease"
+                                    }} />
+                                </div>
+                                <span style={{ fontSize: "18px", fontWeight: 700, minWidth: "50px" }}>{poolOverview.utilizationPercent}%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Share Price</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700 }}>{formatAmount(poolOverview.lpSharePriceFormatted, "TRY")}</p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>LP APR</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700, color: "#22c55e" }}>
+                                {poolOverview.apr && parseFloat(poolOverview.apr) > 0 ? `${poolOverview.apr}%` : "N/A"}
+                            </p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>LP APY</p>
+                            <p style={{ fontSize: "24px", fontWeight: 700, color: "#22c55e" }}>
+                                {poolOverview.apy && parseFloat(poolOverview.apy) > 0 ? `${poolOverview.apy}%` : "N/A"}
+                            </p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>NAV</p>
+                            <p style={{ fontSize: "20px", fontWeight: 700 }}>{formatAmount(poolOverview.navFormatted, "TRY")}</p>
+                        </div>
+                    </div>
+                    {poolOverview.totalInterestAccruedFormatted && parseFloat(poolOverview.totalInterestAccruedFormatted) > 0 && (
+                        <div style={{ 
+                            marginTop: "20px", 
+                            padding: "12px", 
+                            background: "rgba(34, 197, 94, 0.1)", 
+                            borderRadius: "8px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center"
+                        }}>
+                            <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Interest Accrued:</span>
+                            <span style={{ fontSize: "16px", fontWeight: 700, color: "#22c55e" }}>
+                                {formatAmount(poolOverview.totalInterestAccruedFormatted, "TRY")}
+                            </span>
+                        </div>
+                    )}
+                </Card>
             )}
 
             {/* Cashflow Chart */}

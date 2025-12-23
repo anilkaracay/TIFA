@@ -24,6 +24,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </h2>
 
                 <NavLink href="/">Invoices</NavLink>
+                <NavLink href="/lp">LP Dashboard</NavLink>
                 <NavLink href="/analytics">Analytics</NavLink>
                 <NavLink href="/agent">Agent Console</NavLink>
             </aside>

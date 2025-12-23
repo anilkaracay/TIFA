@@ -3,9 +3,13 @@ import {
     CreditDrawn,
     CreditRepaid,
     CollateralReleased,
-    CollateralLiquidated
+    CollateralLiquidated,
+    InterestAccrued,
+    InterestPaid,
+    SharePriceUpdated,
+    ProtocolFeesWithdrawn
 } from "../generated/FinancingPool/FinancingPool"
-import { CollateralPosition, Invoice } from "../generated/schema"
+import { CollateralPosition, Invoice, PoolMetrics } from "../generated/schema"
 import { BigInt } from "@graphprotocol/graph-ts"
 
 export function handleCollateralLocked(event: CollateralLocked): void {
@@ -83,4 +87,55 @@ export function handleCollateralLiquidated(event: CollateralLiquidated): void {
         entity.updatedAt = event.block.timestamp
         entity.save()
     }
+}
+
+function getOrCreatePoolMetrics(): PoolMetrics {
+    let metrics = PoolMetrics.load("1")
+    if (metrics == null) {
+        metrics = new PoolMetrics("1")
+        metrics.nav = BigInt.fromI32(0)
+        metrics.sharePriceWad = BigInt.fromI32(0)
+        metrics.totalPrincipalOutstanding = BigInt.fromI32(0)
+        metrics.totalInterestAccrued = BigInt.fromI32(0)
+        metrics.totalLosses = BigInt.fromI32(0)
+        metrics.protocolFeesAccrued = BigInt.fromI32(0)
+        metrics.utilization = BigInt.fromI32(0)
+        metrics.totalInterestPaidToLP = BigInt.fromI32(0)
+        metrics.poolStartTime = event.block.timestamp
+        metrics.timestamp = event.block.timestamp
+    }
+    return metrics as PoolMetrics
+}
+
+export function handleInterestAccrued(event: InterestAccrued): void {
+    let metrics = getOrCreatePoolMetrics(event)
+    metrics.totalInterestAccrued = event.params.totalInterestAccrued
+    metrics.timestamp = event.block.timestamp
+    metrics.save()
+}
+
+export function handleInterestPaid(event: InterestPaid): void {
+    let metrics = getOrCreatePoolMetrics(event)
+    // LP interest = interestPaid - protocolFee
+    let lpInterest = event.params.interestPaid.minus(event.params.protocolFee)
+    metrics.totalInterestPaidToLP = metrics.totalInterestPaidToLP.plus(lpInterest)
+    metrics.protocolFeesAccrued = metrics.protocolFeesAccrued.plus(event.params.protocolFee)
+    metrics.totalInterestAccrued = metrics.totalInterestAccrued.minus(event.params.interestPaid)
+    metrics.timestamp = event.block.timestamp
+    metrics.save()
+}
+
+export function handleSharePriceUpdated(event: SharePriceUpdated): void {
+    let metrics = getOrCreatePoolMetrics(event)
+    metrics.nav = event.params.nav
+    metrics.sharePriceWad = event.params.sharePriceWad
+    metrics.timestamp = event.block.timestamp
+    metrics.save()
+}
+
+export function handleProtocolFeesWithdrawn(event: ProtocolFeesWithdrawn): void {
+    let metrics = getOrCreatePoolMetrics(event)
+    metrics.protocolFeesAccrued = metrics.protocolFeesAccrued.minus(event.params.amount)
+    metrics.timestamp = event.block.timestamp
+    metrics.save()
 }

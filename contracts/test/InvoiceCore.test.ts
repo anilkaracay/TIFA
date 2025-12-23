@@ -57,7 +57,8 @@ describe("InvoiceCore", function () {
             currency: ethers.ZeroAddress // Placeholder for ETH/Native
         };
 
-        await invoiceToken.connect(deployer).mintInvoice(data, "ipfs://metadata");
+        // Must call from issuer address (user), not deployer
+        await invoiceToken.connect(user).mintInvoice(data, "ipfs://metadata");
 
         expect(await invoiceToken.ownerOfInvoice(INVOICE_ID)).to.equal(user.address);
         expect(await invoiceToken.statusOf(INVOICE_ID)).to.equal(1); // ISSUED

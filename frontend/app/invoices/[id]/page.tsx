@@ -7,6 +7,7 @@ import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { formatAmount, formatDate, statusColor } from "../../../lib/format";
+import { InvoiceRiskPanel } from "../../../components/invoice/InvoiceRiskPanel";
 import { useState } from "react";
 
 const inputStyle: React.CSSProperties = {
@@ -132,6 +133,9 @@ export default function InvoiceDetailPage() {
                     </Card>
                 </div>
             </div>
+
+            {/* Risk & Financing Panel */}
+            <InvoiceRiskPanel invoice={inv} />
 
             {/* Bottom: History */}
             <Card>

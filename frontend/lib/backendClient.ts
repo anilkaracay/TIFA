@@ -118,3 +118,134 @@ export async function createInvoice(data: any) {
     }
     return res.json();
 }
+
+export interface PoolOverview {
+    totalLiquidity: string;
+    totalBorrowed: string;
+    totalPrincipalOutstanding: string;
+    totalInterestAccrued: string;
+    totalLosses: string;
+    protocolFeesAccrued: string;
+    availableLiquidity: string;
+    utilization: string;
+    utilizationPercent: string;
+    maxUtilization: string;
+    maxUtilizationPercent: string;
+    lpTokenSupply: string;
+    nav: string;
+    lpSharePrice: string;
+    borrowAprWad: string;
+    protocolFeeBps: string;
+    poolStartTime: string;
+    apr: string;
+    apy: string;
+    totalLiquidityFormatted: string;
+    totalBorrowedFormatted: string;
+    totalPrincipalOutstandingFormatted: string;
+    totalInterestAccruedFormatted: string;
+    totalLossesFormatted: string;
+    protocolFeesAccruedFormatted: string;
+    availableLiquidityFormatted: string;
+    lpTokenSupplyFormatted: string;
+    navFormatted: string;
+    lpSharePriceFormatted: string;
+}
+
+export interface PoolMetrics {
+    nav: string;
+    navFormatted: string;
+    sharePriceWad: string;
+    sharePriceFormatted: string;
+    totalPrincipalOutstanding: string;
+    totalPrincipalOutstandingFormatted: string;
+    totalInterestAccrued: string;
+    totalInterestAccruedFormatted: string;
+    totalLosses: string;
+    totalLossesFormatted: string;
+    protocolFeesAccrued: string;
+    protocolFeesAccruedFormatted: string;
+    utilization: string;
+    utilizationPercent: string;
+    apr: string;
+    apy: string;
+    borrowApr: string;
+    protocolFeePercent: string;
+    poolStartTime: string;
+    poolAgeDays: string;
+}
+
+export interface LPPosition {
+    wallet: string;
+    lpShares: string;
+    underlyingValue: string;
+    sharePrice: string;
+    lpSharesFormatted: string;
+    underlyingValueFormatted: string;
+    sharePriceFormatted: string;
+    dbShares?: string;
+}
+
+export async function fetchPoolOverview(): Promise<PoolOverview> {
+    const res = await fetch(`${BACKEND_URL}/pool/overview`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool overview");
+    }
+    return res.json();
+}
+
+export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
+    const url = new URL("/lp/position", BACKEND_URL);
+    if (wallet) {
+        url.searchParams.set("wallet", wallet);
+    }
+    const res = await fetch(url.toString(), { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch LP position");
+    }
+    const data = await res.json();
+    console.log("[fetchLPPosition] Received data:", data);
+    return data;
+}
+
+export async function depositLiquidity(amount: string): Promise<{ success: boolean; txHash: string; lpShares: string }> {
+    const res = await fetch(`${BACKEND_URL}/lp/deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Deposit failed");
+    }
+    return res.json();
+}
+
+export async function withdrawLiquidity(lpShares: string): Promise<{ success: boolean; txHash: string }> {
+    const res = await fetch(`${BACKEND_URL}/lp/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lpShares }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Withdraw failed");
+    }
+    return res.json();
+}
+
+export async function fetchPoolMetrics(): Promise<PoolMetrics> {
+    const res = await fetch(`${BACKEND_URL}/pool/metrics`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool metrics");
+    }
+    return res.json();
+}

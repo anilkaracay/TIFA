@@ -40,15 +40,29 @@ describe("Financing and Settlement", function () {
         registry = (await RegistryFactory.deploy(await invoiceToken.getAddress())) as InvoiceRegistry;
         await registry.waitForDeployment();
 
-        // 3. Financing Pool
+        // 3. LP Share Token
+        const LPShareTokenFactory = await ethers.getContractFactory("LPShareToken");
+        const lpToken = await LPShareTokenFactory.deploy();
+        await lpToken.waitForDeployment();
+
+        // 4. Financing Pool
         const PoolFactory = await ethers.getContractFactory("FinancingPool");
+        const BORROW_APR_WAD = ethers.parseEther("0.15"); // 15% APR
+        const PROTOCOL_FEE_BPS = 1000; // 10%
         pool = (await PoolFactory.deploy(
             await invoiceToken.getAddress(),
             await registry.getAddress(),
             await testToken.getAddress(),
-            DEFAULT_LTV_BPS
+            await lpToken.getAddress(),
+            DEFAULT_LTV_BPS,
+            8000, // 80% max utilization
+            BORROW_APR_WAD,
+            PROTOCOL_FEE_BPS
         )) as FinancingPool;
         await pool.waitForDeployment();
+
+        // Grant LP token roles to pool
+        await lpToken.grantPoolRoles(await pool.getAddress());
 
         // 4. Settlement Router
         const RouterFactory = await ethers.getContractFactory("SettlementRouter");
@@ -61,8 +75,13 @@ describe("Financing and Settlement", function () {
         await pool.grantRole(OPERATOR_ROLE, agent.address);
         await router.grantRole(OPERATOR_ROLE, agent.address);
 
-        // Fund the pool with TestToken
-        await testToken.mint(await pool.getAddress(), ethers.parseEther("1000000"));
+        // Fund the pool with TestToken via LP deposit
+        await testToken.mint(deployer.address, ethers.parseEther("1000000"));
+        await testToken.connect(deployer).approve(await pool.getAddress(), ethers.MaxUint256);
+        await pool.connect(deployer).deposit(ethers.parseEther("1000000"));
+
+        // Mint tokens for company to repay debt
+        await testToken.mint(company.address, ethers.parseEther("10000"));
     });
 
     describe("Financing Pool Flow", function () {
@@ -76,7 +95,8 @@ describe("Financing and Settlement", function () {
                 currency: await testToken.getAddress()
             };
 
-            await invoiceToken.connect(deployer).mintInvoice(data, "ipfs://rwa-meta");
+            // Must call from issuer address (company), not deployer
+            await invoiceToken.connect(company).mintInvoice(data, "ipfs://rwa-meta");
 
             const tokenId = await invoiceToken.tokenOfInvoice(INVOICE_ID);
             await registry.connect(deployer).registerInvoice(INVOICE_ID, tokenId, company.address, payer.address);
@@ -87,12 +107,11 @@ describe("Financing and Settlement", function () {
         it("Should lock collateral in the pool", async function () {
             const tokenId = await invoiceToken.tokenOfInvoice(INVOICE_ID);
 
-            // Company transfers NFT to pool
-            await invoiceToken.connect(company).safeTransferFrom(company.address, await pool.getAddress(), tokenId);
-            expect(await invoiceToken.ownerOf(tokenId)).to.equal(await pool.getAddress());
+            // Company approves pool to transfer NFT
+            await invoiceToken.connect(company).approve(await pool.getAddress(), tokenId);
 
-            // Operator locks collateral
-            await pool.connect(agent).lockCollateral(INVOICE_ID, tokenId, company.address);
+            // Company locks collateral (lockCollateral will transfer the token)
+            await pool.connect(company).lockCollateral(INVOICE_ID, tokenId, company.address);
 
             const pos = await pool.getPosition(INVOICE_ID);
             expect(pos.exists).to.be.true;
@@ -101,11 +120,10 @@ describe("Financing and Settlement", function () {
 
         it("Should draw credit", async function () {
             const amount = ethers.parseEther("500");
-            // Company draws credit? No, Requirement says OPERATOR calls drawCredit.
-            // "Only OPERATOR_ROLE or ADMIN_ROLE"
+            // Company draws credit (drawCredit checks that company matches position.company)
 
             const balanceBefore = await testToken.balanceOf(company.address);
-            await pool.connect(agent).drawCredit(INVOICE_ID, amount, company.address);
+            await pool.connect(company).drawCredit(INVOICE_ID, amount, company.address);
 
             const balanceAfter = await testToken.balanceOf(company.address);
             expect(balanceAfter - balanceBefore).to.equal(amount);
@@ -115,19 +133,39 @@ describe("Financing and Settlement", function () {
         });
 
         it("Should repay credit", async function () {
-            const amount = ethers.parseEther("500");
+            // Get current position to see total debt (principal + interest)
+            const posBefore = await pool.getPosition(INVOICE_ID);
+            // Accrue interest first if needed
+            if (posBefore.usedCredit > 0) {
+                await pool.accrueInterest(INVOICE_ID);
+            }
+            const posAfterAccrual = await pool.getPosition(INVOICE_ID);
+            const totalDebt = posAfterAccrual.usedCredit + posAfterAccrual.interestAccrued;
 
-            // Company approves pool to take tokens back
-            await testToken.connect(company).approve(await pool.getAddress(), amount);
+            // Company approves pool to take tokens back (add 10% buffer for rounding)
+            const repayAmount = totalDebt + (totalDebt / 10n);
+            await testToken.connect(company).approve(await pool.getAddress(), repayAmount);
 
-            await pool.connect(company).repayCredit(INVOICE_ID, amount);
+            // RepayCredit will accrue interest again and pay what's needed
+            await pool.connect(company).repayCredit(INVOICE_ID, repayAmount);
 
             const pos = await pool.getPosition(INVOICE_ID);
-            expect(pos.usedCredit).to.equal(0);
+            // Allow small tolerance for rounding (1e12 = 0.000001 ETH)
+            expect(pos.usedCredit).to.be.lte(ethers.parseEther("0.000001"));
+            expect(pos.interestAccrued).to.be.lte(ethers.parseEther("0.000001"));
         });
 
         it("Should release collateral", async function () {
             const tokenId = await invoiceToken.tokenOfInvoice(INVOICE_ID);
+
+            // Ensure all debt is paid (accrue and check)
+            await pool.accrueInterest(INVOICE_ID);
+            const pos = await pool.getPosition(INVOICE_ID);
+            if (pos.usedCredit > 0 || pos.interestAccrued > 0) {
+                const totalDebt = pos.usedCredit + pos.interestAccrued;
+                await testToken.connect(company).approve(await pool.getAddress(), totalDebt);
+                await pool.connect(company).repayCredit(INVOICE_ID, totalDebt);
+            }
 
             await pool.connect(agent).releaseCollateral(INVOICE_ID);
 
@@ -150,7 +188,8 @@ describe("Financing and Settlement", function () {
                 dueDate: Math.floor(Date.now() / 1000) + 86400 * 30,
                 currency: await testToken.getAddress()
             };
-            await invoiceToken.mintInvoice(data, "ipfs://settle");
+            // Must call from issuer address (company), not deployer
+            await invoiceToken.connect(company).mintInvoice(data, "ipfs://settle");
             const tokenId = await invoiceToken.tokenOfInvoice(RULE_ID_INVOICE);
             await registry.registerInvoice(RULE_ID_INVOICE, tokenId, company.address, payer.address);
 

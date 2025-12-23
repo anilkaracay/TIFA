@@ -11,6 +11,18 @@ enum InvoiceStatus {
     DEFAULTED
 }
 
+enum RecourseMode {
+    RECOURSE,
+    NON_RECOURSE
+}
+
+enum DefaultResolution {
+    NONE,
+    RECOVERED,
+    WRITTEN_DOWN,
+    RECOURSE_CLAIMED
+}
+
 struct InvoiceCoreData {
     bytes32 invoiceId;
     address issuer;
