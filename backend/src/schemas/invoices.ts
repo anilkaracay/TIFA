@@ -30,7 +30,21 @@ export const FinancingRequestSchema = z.object({
     amount: z.string().optional(),
 });
 
+export const RecoursePaymentSchema = z.object({
+    amount: z.string(),
+    currency: z.string().default('TRY'),
+    paidAt: z.string().datetime().optional(),
+    txHash: z.string().optional(),
+});
+
+export const DefaultDeclarationSchema = z.object({
+    reason: z.string().optional(),
+    lossAmount: z.string().optional(), // Calculated if not provided
+});
+
 export type InvoiceCreate = z.infer<typeof InvoiceCreateSchema>;
 export type InvoiceUpdate = z.infer<typeof InvoiceUpdateSchema>;
 export type PaymentNotification = z.infer<typeof PaymentNotificationSchema>;
 export type FinancingRequest = z.infer<typeof FinancingRequestSchema>;
+export type RecoursePayment = z.infer<typeof RecoursePaymentSchema>;
+export type DefaultDeclaration = z.infer<typeof DefaultDeclarationSchema>;

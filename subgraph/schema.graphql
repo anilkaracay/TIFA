@@ -79,7 +79,7 @@ type SettlementExecution @entity {
 }
 
 type PoolMetrics @entity {
-  id: ID!                     # "1" (singleton)
+  id: ID!                     # "POOL" (singleton)
   nav: BigInt!
   sharePriceWad: BigInt!
   totalPrincipalOutstanding: BigInt!
@@ -92,4 +92,24 @@ type PoolMetrics @entity {
   # Track history for APR calculation
   totalInterestPaidToLP: BigInt!
   poolStartTime: BigInt!
+  
+  # Freshness tracking
+  lastEventBlock: BigInt!
+  lastEventTimestamp: BigInt!
+  
+  # Additional fields for truth reconciliation
+  totalLiquidity: BigInt!
+  totalBorrowed: BigInt!
+  reserveBalance: BigInt!
+}
+
+type InterestPaidEvent @entity {
+  id: ID!                     # txHash-logIndex
+  invoiceId: Bytes!
+  interestPaid: BigInt!
+  lpInterest: BigInt!
+  protocolFee: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
 }

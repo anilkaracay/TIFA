@@ -1,5 +1,4 @@
 import { loadContract } from "./onchain/provider";
-import { ethers } from "ethers";
 
 const UTILIZATION_THRESHOLD_BPS = 7500; // 75% - stop auto-financing above this
 const MAX_UTILIZATION_BPS = 8000; // 80% - hard limit
@@ -11,6 +10,10 @@ export interface PoolState {
     utilization: number; // in basis points (0-10000)
     utilizationPercent: number; // 0-100
     maxUtilization: number;
+    paused: boolean;
+    nav: bigint;
+    maxSingleLoan: bigint;
+    maxIssuerExposure: bigint;
 }
 
 /**
@@ -26,6 +29,29 @@ export async function getPoolState(): Promise<PoolState> {
         const utilization = await Pool.utilization();
         const maxUtilization = await Pool.maxUtilizationBps();
         
+        // Check if pool is paused
+        let paused = false;
+        try {
+            paused = await Pool.paused();
+        } catch (e) {
+            // If paused() doesn't exist in ABI, assume not paused
+            console.warn("[PoolGuard] paused() not available in ABI");
+        }
+        
+        // Get NAV and safety limits
+        let nav = 0n;
+        let maxSingleLoan = 0n;
+        let maxIssuerExposure = 0n;
+        try {
+            nav = BigInt((await Pool.getNAV()).toString());
+            const maxLoanBps = await Pool.maxLoanBpsOfTVL();
+            const maxIssuerBps = await Pool.maxIssuerExposureBps();
+            maxSingleLoan = (nav * BigInt(maxLoanBps.toString())) / 10000n;
+            maxIssuerExposure = (nav * BigInt(maxIssuerBps.toString())) / 10000n;
+        } catch (e) {
+            console.warn("[PoolGuard] Safety limits not available:", e);
+        }
+        
         return {
             totalLiquidity: BigInt(totalLiquidity.toString()),
             totalBorrowed: BigInt(totalBorrowed.toString()),
@@ -33,10 +59,14 @@ export async function getPoolState(): Promise<PoolState> {
             utilization: Number(utilization.toString()),
             utilizationPercent: Number(utilization.toString()) / 100,
             maxUtilization: Number(maxUtilization.toString()),
+            paused,
+            nav,
+            maxSingleLoan,
+            maxIssuerExposure,
         };
     } catch (e: any) {
         console.error("[PoolGuard] Failed to fetch pool state:", e.message);
-        // Return safe defaults if contract call fails
+        // Return safe defaults if contract call fails (assume paused for safety)
         return {
             totalLiquidity: 0n,
             totalBorrowed: 0n,
@@ -44,6 +74,10 @@ export async function getPoolState(): Promise<PoolState> {
             utilization: 0,
             utilizationPercent: 0,
             maxUtilization: MAX_UTILIZATION_BPS,
+            paused: true, // Fail-safe: assume paused if we can't check
+            nav: 0n,
+            maxSingleLoan: 0n,
+            maxIssuerExposure: 0n,
         };
     }
 }
@@ -51,13 +85,23 @@ export async function getPoolState(): Promise<PoolState> {
 /**
  * Check if pool has sufficient liquidity for a financing request
  * @param requestedAmount Amount requested in wei/cents
+ * @param issuerAddress Issuer address for exposure check (optional)
  */
-export async function canFinance(requestedAmount: bigint): Promise<{
+export async function canFinance(requestedAmount: bigint, issuerAddress?: string): Promise<{
     canFinance: boolean;
     reason?: string;
     poolState?: PoolState;
 }> {
     const poolState = await getPoolState();
+    
+    // SAFETY CHECK 0: Pool paused
+    if (poolState.paused) {
+        return {
+            canFinance: false,
+            reason: "POOL_PAUSED",
+            poolState,
+        };
+    }
     
     // Check 1: Available liquidity
     if (poolState.availableLiquidity < requestedAmount) {
@@ -72,7 +116,7 @@ export async function canFinance(requestedAmount: bigint): Promise<{
     if (poolState.utilization >= UTILIZATION_THRESHOLD_BPS) {
         return {
             canFinance: false,
-            reason: `Utilization too high: ${poolState.utilizationPercent.toFixed(2)}% (threshold: 75%)`,
+            reason: `UTILIZATION_LIMIT: ${poolState.utilizationPercent.toFixed(2)}% (threshold: 75%)`,
             poolState,
         };
     }
@@ -86,9 +130,37 @@ export async function canFinance(requestedAmount: bigint): Promise<{
     if (newUtilization >= poolState.maxUtilization) {
         return {
             canFinance: false,
-            reason: `Loan would exceed max utilization: ${(newUtilization / 100).toFixed(2)}% (max: ${poolState.maxUtilization / 100}%)`,
+            reason: `UTILIZATION_LIMIT: Loan would exceed max utilization: ${(newUtilization / 100).toFixed(2)}% (max: ${poolState.maxUtilization / 100}%)`,
             poolState,
         };
+    }
+    
+    // Check 4: Max single loan size
+    if (poolState.maxSingleLoan > 0n && requestedAmount > poolState.maxSingleLoan) {
+        return {
+            canFinance: false,
+            reason: `MAX_SINGLE_LOAN_EXCEEDED: Requested ${requestedAmount.toString()}, Max: ${poolState.maxSingleLoan.toString()}`,
+            poolState,
+        };
+    }
+    
+    // Check 5: Issuer exposure limit (if issuer address provided)
+    if (issuerAddress && poolState.maxIssuerExposure > 0n) {
+        try {
+            const Pool = loadContract("FinancingPool");
+            const currentExposure = BigInt((await Pool.totalIssuerOutstanding(issuerAddress)).toString());
+            const newExposure = currentExposure + requestedAmount;
+            
+            if (newExposure > poolState.maxIssuerExposure) {
+                return {
+                    canFinance: false,
+                    reason: `ISSUER_EXPOSURE_LIMIT_EXCEEDED: Current ${currentExposure.toString()}, Requested ${requestedAmount.toString()}, Max: ${poolState.maxIssuerExposure.toString()}`,
+                    poolState,
+                };
+            }
+        } catch (e) {
+            console.warn("[PoolGuard] Could not check issuer exposure:", e);
+        }
     }
     
     return {

@@ -91,6 +91,14 @@ dataSources:
           handler: handleSharePriceUpdated
         - event: ProtocolFeesWithdrawn(indexed address,uint256)
           handler: handleProtocolFeesWithdrawn
+        - event: LiquidityDeposited(indexed address,uint256,uint256)
+          handler: handleLiquidityDeposited
+        - event: LiquidityWithdrawn(indexed address,uint256,uint256)
+          handler: handleLiquidityWithdrawn
+        - event: LossWrittenDown(indexed bytes32,uint256,uint256,uint256)
+          handler: handleLossWrittenDown
+        - event: ReserveFunded(uint256,uint256)
+          handler: handleReserveFunded
       file: ./src/financingPool.ts
 
   - kind: ethereum

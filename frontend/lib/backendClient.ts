@@ -1,4 +1,22 @@
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
+// Role-related types
+export interface UserRoleResponse {
+    wallet: string;
+    role: string;
+    isAdmin: boolean;
+    readOnly: boolean;
+}
+
+export async function fetchUserRole(walletAddress: string): Promise<UserRoleResponse> {
+    const res = await fetch(`${BACKEND_URL}/admin/status?wallet=${walletAddress}`, {
+        cache: 'no-store',
+    });
+    if (!res.ok) {
+        throw new Error('Failed to fetch user role');
+    }
+    return res.json();
+}
 
 export type InvoiceStatus = "pending" | "approved" | "rejected" | "paid" | "partially_paid" | "financed" | "tokenized";
 
@@ -48,18 +66,70 @@ export async function fetchInvoicesForCompany(companyId: string): Promise<Invoic
 }
 
 export async function fetchInvoiceDetail(id: string): Promise<InvoiceDetail> {
-    const res = await fetch(`${BACKEND_URL} /invoices/${id} `, { cache: "no-store" });
+    const res = await fetch(`${BACKEND_URL}/invoices/${id}`, { cache: "no-store" });
     if (!res.ok) throw new Error("Failed to fetch invoice detail");
     return res.json();
 }
 
-export async function recordPayment(id: string, payload: { amount: string; currency: string; paidAt: string }) {
-    const res = await fetch(`${BACKEND_URL} /invoices/${id}/payments`, {
+export async function recordPayment(id: string, payload: { amount: string; currency: string; paidAt: string; psp?: string; transactionId?: string }, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    const res = await fetch(`${BACKEND_URL}/invoices/${id}/payments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        body: JSON.stringify({
+            transactionId: payload.transactionId || `TXN-${Date.now()}`,
+            amount: payload.amount,
+            currency: payload.currency,
+            paidAt: payload.paidAt,
+            psp: payload.psp,
+        }),
+    });
+    if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.message || "Failed to record payment");
+    }
+    return res.json();
+}
+
+export async function payRecourse(id: string, payload: { amount: string; currency?: string; paidAt?: string; txHash?: string }, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    const res = await fetch(`${BACKEND_URL}/invoices/${id}/recourse-payment`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+            amount: payload.amount,
+            currency: payload.currency || 'TRY',
+            paidAt: payload.paidAt || new Date().toISOString(),
+            txHash: payload.txHash,
+        }),
+    });
+    if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.message || "Failed to pay recourse");
+    }
+    return res.json();
+}
+
+export async function declareDefault(id: string, payload: { reason?: string; lossAmount?: string }, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    const res = await fetch(`${BACKEND_URL}/invoices/${id}/declare-default`, {
+        method: "POST",
+        headers,
         body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to record payment");
+    if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.message || "Failed to declare default");
+    }
     return res.json();
 }
 
@@ -80,43 +150,95 @@ export async function fetchInvoices(params?: { status?: string; companyId?: stri
     }
 }
 
-export async function tokenizeInvoice(id: string) {
+export async function tokenizeInvoice(id: string, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/tokenize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({}),
     });
     if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Failed to tokenize invoice: ${res.statusText}`);
+        throw new Error(errBody.error || errBody.message || `Failed to tokenize invoice: ${res.statusText}`);
     }
     return res.json();
 }
 
-export async function requestFinancing(id: string) {
+export async function requestFinancing(id: string, walletAddress?: string, txHash?: string, amount?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    const body: any = {};
+    if (txHash) {
+        body.txHash = txHash;
+    }
+    if (amount) {
+        body.amount = amount;
+    }
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/finance`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // optional amount
+        headers,
+        body: JSON.stringify(body),
     });
     if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Failed to request financing: ${res.statusText}`);
+        throw new Error(errBody.error || errBody.message || `Failed to request financing: ${res.statusText}`);
     }
     return res.json();
 }
 
-export async function createInvoice(data: any) {
-    const res = await fetch(`${BACKEND_URL}/invoices`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Failed to create invoice: ${res.statusText}`);
+export async function createInvoice(data: any, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    
+    // Add wallet address to header if provided
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
     }
-    return res.json();
+    
+    const url = `${BACKEND_URL}/invoices`;
+    console.log('[createInvoice] Request:', {
+        url,
+        method: 'POST',
+        headers,
+        body: data
+    });
+    
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(data),
+        });
+        
+        console.log('[createInvoice] Response:', {
+            status: res.status,
+            statusText: res.statusText,
+            ok: res.ok,
+            url: res.url
+        });
+        
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            const errorMsg = errBody.error || errBody.message || `Failed to create invoice: ${res.statusText}`;
+            console.error('[createInvoice] Error:', {
+                status: res.status,
+                statusText: res.statusText,
+                url,
+                error: errBody,
+                walletAddress,
+                requestBody: data
+            });
+            throw new Error(errorMsg);
+        }
+        return res.json();
+    } catch (e: any) {
+        console.error('[createInvoice] Fetch error:', e);
+        throw e;
+    }
 }
 
 export interface PoolOverview {
@@ -172,6 +294,189 @@ export interface PoolMetrics {
     protocolFeePercent: string;
     poolStartTime: string;
     poolAgeDays: string;
+}
+
+export interface PoolLimits {
+    paused: boolean;
+    utilization: number;
+    utilizationPercent: number;
+    maxUtilization: number;
+    maxUtilizationPercent: number;
+    nav: string;
+    navFormatted: string;
+    maxSingleLoan: string;
+    maxSingleLoanFormatted: string;
+    maxSingleLoanBps: number;
+    maxIssuerExposure: string;
+    maxIssuerExposureFormatted: string;
+    maxIssuerExposureBps: number;
+    totalLiquidity: string;
+    totalBorrowed: string;
+}
+
+export interface IssuerExposure {
+    issuer: string;
+    currentExposure: string;
+    currentExposureFormatted: string;
+    maxAllowed: string;
+    maxAllowedFormatted: string;
+    maxAllowedBps: number;
+    utilizationPercent: number;
+    remainingCapacity: string;
+    remainingCapacityFormatted: string;
+}
+
+export async function fetchPoolLimits(): Promise<PoolLimits> {
+    const res = await fetch(`${BACKEND_URL}/pool/limits`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool limits");
+    }
+    return res.json();
+}
+
+export async function fetchIssuerExposure(issuerAddress: string): Promise<IssuerExposure> {
+    const res = await fetch(`${BACKEND_URL}/pool/issuer/${issuerAddress}/exposure`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch issuer exposure");
+    }
+    return res.json();
+}
+
+// Truth Service Types
+export interface PoolTruthSnapshot {
+    blockNumber: number;
+    timestamp: number;
+    nav: string;
+    sharePriceWad: string;
+    utilizationBps: number;
+    totalPrincipalOutstanding: string;
+    totalInterestAccrued: string;
+    totalLosses: string;
+    reserveBalance?: string;
+    protocolFeesAccrued?: string;
+    totalLiquidity: string;
+    totalBorrowed: string;
+}
+
+export interface PoolIndexedSnapshot extends PoolTruthSnapshot {
+    indexedBlockNumber: number;
+    indexedAt: number;
+    subgraphLagBlocks: number;
+}
+
+export interface TruthMismatch {
+    field: string;
+    onchain: string | number;
+    indexed: string | number;
+    diff: string | number;
+}
+
+export interface ReconciledPoolTruth {
+    modeUsed: 'reconciled' | 'onchain-only' | 'subgraph-only';
+    onchain: PoolTruthSnapshot;
+    indexed?: PoolIndexedSnapshot;
+    mismatches: TruthMismatch[];
+    freshness: {
+        subgraphLagBlocks: number;
+        lastIndexedAt?: number;
+        lastOnchainBlock: number;
+    };
+}
+
+export interface InvoiceTruth {
+    onchain: {
+        exists: boolean;
+        usedCredit: string;
+        interestAccrued: string;
+        maxCreditLine: string;
+        isInDefault: boolean;
+        recourseMode: number;
+        dueDate: string;
+    } | null;
+    db: {
+        id: string;
+        externalId: string;
+        status: string;
+        isFinanced: boolean;
+        amount: string;
+        cumulativePaid: string;
+    };
+    dbOutOfSync: boolean;
+    note?: string;
+}
+
+export interface LPPositionTruth {
+    wallet: string;
+    lpShares: string;
+    underlyingValue: string;
+    sharePriceWad: string;
+    nav: string;
+    computedFrom: string;
+    note: string;
+}
+
+export interface PoolYieldTruth {
+    windowDays: number;
+    windowStartTimestamp: number;
+    windowEndTimestamp: number;
+    startBlock: number;
+    endBlock: number;
+    lpInterestPaid: string;
+    avgNav: string;
+    apr: string;
+    apy: string;
+    method: string;
+    eventCount: number;
+}
+
+export async function fetchPoolTruth(): Promise<ReconciledPoolTruth> {
+    const res = await fetch(`${BACKEND_URL}/truth/pool`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool truth");
+    }
+    return res.json();
+}
+
+export async function fetchInvoiceTruth(invoiceId: string): Promise<InvoiceTruth> {
+    const res = await fetch(`${BACKEND_URL}/truth/invoice/${invoiceId}`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch invoice truth");
+    }
+    return res.json();
+}
+
+export async function fetchLPPositionTruth(wallet: string): Promise<LPPositionTruth> {
+    const res = await fetch(`${BACKEND_URL}/truth/lp/${wallet}`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch LP position truth");
+    }
+    return res.json();
+}
+
+export async function fetchPoolYieldTruth(windowDays: number = 7): Promise<PoolYieldTruth> {
+    const res = await fetch(`${BACKEND_URL}/truth/pool/yield?windowDays=${windowDays}`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool yield truth");
+    }
+    return res.json();
 }
 
 export interface LPPosition {
@@ -239,6 +544,40 @@ export async function withdrawLiquidity(lpShares: string): Promise<{ success: bo
     return res.json();
 }
 
+export interface LPTransaction {
+    id: string;
+    date: string;
+    type: "Deposit" | "Withdrawal" | "Reinvest";
+    amount: string;
+    sharePrice: string;
+    balanceImpact: string;
+    status: "Settled" | "Pending";
+    txHash: string;
+}
+
+export interface LPTransactionsResponse {
+    transactions: LPTransaction[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
+export async function fetchLPTransactions(wallet?: string, limit = 50, offset = 0): Promise<LPTransactionsResponse> {
+    const url = new URL("/lp/transactions", BACKEND_URL);
+    if (wallet) {
+        url.searchParams.set("wallet", wallet);
+    }
+    url.searchParams.set("limit", limit.toString());
+    url.searchParams.set("offset", offset.toString());
+    
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch LP transactions");
+    }
+    return res.json();
+}
+
 export async function fetchPoolMetrics(): Promise<PoolMetrics> {
     const res = await fetch(`${BACKEND_URL}/pool/metrics`, { 
         cache: "no-store"
@@ -246,6 +585,139 @@ export async function fetchPoolMetrics(): Promise<PoolMetrics> {
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to fetch pool metrics");
+    }
+    return res.json();
+}
+
+export interface PortfolioAnalytics {
+    kpis: {
+        currentUtilization: {
+            value: number;
+            target: number;
+            delta: number;
+        };
+        netYield: {
+            value: number;
+            benchmark: number;
+            delta: number;
+        };
+        defaultRate: {
+            value: number;
+            tolerance: number;
+            delta: number;
+        };
+        avgInvoiceDuration: {
+            value: number;
+            historical: number;
+            delta: number;
+        };
+    };
+    yieldComposition: {
+        grossYield: number;
+        netYield: number;
+        benchmarkYield: number;
+    };
+    utilizationTrend: Array<{
+        month: string;
+        utilization: number;
+    }>;
+    durationDistribution: Array<{
+        label: string;
+        min: number;
+        max: number;
+        count: number;
+    }>;
+    vintageAnalysis: Array<{
+        vintage: string;
+        originatedVolume: number;
+        outstanding: number;
+        defaultRate: number;
+        performance: string;
+    }>;
+    metadata: {
+        lastUpdated: string;
+        dataCutoff: string;
+        fundName: string;
+    };
+}
+
+export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics> {
+    const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        const errorMessage = error.error || "Failed to fetch portfolio analytics";
+        const errorDetails = error.details ? `: ${error.details}` : "";
+        throw new Error(`${errorMessage}${errorDetails}`);
+    }
+    return res.json();
+}
+
+export interface AgentConsoleData {
+    systemStatus: {
+        engineStatus: string;
+        activeAgents: number;
+        lastEvaluation: string;
+        systemLoad: number;
+    };
+    agents: Array<{
+        id: string;
+        name: string;
+        scope: string;
+        state: string;
+        lastAction: string | Date;
+        confidence: number;
+    }>;
+    signals: Array<{
+        id: string;
+        timestamp: string | Date;
+        sourceAgent: string;
+        severity: string;
+        message: string;
+        context: any;
+    }>;
+    decisionTraces: Array<{
+        id: string;
+        timestamp: string | Date;
+        inputs: any;
+        signals: any[];
+        evaluation: any;
+        recommendation: any;
+    }>;
+    recommendations: Array<{
+        id: string;
+        timestamp: string | Date;
+        type: string;
+        summary: string;
+        reasoning: string;
+        confidence: number;
+        supportingSignals: any[];
+        requiresApproval: boolean;
+    }>;
+    modelTransparency: {
+        dataSources: string[];
+        updateFrequency: string;
+        modelClass: string;
+        lastRetraining: string;
+        version: string;
+    };
+    auditLog: {
+        totalDecisions: number;
+        lastUpdated: string;
+        exportable: boolean;
+    };
+}
+
+export async function fetchAgentConsole(): Promise<AgentConsoleData> {
+    const res = await fetch(`${BACKEND_URL}/agent/console`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        const errorMessage = error.error || "Failed to fetch agent console data";
+        const errorDetails = error.details ? `: ${error.details}` : "";
+        throw new Error(`${errorMessage}${errorDetails}`);
     }
     return res.json();
 }

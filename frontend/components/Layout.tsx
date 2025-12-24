@@ -23,6 +23,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     TIFA Dashboard
                 </h2>
 
+                <NavLink href="/overview">Overview</NavLink>
                 <NavLink href="/">Invoices</NavLink>
                 <NavLink href="/lp">LP Dashboard</NavLink>
                 <NavLink href="/analytics">Analytics</NavLink>

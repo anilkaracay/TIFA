@@ -28,6 +28,12 @@ async function tick() {
         const poolState = await getPoolState();
         const poolProtected = await isPoolProtected();
         
+        // SAFETY CHECK: If pool is paused, skip all actions
+        if (poolState.paused) {
+            console.log(`[Agent] ⛔ Pool is PAUSED. Skipping all actions.`);
+            return;
+        }
+        
         if (poolProtected) {
             console.log(`[Agent] ⚠️  Pool Protection Active: Utilization ${poolState.utilizationPercent.toFixed(2)}% (threshold: 75%)`);
         }
@@ -35,9 +41,26 @@ async function tick() {
         for (const inv of invoices) {
             const risk = computeRiskScore(inv);
             
-            // Check if we can finance this invoice (liquidity check)
+            // Check if we can finance this invoice (liquidity + safety checks)
             const invoiceAmount = BigInt(inv.amount);
-            const financeCheck = await canFinance(invoiceAmount);
+            const financeCheck = await canFinance(invoiceAmount, inv.issuer);
+            
+            // If finance is blocked due to safety guardrails, log structured message
+            if (!financeCheck.canFinance && financeCheck.reason) {
+                const reason = financeCheck.reason;
+                if (reason === "POOL_PAUSED" || reason.includes("UTILIZATION_LIMIT") || 
+                    reason.includes("MAX_SINGLE_LOAN") || reason.includes("ISSUER_EXPOSURE")) {
+                    console.log(`[Agent] 🛡️  Safety Guardrail: Invoice ${inv.externalId} blocked. Reason: ${reason}`);
+                    // Log to backend for observability
+                    await logAgentDecision({
+                        invoiceExternalId: inv.externalId,
+                        invoiceOnChainId: inv.invoiceIdOnChain,
+                        actionType: "SAFETY_BLOCKED",
+                        message: `Safety guardrail triggered: ${reason}`,
+                    });
+                    continue; // Skip this invoice, don't attempt action
+                }
+            }
             
             const { nextStatus, shouldFinance, financeBlocked, financeBlockReason } = determineAction(inv, financeCheck);
 

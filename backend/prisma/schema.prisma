@@ -81,6 +81,28 @@ model LPPosition {
     updatedAt   DateTime @updatedAt
     createdAt   DateTime @default(now())
     
+    transactions LPTransaction[]
+    
     @@unique([wallet])
     @@index([wallet])
+}
+
+model LPTransaction {
+    id              String   @id @default(cuid())
+    wallet          String   // LP wallet address
+    type            String   // "Deposit" | "Withdrawal"
+    amount          String   // Amount in liquidityToken (18 decimals, formatted)
+    lpShares        String   // LP shares minted/burned (18 decimals, formatted)
+    sharePrice      String   // Share price at time of transaction (18 decimals, formatted)
+    balanceImpact   String   // Impact on balance (+amount or -amount)
+    txHash          String   // Blockchain transaction hash
+    blockNumber     String?  // Block number
+    status          String   @default("Settled") // "Settled" | "Pending"
+    createdAt       DateTime @default(now())
+    
+    lpPosition      LPPosition? @relation(fields: [wallet], references: [wallet])
+    
+    @@index([wallet])
+    @@index([txHash])
+    @@index([createdAt])
 }

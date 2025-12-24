@@ -1,102 +1,493 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAccount, useWriteContract, usePublicClient } from "wagmi";
-import { fetchPoolOverview, fetchLPPosition, fetchPoolMetrics, PoolOverview, LPPosition, PoolMetrics } from "../../lib/backendClient";
-import { formatAmount } from "../../lib/format";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { RiskExposurePanel } from "../../components/lp/RiskExposurePanel";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Deployments from "../../lib/deployments.json";
+import { fetchPoolOverview, fetchLPPosition, fetchPoolMetrics, fetchLPTransactions, PoolOverview, LPPosition, PoolMetrics, LPTransaction } from "../../lib/backendClient";
+import { formatAmount, formatDate } from "../../lib/format";
+import { useWalletWebSocket } from "../../lib/websocketClient";
+import { useTransactionManager } from "../../lib/transactionManager";
+import { useToast } from "../../components/Toast";
+
+// Premium institutional fintech styling
+const styles = {
+    page: {
+        minHeight: "100vh",
+        background: "#f8f9fa",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+        display: "flex",
+        flexDirection: "column" as "column",
+    },
+    navbar: {
+        background: "#ffffff",
+        borderBottom: "1px solid #e0e0e0",
+        padding: "16px 40px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexShrink: 0,
+    },
+    navLeft: {
+        display: "flex",
+        alignItems: "center",
+        gap: "32px",
+    },
+    navTitle: {
+        fontSize: "20px",
+        fontWeight: 700,
+        color: "#1a1a1a",
+    },
+    navLinks: {
+        display: "flex",
+        gap: "24px",
+        alignItems: "center",
+    },
+    navLink: {
+        textDecoration: "none",
+        color: "#666",
+        fontSize: "14px",
+        fontWeight: 500,
+        padding: "8px 0",
+        borderBottom: "2px solid transparent",
+        transition: "0.2s",
+    },
+    navLinkActive: {
+        color: "#2563eb",
+        borderBottomColor: "#2563eb",
+    },
+    navRight: {
+        display: "flex",
+        alignItems: "center",
+    },
+    container: {
+        maxWidth: "1400px",
+        margin: "0 auto",
+        padding: "32px 40px",
+        flex: 1,
+        width: "100%",
+    },
+    pageTitle: {
+        fontSize: "32px",
+        fontWeight: 700,
+        color: "#1a1a1a",
+        marginBottom: "8px",
+    },
+    pageSubtitle: {
+        fontSize: "14px",
+        color: "#666",
+        marginBottom: "32px",
+    },
+    overviewCards: {
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: "20px",
+        marginBottom: "32px",
+    },
+    overviewCard: {
+        background: "#ffffff",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        padding: "24px",
+    },
+    cardLabel: {
+        fontSize: "12px",
+        color: "#666",
+        marginBottom: "12px",
+        fontWeight: 500,
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    cardValue: {
+        fontSize: "28px",
+        fontWeight: 700,
+        color: "#1a1a1a",
+    },
+    cardMeta: {
+        fontSize: "12px",
+        color: "#999",
+        marginTop: "8px",
+    },
+    section: {
+        background: "#ffffff",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        padding: "32px",
+        marginBottom: "24px",
+    },
+    sectionHeader: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "24px",
+        paddingBottom: "16px",
+        borderBottom: "1px solid #f0f0f0",
+    },
+    sectionTitle: {
+        fontSize: "18px",
+        fontWeight: 600,
+        color: "#1a1a1a",
+    },
+    tabs: {
+        display: "flex",
+        gap: "8px",
+        marginBottom: "24px",
+        borderBottom: "1px solid #e0e0e0",
+    },
+    tab: {
+        padding: "12px 20px",
+        fontSize: "14px",
+        fontWeight: 500,
+        background: "transparent",
+        border: "none",
+        borderBottom: "2px solid transparent",
+        color: "#666",
+        cursor: "pointer",
+        transition: "0.2s",
+    },
+    tabActive: {
+        color: "#2563eb",
+        borderBottomColor: "#2563eb",
+    },
+    formGroup: {
+        marginBottom: "20px",
+    },
+    formLabel: {
+        fontSize: "13px",
+        fontWeight: 500,
+        color: "#1a1a1a",
+        marginBottom: "8px",
+        display: "block",
+    },
+    formInput: {
+        width: "100%",
+        padding: "12px 16px",
+        fontSize: "16px",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        background: "#ffffff",
+        color: "#1a1a1a",
+    },
+    noticeBox: {
+        padding: "12px 16px",
+        background: "#f0f4f8",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        fontSize: "13px",
+        color: "#666",
+        marginBottom: "20px",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "12px",
+    },
+    noticeIcon: {
+        fontSize: "16px",
+        flexShrink: 0,
+    },
+    buttonPrimary: {
+        padding: "12px 24px",
+        fontSize: "14px",
+        fontWeight: 500,
+        background: "#2563eb",
+        border: "none",
+        borderRadius: "4px",
+        color: "#ffffff",
+        cursor: "pointer",
+        transition: "0.2s",
+        width: "100%",
+    },
+    buttonDisabled: {
+        opacity: 0.5,
+        cursor: "not-allowed",
+    },
+    riskGrid: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "32px",
+    },
+    riskList: {
+        listStyle: "none",
+        padding: 0,
+        margin: 0,
+    },
+    riskItem: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "12px 0",
+        borderBottom: "1px solid #f0f0f0",
+    },
+    riskLabel: {
+        fontSize: "14px",
+        color: "#666",
+    },
+    riskValue: {
+        fontSize: "14px",
+        fontWeight: 600,
+        color: "#1a1a1a",
+    },
+    progressBar: {
+        height: "8px",
+        background: "#f0f0f0",
+        borderRadius: "4px",
+        overflow: "hidden",
+        marginTop: "8px",
+    },
+    progressFill: {
+        height: "100%",
+        background: "#2563eb",
+        borderRadius: "4px",
+        transition: "width 0.3s ease",
+    },
+    downloadLink: {
+        fontSize: "13px",
+        color: "#2563eb",
+        textDecoration: "none",
+        fontWeight: 500,
+    },
+    ledgerHeader: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+    },
+    searchBar: {
+        display: "flex",
+        gap: "12px",
+        alignItems: "center",
+    },
+    searchInput: {
+        padding: "10px 16px",
+        fontSize: "14px",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        background: "#ffffff",
+        color: "#1a1a1a",
+        width: "300px",
+    },
+    filterButton: {
+        padding: "10px 16px",
+        fontSize: "14px",
+        fontWeight: 500,
+        background: "#ffffff",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        color: "#1a1a1a",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    table: {
+        width: "100%",
+        borderCollapse: "collapse" as "collapse",
+    },
+    tableHeader: {
+        background: "#f8f9fa",
+        borderBottom: "1px solid #e0e0e0",
+    },
+    tableHeaderCell: {
+        padding: "12px 16px",
+        textAlign: "left",
+        fontSize: "12px",
+        fontWeight: 600,
+        color: "#666",
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+    },
+    tableRow: {
+        borderBottom: "1px solid #f0f0f0",
+    },
+    tableCell: {
+        padding: "12px 16px",
+        fontSize: "14px",
+        color: "#1a1a1a",
+    },
+    tableCellMuted: {
+        color: "#666",
+    },
+    statusBadge: {
+        display: "inline-block",
+        padding: "4px 8px",
+        borderRadius: "4px",
+        fontSize: "11px",
+        fontWeight: 600,
+    },
+    statusSettled: {
+        background: "#dcfce7",
+        color: "#15803d",
+    },
+    pagination: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: "20px",
+        paddingTop: "20px",
+        borderTop: "1px solid #e0e0e0",
+    },
+    paginationInfo: {
+        fontSize: "13px",
+        color: "#666",
+    },
+    paginationControls: {
+        display: "flex",
+        gap: "8px",
+        alignItems: "center",
+    },
+    paginationButton: {
+        padding: "8px 12px",
+        fontSize: "13px",
+        border: "1px solid #e0e0e0",
+        borderRadius: "4px",
+        background: "#ffffff",
+        color: "#1a1a1a",
+        cursor: "pointer",
+        minWidth: "36px",
+    },
+    paginationButtonActive: {
+        background: "#2563eb",
+        color: "#ffffff",
+        borderColor: "#2563eb",
+    },
+    paginationButtonDisabled: {
+        opacity: 0.5,
+        cursor: "not-allowed",
+    },
+    message: {
+        padding: "12px 16px",
+        borderRadius: "4px",
+        marginBottom: "24px",
+        fontSize: "14px",
+    },
+    messageSuccess: {
+        background: "#dcfce7",
+        color: "#15803d",
+        border: "1px solid #86efac",
+    },
+    messageError: {
+        background: "#fee2e2",
+        color: "#dc2626",
+        border: "1px solid #fca5a5",
+    },
+    messageInfo: {
+        background: "#dbeafe",
+        color: "#1e40af",
+        border: "1px solid #93c5fd",
+    },
+};
+
+// Transaction interface is now imported from backendClient as LPTransaction
 
 export default function LPDashboardPage() {
+    const pathname = usePathname();
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
-
+    
+    const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawShares, setWithdrawShares] = useState("");
-    const [message, setMessage] = useState<string | React.ReactNode>(null);
+    const [mintAmount, setMintAmount] = useState("");
+    const [message, setMessage] = useState<React.ReactNode | null>(null);
     const [loading, setLoading] = useState(false);
-    const [loadingType, setLoadingType] = useState<"deposit" | "withdraw" | null>(null);
+    const [loadingType, setLoadingType] = useState<"deposit" | "withdraw" | "mint" | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    // WebSocket connection for real-time updates
+    const { subscribe: subscribeWS, isConnected: wsConnected } = useWalletWebSocket(address);
+    const { trackTransaction } = useTransactionManager();
+    const { showToast } = useToast();
 
     // Fetch pool overview
     const { data: poolOverview, mutate: mutatePool } = useSWR<PoolOverview>(
         "pool-overview",
         () => fetchPoolOverview(),
-        { 
-            refreshInterval: 3000,
-            revalidateOnFocus: true,
-            revalidateOnReconnect: true,
-            dedupingInterval: 1000,
-        }
+        { refreshInterval: 10000 } // Reduced polling, WebSocket will handle updates
     );
 
-    // Fetch pool metrics (for APY/APR)
+    // Fetch pool metrics
     const { data: poolMetrics, mutate: mutateMetrics } = useSWR<PoolMetrics>(
         "pool-metrics",
         () => fetchPoolMetrics(),
-        { 
-            refreshInterval: 3000,
-            revalidateOnFocus: true,
-            revalidateOnReconnect: true,
-            dedupingInterval: 1000,
-        }
+        { refreshInterval: 10000 }
     );
 
     // Fetch LP position
-    const { data: lpPosition, mutate: mutatePosition, isLoading: isLoadingPosition, error: lpPositionError } = useSWR<LPPosition>(
+    const { data: lpPosition, mutate: mutatePosition } = useSWR<LPPosition>(
         address ? ["lp-position", address] : null,
-        async () => {
-            try {
-                return await fetchLPPosition(address);
-            } catch (error) {
-                console.error("[LP Dashboard] Error fetching LP position:", error);
-                throw error;
-            }
-        },
-        { 
-            refreshInterval: 3000,
-            revalidateOnFocus: true,
-            revalidateOnReconnect: true,
-            dedupingInterval: 1000,
-            errorRetryCount: 3,
-            errorRetryInterval: 2000,
-        }
+        () => fetchLPPosition(address),
+        { refreshInterval: 10000 }
     );
+
+    // Fetch LP transactions
+    const { data: transactionsData, mutate: mutateTransactions } = useSWR<{ transactions: LPTransaction[]; total: number }>(
+        address ? ["lp-transactions", address] : null,
+        () => fetchLPTransactions(address).then(res => ({ transactions: res.transactions, total: res.total })),
+        { refreshInterval: 10000 }
+    );
+
+    // Subscribe to WebSocket events
+    React.useEffect(() => {
+        if (!address) return;
+
+        const unsubscribeLPDeposit = subscribeWS('lp.deposited', (event) => {
+            if (event.payload.wallet.toLowerCase() === address.toLowerCase()) {
+                console.log('[WebSocket] lp.deposited event received, refreshing transactions...');
+                mutatePosition();
+                mutatePool();
+                mutateMetrics();
+                // CRITICAL: Force immediate refresh with revalidate
+                mutateTransactions(undefined, { revalidate: true });
+                showToast('success', `Deposit successful: ${formatAmount(event.payload.amount)}`);
+            }
+        });
+
+        const unsubscribeLPWithdraw = subscribeWS('lp.withdrawn', (event) => {
+            if (event.payload.wallet.toLowerCase() === address.toLowerCase()) {
+                console.log('[WebSocket] lp.withdrawn event received, refreshing transactions...');
+                mutatePosition();
+                mutatePool();
+                mutateMetrics();
+                // CRITICAL: Force immediate refresh with revalidate
+                mutateTransactions(undefined, { revalidate: true });
+                showToast('success', `Withdrawal successful`);
+            }
+        });
+
+        const unsubscribePoolLiquidity = subscribeWS('pool.liquidity_changed', () => {
+            mutatePool();
+            mutateMetrics();
+            mutatePosition();
+        });
+
+        const unsubscribePoolUtilization = subscribeWS('pool.utilization_changed', () => {
+            mutatePool();
+            mutateMetrics();
+        });
+
+        return () => {
+            unsubscribeLPDeposit();
+            unsubscribeLPWithdraw();
+            unsubscribePoolLiquidity();
+            unsubscribePoolUtilization();
+        };
+    }, [subscribeWS, address, mutatePosition, mutatePool, mutateMetrics, showToast]);
 
     // Calculate expected LP shares for deposit
     const expectedLPShares = useMemo(() => {
         if (!depositAmount || parseFloat(depositAmount) <= 0 || !poolOverview) return null;
         const amount = parseFloat(depositAmount);
-        const nav = parseFloat(poolOverview.navFormatted || "0");
-        const totalShares = parseFloat(poolOverview.lpTokenSupplyFormatted || "0");
-        
-        if (totalShares === 0) {
-            return amount; // First deposit: 1:1
-        }
-        if (nav === 0) return null;
-        
         const sharePrice = parseFloat(poolOverview.lpSharePriceFormatted || "1");
         return amount / sharePrice;
     }, [depositAmount, poolOverview]);
-
-    // Calculate expected earnings for deposit
-    const expectedEarnings = useMemo(() => {
-        if (!depositAmount || parseFloat(depositAmount) <= 0 || !poolMetrics) return null;
-        const amount = parseFloat(depositAmount);
-        const apy = parseFloat(poolMetrics.apy || "0");
-        
-        if (apy <= 0) return null;
-        
-        return {
-            annual: (amount * apy) / 100,
-            monthly: (amount * apy) / (100 * 12),
-            daily: (amount * apy) / (100 * 365),
-        };
-    }, [depositAmount, poolMetrics]);
 
     // Calculate expected withdrawal amount
     const expectedWithdrawal = useMemo(() => {
@@ -106,32 +497,39 @@ export default function LPDashboardPage() {
         return shares * sharePrice;
     }, [withdrawShares, poolOverview]);
 
-    // Calculate LP position PnL and projected earnings
-    const positionMetrics = useMemo(() => {
-        if (!lpPosition || !poolMetrics) return null;
-        
-        const currentValue = parseFloat(lpPosition.underlyingValueFormatted || "0");
-        const initialDeposit = parseFloat(lpPosition.dbShares || lpPosition.underlyingValueFormatted || "0");
-        const pnl = currentValue - initialDeposit;
-        const pnlPercent = initialDeposit > 0 ? (pnl / initialDeposit) * 100 : 0;
-        
-        const apy = parseFloat(poolMetrics.apy || "0");
-        const projectedAnnual = currentValue > 0 && apy > 0 ? (currentValue * apy) / 100 : 0;
-        const projectedMonthly = projectedAnnual / 12;
-        const projectedDaily = projectedAnnual / 365;
-        
-        return {
-            pnl,
-            pnlPercent,
-            projectedAnnual,
-            projectedMonthly,
-            projectedDaily,
-        };
-    }, [lpPosition, poolMetrics]);
+    // Use real transactions from backend
+    const transactions = transactionsData?.transactions || [];
+    
+    // Debug: Log transactions
+    React.useEffect(() => {
+        console.log('[LP Transactions] Current transactions:', transactions);
+        console.log('[LP Transactions] Transactions data:', transactionsData);
+        console.log('[LP Transactions] Wallet address:', address);
+    }, [transactions, transactionsData, address]);
 
+    // Filter transactions
+    const filteredTransactions = useMemo(() => {
+        if (!searchQuery) return transactions;
+        const query = searchQuery.toLowerCase();
+        return transactions.filter(tx => 
+            tx.id.toLowerCase().includes(query) ||
+            tx.type.toLowerCase().includes(query) ||
+            tx.txHash?.toLowerCase().includes(query)
+        );
+    }, [transactions, searchQuery]);
+
+    // Paginate transactions
+    const paginatedTransactions = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredTransactions.slice(start, start + itemsPerPage);
+    }, [filteredTransactions, currentPage]);
+
+    const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+
+    // Handle Deposit
     async function handleDeposit() {
         if (!address || !depositAmount || parseFloat(depositAmount) <= 0) {
-            setMessage(<span style={{ color: "#ef4444" }}>⚠️ Please enter a valid amount</span>);
+            setMessage("Please enter a valid amount");
             return;
         }
 
@@ -142,9 +540,11 @@ export default function LPDashboardPage() {
 
             const TestToken = Deployments.TestToken;
             const FinancingPool = Deployments.FinancingPool;
+            // TestToken uses 18 decimals
+            // Convert user input (e.g., 1000) to wei: multiply by 10^18
+            const amountWei = BigInt(Math.floor(parseFloat(depositAmount) * 1e18));
 
-            const amountWei = BigInt(Math.floor(parseFloat(depositAmount) * 10 ** 18));
-
+            // Check allowance
             const allowance = await publicClient!.readContract({
                 address: TestToken.address as `0x${string}`,
                 abi: TestToken.abi,
@@ -153,7 +553,7 @@ export default function LPDashboardPage() {
             }) as bigint;
 
             if (allowance < amountWei) {
-                setMessage(<span style={{ color: "#3b82f6" }}>⏳ Step 1/2: Approving tokens... (Please confirm in wallet)</span>);
+                setMessage("Step 1/2: Approving tokens...");
                 const approveTx = await writeContractAsync({
                     address: TestToken.address as `0x${string}`,
                     abi: TestToken.abi,
@@ -163,7 +563,7 @@ export default function LPDashboardPage() {
                 await publicClient!.waitForTransactionReceipt({ hash: approveTx });
             }
 
-            setMessage(<span style={{ color: "#3b82f6" }}>⏳ Step 2/2: Depositing liquidity... (Please confirm in wallet)</span>);
+            setMessage("Step 2/2: Depositing liquidity...");
             const depositTx = await writeContractAsync({
                 address: FinancingPool.address as `0x${string}`,
                 abi: FinancingPool.abi,
@@ -171,51 +571,139 @@ export default function LPDashboardPage() {
                 args: [amountWei],
             });
 
-            setMessage(<span style={{ color: "#3b82f6" }}>⏳ Transaction sent. Waiting for confirmation...</span>);
+            trackTransaction(depositTx);
+            showToast('info', `Deposit transaction submitted: ${depositTx.slice(0, 10)}...`);
+
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: depositTx });
 
-            if (receipt.status === "success") {
-                setMessage(
-                    <div style={{ color: "#22c55e", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "20px" }}>✅</span>
-                        <span>Deposit successful! LP shares minted.</span>
-                    </div>
-                );
-                setDepositAmount("");
+            // Notify backend about the deposit so it can record the transaction
+            try {
+                console.log('[Deposit] Recording transaction in backend...', { depositTx, address, depositAmount });
                 
-                // Refresh data
-                await Promise.all([
-                    mutatePool(undefined, { revalidate: true }),
-                    mutatePosition(undefined, { revalidate: true }),
-                    mutateMetrics(undefined, { revalidate: true }),
-                ]);
+                const FinancingPool = Deployments.FinancingPool;
+                const lpPositionResult = await publicClient!.readContract({
+                    address: FinancingPool.address as `0x${string}`,
+                    abi: FinancingPool.abi,
+                    functionName: "getLPPosition",
+                    args: [address],
+                }) as [bigint, bigint, bigint]; // [lpShares, underlyingValue, sharePrice]
                 
-                setTimeout(async () => {
-                    await Promise.all([
-                        mutatePool(undefined, { revalidate: true }),
-                        mutatePosition(undefined, { revalidate: true }),
-                        mutateMetrics(undefined, { revalidate: true }),
-                    ]);
-                }, 2000);
-            } else {
-                setMessage(<span style={{ color: "#ef4444" }}>❌ Error: Deposit transaction reverted.</span>);
+                // getLPPosition returns a tuple: [lpShares, underlyingValue, sharePrice]
+                const lpShares = lpPositionResult[0];
+                const underlyingValue = lpPositionResult[1];
+                const sharePrice = lpPositionResult[2];
+
+                console.log('[Deposit] LP Position data:', {
+                    lpShares: lpShares.toString(),
+                    sharePrice: sharePrice.toString(),
+                });
+
+                const requestBody = {
+                    type: 'Deposit',
+                    amount: depositAmount,
+                    lpShares: lpShares.toString(),
+                    sharePrice: sharePrice.toString(),
+                    txHash: depositTx,
+                    blockNumber: receipt.blockNumber.toString(),
+                };
+
+                console.log('[Deposit] Sending request to backend:', requestBody);
+
+                // Call backend to record transaction
+                const recordRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/lp/record-transaction`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-wallet-address': address!,
+                    },
+                    body: JSON.stringify(requestBody),
+                });
+                
+                console.log('[Deposit] Backend response status:', recordRes.status);
+                
+                if (!recordRes.ok) {
+                    const errorText = await recordRes.text();
+                    console.error('[Deposit] ❌ Failed to record transaction:', recordRes.status, errorText);
+                    showToast('error', `Failed to record transaction: ${errorText}`);
+                } else {
+                    const result = await recordRes.json();
+                    console.log('[Deposit] ✅ Transaction recorded successfully:', result);
+                    // CRITICAL: Force immediate refresh with revalidate
+                    await mutateTransactions(undefined, { revalidate: true });
+                    // Also refresh after a short delay to ensure it's visible
+                    setTimeout(() => {
+                        mutateTransactions(undefined, { revalidate: true });
+                    }, 500);
+                }
+            } catch (err: any) {
+                console.error('[Deposit] ❌ Error recording transaction:', err);
+                showToast('error', `Failed to record transaction: ${err.message}`);
             }
+
+            showToast('success', 'Deposit successful! LP shares minted.');
+            setDepositAmount("");
+            setMessage(null); // Clear the "Step 2/2: Depositing liquidity..." message
+            
+            // Refresh all data
+            await Promise.all([
+                mutatePool(undefined, { revalidate: true }),
+                mutatePosition(undefined, { revalidate: true }),
+                mutateTransactions(undefined, { revalidate: true }),
+            ]);
         } catch (e: any) {
             console.error(e);
-            setMessage(
-                <div style={{ color: "#ef4444" }}>
-                    ❌ Deposit failed: {e.message || e.shortMessage || "Unknown error"}
-                </div>
-            );
+            setMessage(`Deposit failed: ${e.message || e.shortMessage || "Unknown error"}`);
         } finally {
             setLoading(false);
             setLoadingType(null);
         }
     }
 
+    // Handle Mint TestToken
+    async function handleMintTestToken() {
+        if (!address || !mintAmount || parseFloat(mintAmount) <= 0) {
+            setMessage("Please enter a valid amount");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setLoadingType("mint");
+            setMessage(null);
+
+            const TestToken = Deployments.TestToken;
+            // TestToken uses 18 decimals
+            const amountWei = BigInt(Math.floor(parseFloat(mintAmount) * 1e18));
+
+            setMessage("Minting TestToken...");
+            const mintTx = await writeContractAsync({
+                address: TestToken.address as `0x${string}`,
+                abi: TestToken.abi,
+                functionName: "mint",
+                args: [address, amountWei],
+            });
+
+            trackTransaction(mintTx);
+            showToast('info', `Mint transaction submitted: ${mintTx.slice(0, 10)}...`);
+
+            await publicClient!.waitForTransactionReceipt({ hash: mintTx });
+
+            showToast('success', `Minted ${mintAmount} TestToken successfully!`);
+            setMintAmount("");
+        } catch (e: any) {
+            console.error(e);
+            setMessage(`Mint failed: ${e.message || e.shortMessage || "Unknown error"}`);
+            showToast('error', `Mint failed: ${e.message || e.shortMessage || "Unknown error"}`);
+        } finally {
+            setLoading(false);
+            setLoadingType(null);
+        }
+    }
+
+    // Handle Withdraw
     async function handleWithdraw() {
         if (!address || !withdrawShares || parseFloat(withdrawShares) <= 0) {
-            setMessage(<span style={{ color: "#ef4444" }}>⚠️ Please enter a valid LP share amount</span>);
+            setMessage("Please enter a valid LP share amount");
             return;
         }
 
@@ -225,18 +713,18 @@ export default function LPDashboardPage() {
             setMessage(null);
 
             if (poolOverview && parseFloat(poolOverview.utilizationPercent) >= parseFloat(poolOverview.maxUtilizationPercent)) {
-                setMessage(
-                    <span style={{ color: "#ef4444" }}>
-                        ⚠️ Withdrawal disabled: Utilization is {poolOverview.utilizationPercent}% (max: {poolOverview.maxUtilizationPercent}%)
-                    </span>
-                );
+                setMessage(`Withdrawal disabled: Utilization is ${poolOverview.utilizationPercent}% (max: ${poolOverview.maxUtilizationPercent}%)`);
+                setLoading(false);
+                setLoadingType(null);
                 return;
             }
 
             const FinancingPool = Deployments.FinancingPool;
-            const sharesWei = BigInt(Math.floor(parseFloat(withdrawShares) * 10 ** 18));
+            // LP shares use 18 decimals (same as ERC20 standard)
+            // Convert user input (e.g., 1000) to wei: multiply by 10^18
+            const sharesWei = BigInt(Math.floor(parseFloat(withdrawShares) * 1e18));
 
-            setMessage(<span style={{ color: "#3b82f6" }}>⏳ Withdrawing liquidity... (Please confirm in wallet)</span>);
+            setMessage("Withdrawing liquidity...");
             const withdrawTx = await writeContractAsync({
                 address: FinancingPool.address as `0x${string}`,
                 abi: FinancingPool.abi,
@@ -244,42 +732,84 @@ export default function LPDashboardPage() {
                 args: [sharesWei],
             });
 
-            setMessage(<span style={{ color: "#3b82f6" }}>⏳ Transaction sent. Waiting for confirmation...</span>);
+            trackTransaction(withdrawTx);
+            showToast('info', `Withdrawal transaction submitted: ${withdrawTx.slice(0, 10)}...`);
+
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: withdrawTx });
 
-            if (receipt.status === "success") {
-                setMessage(
-                    <div style={{ color: "#22c55e", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "20px" }}>✅</span>
-                        <span>Withdrawal successful!</span>
-                    </div>
-                );
-                setWithdrawShares("");
-                
-                // Refresh data
-                await Promise.all([
-                    mutatePool(undefined, { revalidate: true }),
-                    mutatePosition(undefined, { revalidate: true }),
-                    mutateMetrics(undefined, { revalidate: true }),
-                ]);
-                
-                setTimeout(async () => {
-                    await Promise.all([
-                        mutatePool(undefined, { revalidate: true }),
-                        mutatePosition(undefined, { revalidate: true }),
-                        mutateMetrics(undefined, { revalidate: true }),
-                    ]);
-                }, 2000);
-            } else {
-                setMessage(<span style={{ color: "#ef4444" }}>❌ Error: Withdrawal transaction reverted.</span>);
+            if (receipt.status !== "success") {
+                showToast('error', 'Withdrawal transaction reverted');
+                setMessage(null);
+                setLoading(false);
+                setLoadingType(null);
+                return;
             }
+
+            // Notify backend about the withdrawal so it can record the transaction
+            try {
+                const FinancingPool = Deployments.FinancingPool;
+                const lpPositionResult = await publicClient!.readContract({
+                    address: FinancingPool.address as `0x${string}`,
+                    abi: FinancingPool.abi,
+                    functionName: "getLPPosition",
+                    args: [address],
+                }) as [bigint, bigint, bigint]; // [lpShares, underlyingValue, sharePrice]
+                
+                // getLPPosition returns a tuple: [lpShares, underlyingValue, sharePrice]
+                const sharePrice = lpPositionResult[2];
+                const withdrawalAmount = await publicClient!.readContract({
+                    address: FinancingPool.address as `0x${string}`,
+                    abi: FinancingPool.abi,
+                    functionName: "calculateWithdrawalAmount",
+                    args: [sharesWei],
+                }) as bigint;
+
+                // Call backend to record transaction
+                await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/lp/record-transaction`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-wallet-address': address!,
+                    },
+                    body: JSON.stringify({
+                        type: 'Withdrawal',
+                        amount: (Number(withdrawalAmount) / 1e18).toString(),
+                        lpShares: withdrawShares,
+                        sharePrice: sharePrice.toString(),
+                        txHash: withdrawTx,
+                        blockNumber: receipt.blockNumber.toString(),
+                    }),
+                }).catch(err => {
+                    console.warn('Failed to notify backend about withdrawal:', err);
+                });
+            } catch (err) {
+                console.warn('Failed to record transaction in backend:', err);
+            }
+
+            showToast('success', 'Withdrawal successful!');
+            setWithdrawShares("");
+            setMessage(null); // Clear the "Withdrawing liquidity..." message
+            
+            // Force immediate refresh
+            await Promise.all([
+                mutatePool(undefined, { revalidate: true }),
+                mutatePosition(undefined, { revalidate: true }),
+                mutateMetrics(undefined, { revalidate: true }),
+                mutateTransactions(undefined, { revalidate: true }),
+            ]);
+            
+            // Also trigger a second refresh after a short delay to ensure backend has synced
+            setTimeout(async () => {
+                await Promise.all([
+                    mutatePool(),
+                    mutatePosition(),
+                    mutateMetrics(),
+                    mutateTransactions(),
+                ]);
+            }, 2000);
         } catch (e: any) {
             console.error(e);
-            setMessage(
-                <div style={{ color: "#ef4444" }}>
-                    ❌ Withdrawal failed: {e.message || e.shortMessage || "Unknown error"}
-                </div>
-            );
+            setMessage(`Withdrawal failed: ${e.message || e.shortMessage || "Unknown error"}`);
         } finally {
             setLoading(false);
             setLoadingType(null);
@@ -287,1248 +817,475 @@ export default function LPDashboardPage() {
     }
 
     const isWithdrawDisabled = poolOverview && parseFloat(poolOverview.utilizationPercent) >= parseFloat(poolOverview.maxUtilizationPercent);
-    const currentAPY = poolMetrics?.apy ? parseFloat(poolMetrics.apy) : poolOverview?.apy ? parseFloat(poolOverview.apy) : 0;
-    const currentAPR = poolMetrics?.apr ? parseFloat(poolMetrics.apr) : poolOverview?.apr ? parseFloat(poolOverview.apr) : 0;
+    const netYieldTTM = poolMetrics?.apr ? parseFloat(poolMetrics.apr) : 0;
 
     return (
-        <div style={{ 
-            maxWidth: "1400px", 
-            margin: "0 auto",
-            padding: "0 20px",
-            minHeight: "100vh",
-        }}>
-            {/* Header */}
-            <div style={{ 
-                marginBottom: "32px", 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "flex-start",
-                gap: "20px",
-                flexWrap: "wrap",
-            }}>
-                <div style={{ flex: "1", minWidth: "300px" }}>
-                    <h1 style={{ 
-                        fontSize: "clamp(28px, 4vw, 36px)", 
-                        fontWeight: 800, 
-                        marginBottom: "8px",
-                        background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        backgroundClip: "text",
-                        lineHeight: "1.2",
-                    }}>
-                        LP Dashboard
-                    </h1>
-                    <p style={{ 
-                        color: "var(--text-muted)", 
-                        fontSize: "16px",
-                        lineHeight: "1.6"
-                    }}>
-                        Provide liquidity and earn yield from invoice financing
+        <div style={styles.page}>
+            {/* Top Navbar */}
+            <nav style={styles.navbar}>
+                <div style={styles.navLeft}>
+                    <div style={styles.navTitle}>TIFA Dashboard</div>
+                    <div style={styles.navLinks}>
+                        <Link href="/overview" style={{ ...styles.navLink, ...(pathname === "/overview" ? styles.navLinkActive : {}) }}>
+                            Overview
+                        </Link>
+                        <Link href="/invoices" style={{ ...styles.navLink, ...(pathname?.startsWith("/invoices") ? styles.navLinkActive : {}) }}>
+                            Invoices
+                        </Link>
+                        <Link href="/lp" style={{ ...styles.navLink, ...(pathname === "/lp" ? styles.navLinkActive : {}) }}>
+                            LP Dashboard
+                        </Link>
+                        <Link href="/analytics" style={{ ...styles.navLink, ...(pathname === "/analytics" ? styles.navLinkActive : {}) }}>
+                            Analytics
+                        </Link>
+                        <Link href="/agent" style={{ ...styles.navLink, ...(pathname === "/agent" ? styles.navLinkActive : {}) }}>
+                            Agent Console
+                        </Link>
+                    </div>
+                </div>
+                <div style={styles.navRight}>
+                    <ConnectButton />
+                </div>
+            </nav>
+
+            {/* Main Content */}
+            <div style={styles.container}>
+                {/* Page Header */}
+                <div>
+                    <h1 style={styles.pageTitle}>Liquidity Provider Dashboard</h1>
+                    <p style={styles.pageSubtitle}>
+                        Manage capital allocation and monitor risk exposure
                     </p>
                 </div>
-                <Link href="/" style={{ textDecoration: "none", flexShrink: 0 }}>
-                    <Button variant="secondary" style={{ 
-                        padding: "10px 20px",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        whiteSpace: "nowrap",
-                    }}>
-                        ← Back to Invoices
-                    </Button>
-                </Link>
-            </div>
 
-            {/* Message Alert */}
-            {message && (
-                <div style={{
-                    marginBottom: "24px",
-                    padding: "16px 20px",
-                    background: typeof message === "string" && (message.includes("❌") || message.includes("⚠️")) 
-                        ? "rgba(239, 68, 68, 0.1)" 
-                        : typeof message === "string" && message.includes("✅")
-                        ? "rgba(34, 197, 94, 0.1)"
-                        : "rgba(59, 130, 246, 0.1)",
-                    border: `1px solid ${
-                        typeof message === "string" && (message.includes("❌") || message.includes("⚠️"))
-                            ? "rgba(239, 68, 68, 0.3)" 
-                            : typeof message === "string" && message.includes("✅")
-                            ? "rgba(34, 197, 94, 0.3)"
-                            : "rgba(59, 130, 246, 0.3)"
-                    }`,
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    fontWeight: 500,
-                    animation: "fadeIn 0.3s ease-out",
-                }}>
-                    {message}
+                {/* Message Display */}
+                {message && (
+                    <div style={{
+                        ...styles.message,
+                        ...(typeof message === "string" && message.includes("successful") ? styles.messageSuccess :
+                            typeof message === "string" && message.includes("failed") || typeof message === "string" && message.includes("disabled") ? styles.messageError :
+                            styles.messageInfo)
+                    }}>
+                        {message}
+                    </div>
+                )}
+
+                {/* LP Portfolio Overview */}
+                <div style={styles.overviewCards}>
+                    <div style={styles.overviewCard}>
+                        <div style={styles.cardLabel}>
+                            <span>📄</span>
+                            <span>Total Deposited</span>
+                        </div>
+                        <div style={styles.cardValue}>
+                            {lpPosition && lpPosition.underlyingValueFormatted
+                                ? formatAmount(lpPosition.underlyingValueFormatted, "TRY")
+                                : formatAmount("0", "TRY")}
+                        </div>
+                        <div style={styles.cardMeta}>On-chain sourced</div>
+                    </div>
+                    <div style={styles.overviewCard}>
+                        <div style={styles.cardLabel}>
+                            <span>→</span>
+                            <span>Current Share Value</span>
+                        </div>
+                        <div style={styles.cardValue}>
+                            {poolOverview?.lpSharePriceFormatted
+                                ? formatAmount(poolOverview.lpSharePriceFormatted, "TRY")
+                                : formatAmount("1.00", "TRY")}
+                        </div>
+                        <div style={styles.cardMeta}>Pool sharePrice</div>
+                    </div>
+                    <div style={styles.overviewCard}>
+                        <div style={styles.cardLabel}>
+                            <span>📊</span>
+                            <span>Net Yield (TTM)</span>
+                        </div>
+                        <div style={styles.cardValue}>
+                            {netYieldTTM > 0 ? `${netYieldTTM.toFixed(1)}%` : "N/A"}
+                        </div>
+                        <div style={styles.cardMeta}>Realized events only</div>
+                    </div>
+                    <div style={styles.overviewCard}>
+                        <div style={styles.cardLabel}>
+                            <span>+</span>
+                            <span>Utilization</span>
+                        </div>
+                        <div style={styles.cardValue}>
+                            {poolOverview?.utilizationPercent || "0.0"}%
+                        </div>
+                        <div style={styles.cardMeta}>
+                            {poolOverview && parseFloat(poolOverview.utilizationPercent) >= parseFloat(poolOverview.maxUtilizationPercent) - 5
+                                ? "Near limit"
+                                : "Within limits"}
+                        </div>
+                    </div>
                 </div>
-            )}
 
-            {/* Pool Overview */}
-            {poolOverview && (
-                <Card style={{ 
-                    marginBottom: "32px",
-                    background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)",
-                    border: "2px solid rgba(59, 130, 246, 0.2)",
-                    padding: "28px",
-                }}>
-                    <div style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
-                        alignItems: "center",
-                        marginBottom: "24px",
-                        flexWrap: "wrap",
-                        gap: "12px",
-                    }}>
-                        <h2 style={{ 
-                            fontSize: "24px", 
-                            fontWeight: 700,
-                            background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                        }}>
-                            💧 Pool Overview
-                        </h2>
-                        <div style={{
-                            padding: "6px 12px",
-                            background: "rgba(59, 130, 246, 0.15)",
-                            borderRadius: "20px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            color: "#3b82f6"
-                        }}>
-                            Live
+                {/* Capital Management & Risk Exposure */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
+                    {/* Capital Management */}
+                    <div style={styles.section}>
+                        <div style={styles.sectionHeader}>
+                            <h2 style={styles.sectionTitle}>Capital Management</h2>
                         </div>
-                    </div>
-                    <div style={{ 
-                        display: "grid", 
-                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-                        gap: "20px",
-                        marginBottom: "24px"
-                    }}>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(59, 130, 246, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(59, 130, 246, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                Total Liquidity (TVL)
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800,
-                                color: "#3b82f6",
-                                margin: 0,
-                                wordBreak: "break-word",
-                            }}>
-                                {formatAmount(poolOverview.totalLiquidityFormatted, "TRY")}
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(239, 68, 68, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(239, 68, 68, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                Borrowed
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: "#ef4444",
-                                margin: 0,
-                            }}>
-                                {formatAmount(poolOverview.totalBorrowedFormatted, "TRY")}
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(34, 197, 94, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(34, 197, 94, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                Available
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: "#22c55e",
-                                margin: 0,
-                            }}>
-                                {formatAmount(poolOverview.availableLiquidityFormatted, "TRY")}
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: parseFloat(poolOverview.utilizationPercent) > 75 
-                                ? "rgba(239, 68, 68, 0.1)"
-                                : parseFloat(poolOverview.utilizationPercent) > 50
-                                ? "rgba(249, 115, 22, 0.1)"
-                                : "rgba(34, 197, 94, 0.1)",
-                            borderRadius: "12px",
-                            border: `1px solid ${
-                                parseFloat(poolOverview.utilizationPercent) > 75 
-                                    ? "rgba(239, 68, 68, 0.2)"
-                                    : parseFloat(poolOverview.utilizationPercent) > 50
-                                    ? "rgba(249, 115, 22, 0.2)"
-                                    : "rgba(34, 197, 94, 0.2)"
-                            }`,
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                Utilization
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: parseFloat(poolOverview.utilizationPercent) > 75 
-                                    ? "#ef4444" 
-                                    : parseFloat(poolOverview.utilizationPercent) > 50
-                                    ? "#f97316"
-                                    : "#22c55e",
-                                margin: 0,
-                            }}>
-                                {poolOverview.utilizationPercent}%
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(251, 191, 36, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(251, 191, 36, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                LP APR
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: "#fbbf24",
-                                margin: 0,
-                            }}>
-                                {currentAPR > 0 ? `${currentAPR.toFixed(2)}%` : "N/A"}
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(168, 85, 247, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(168, 85, 247, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                LP APY
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: "#a855f7",
-                                margin: 0,
-                            }}>
-                                {currentAPY > 0 ? `${currentAPY.toFixed(2)}%` : "N/A"}
-                            </p>
-                        </div>
-                        <div style={{
-                            padding: "20px",
-                            background: "rgba(59, 130, 246, 0.1)",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(59, 130, 246, 0.2)",
-                        }}>
-                            <p style={{ 
-                                fontSize: "12px", 
-                                color: "var(--text-muted)", 
-                                marginBottom: "8px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                                fontWeight: 600
-                            }}>
-                                Share Price
-                            </p>
-                            <p style={{ 
-                                fontSize: "clamp(20px, 3vw, 28px)", 
-                                fontWeight: 800, 
-                                color: "#3b82f6",
-                                margin: 0,
-                            }}>
-                                {formatAmount(poolOverview.lpSharePriceFormatted, "TRY")}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    {/* Utilization Progress Bar */}
-                    <div>
-                        <div style={{ 
-                            display: "flex", 
-                            justifyContent: "space-between", 
-                            marginBottom: "10px", 
-                            fontSize: "13px", 
-                            color: "var(--text-muted)",
-                            fontWeight: 600
-                        }}>
-                            <span>Pool Utilization</span>
-                            <span>{poolOverview.utilizationPercent}% / {poolOverview.maxUtilizationPercent}%</span>
-                        </div>
-                        <div style={{
-                            width: "100%",
-                            height: "10px",
-                            background: "rgba(59, 130, 246, 0.1)",
-                            borderRadius: "10px",
-                            overflow: "hidden",
-                            position: "relative",
-                            border: "1px solid rgba(59, 130, 246, 0.2)",
-                        }}>
-                            <div style={{
-                                width: `${Math.min(100, (parseFloat(poolOverview.utilizationPercent) / parseFloat(poolOverview.maxUtilizationPercent)) * 100)}%`,
-                                height: "100%",
-                                background: parseFloat(poolOverview.utilizationPercent) > 75 
-                                    ? "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)"
-                                    : parseFloat(poolOverview.utilizationPercent) > 50
-                                    ? "linear-gradient(90deg, #f97316 0%, #ea580c 100%)"
-                                    : "linear-gradient(90deg, #22c55e 0%, #16a34a 100%)",
-                                transition: "width 0.5s ease",
-                                borderRadius: "10px",
-                            }} />
-                        </div>
-                    </div>
-                </Card>
-            )}
-
-            {/* Action Cards */}
-            <div style={{ 
-                display: "grid", 
-                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 500px), 1fr))", 
-                gap: "28px",
-                marginBottom: "32px"
-            }}>
-                {/* Deposit Section */}
-                <Card style={{
-                    background: "linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)",
-                    border: "2px solid rgba(59, 130, 246, 0.2)",
-                    padding: "32px",
-                    position: "relative",
-                    overflow: "hidden",
-                }}>
-                    <div style={{
-                        position: "absolute",
-                        top: "-50px",
-                        right: "-50px",
-                        width: "200px",
-                        height: "200px",
-                        background: "radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%)",
-                        borderRadius: "50%",
-                    }} />
-                    <div style={{ position: "relative", zIndex: 1 }}>
-                        <div style={{ 
-                            display: "flex", 
-                            alignItems: "center", 
-                            gap: "12px",
-                            marginBottom: "12px"
-                        }}>
-                            <div style={{
-                                width: "48px",
-                                height: "48px",
-                                background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-                                borderRadius: "12px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "24px",
-                            }}>
-                                💧
-                            </div>
-                            <div>
-                                <h2 style={{ 
-                                    fontSize: "22px", 
-                                    fontWeight: 700,
-                                    marginBottom: "4px"
-                                }}>
-                                    Provide Liquidity
-                                </h2>
-                                <p style={{ 
-                                    fontSize: "13px", 
-                                    color: "var(--text-muted)",
-                                }}>
-                                    Deposit stablecoins to earn yield
-                                </p>
-                            </div>
-                        </div>
-
-                        <div style={{ marginTop: "28px", marginBottom: "20px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                                <label style={{ 
-                                    fontSize: "14px", 
-                                    fontWeight: 600, 
-                                    display: "block",
-                                    color: "var(--text)"
-                                }}>
-                                    Amount to Deposit
-                                </label>
-                                {poolOverview && poolOverview.availableLiquidityFormatted && (
-                                    <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                        Available: {formatAmount(poolOverview.availableLiquidityFormatted, "TRY")}
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ position: "relative", marginBottom: "8px" }}>
-                                <input
-                                    id="deposit-input"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={depositAmount}
-                                    onChange={(e) => setDepositAmount(e.target.value)}
-                                    placeholder="0.00"
-                                    style={{
-                                        width: "100%",
-                                        padding: "16px 70px 16px 20px",
-                                        background: "var(--bg-panel)",
-                                        border: "2px solid var(--border)",
-                                        borderRadius: "12px",
-                                        color: "var(--text)",
-                                        fontSize: "18px",
-                                        fontWeight: 600,
-                                        transition: "all 0.2s",
-                                        outline: "none",
-                                        boxSizing: "border-box",
-                                    }}
-                                    disabled={loading || !address}
-                                    onFocus={(e) => {
-                                        e.target.style.borderColor = "#3b82f6";
-                                        e.target.style.boxShadow = "0 0 0 3px rgba(59, 130, 246, 0.1)";
-                                    }}
-                                    onBlur={(e) => {
-                                        e.target.style.borderColor = "var(--border)";
-                                        e.target.style.boxShadow = "none";
-                                    }}
-                                />
-                                <span style={{
-                                    position: "absolute",
-                                    right: "20px",
-                                    top: "50%",
-                                    transform: "translateY(-50%)",
-                                    color: "var(--text-muted)",
-                                    fontSize: "16px",
-                                    fontWeight: 700,
-                                    pointerEvents: "none",
-                                }}>
-                                    TRY
-                                </span>
-                            </div>
-                            {poolOverview && poolOverview.availableLiquidityFormatted && (
-                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                    {["25", "50", "75", "100"].map((percent) => {
-                                        const available = parseFloat(poolOverview.availableLiquidityFormatted || "0");
-                                        const amount = (available * parseFloat(percent)) / 100;
-                                        return (
-                                            <button
-                                                key={percent}
-                                                onClick={() => setDepositAmount(amount.toFixed(2))}
-                                                disabled={loading || !address || amount <= 0}
-                                                style={{
-                                                    padding: "6px 12px",
-                                                    background: "rgba(59, 130, 246, 0.1)",
-                                                    border: "1px solid rgba(59, 130, 246, 0.3)",
-                                                    borderRadius: "8px",
-                                                    fontSize: "12px",
-                                                    fontWeight: 600,
-                                                    color: "#3b82f6",
-                                                    cursor: (loading || !address || amount <= 0) ? "not-allowed" : "pointer",
-                                                    opacity: (loading || !address || amount <= 0) ? 0.5 : 1,
-                                                    transition: "all 0.2s",
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (!loading && address && amount > 0) {
-                                                        e.currentTarget.style.background = "rgba(59, 130, 246, 0.2)";
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = "rgba(59, 130, 246, 0.1)";
-                                                }}
-                                            >
-                                                {percent}%
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Expected LP Shares */}
-                        {expectedLPShares !== null && depositAmount && parseFloat(depositAmount) > 0 && (
-                            <div style={{
-                                padding: "16px",
-                                background: "rgba(59, 130, 246, 0.15)",
-                                borderRadius: "12px",
-                                marginBottom: "12px",
-                                border: "1px solid rgba(59, 130, 246, 0.3)",
-                            }}>
-                                <p style={{ 
-                                    color: "var(--text-muted)", 
-                                    marginBottom: "6px",
-                                    fontSize: "13px",
-                                    fontWeight: 600
-                                }}>
-                                    Expected LP Shares
-                                </p>
-                                <p style={{ 
-                                    fontWeight: 700, 
-                                    color: "#3b82f6",
-                                    fontSize: "18px",
-                                    margin: 0,
-                                }}>
-                                    {expectedLPShares.toFixed(4)} <span style={{ fontSize: "14px", color: "var(--text-muted)" }}>TIFA-LP</span>
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Expected Earnings */}
-                        {expectedEarnings && depositAmount && parseFloat(depositAmount) > 0 && (
-                            <div style={{
-                                padding: "16px",
-                                background: "rgba(168, 85, 247, 0.15)",
-                                borderRadius: "12px",
-                                marginBottom: "20px",
-                                border: "1px solid rgba(168, 85, 247, 0.3)",
-                            }}>
-                                <p style={{ 
-                                    color: "var(--text-muted)", 
-                                    marginBottom: "12px",
-                                    fontSize: "13px",
-                                    fontWeight: 600
-                                }}>
-                                    💰 Projected Earnings (at {currentAPY.toFixed(2)}% APY)
-                                </p>
-                                <div style={{ 
-                                    display: "grid", 
-                                    gridTemplateColumns: "repeat(3, 1fr)", 
-                                    gap: "12px" 
-                                }}>
-                                    <div>
-                                        <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Annual</p>
-                                        <p style={{ fontSize: "16px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                            {formatAmount(expectedEarnings.annual.toFixed(2), "TRY")}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Monthly</p>
-                                        <p style={{ fontSize: "16px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                            {formatAmount(expectedEarnings.monthly.toFixed(2), "TRY")}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Daily</p>
-                                        <p style={{ fontSize: "16px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                            {formatAmount(expectedEarnings.daily.toFixed(2), "TRY")}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <Button
-                            variant="primary"
-                            onClick={handleDeposit}
-                            disabled={loading || !address || !depositAmount || parseFloat(depositAmount) <= 0}
-                            style={{ 
-                                width: "100%",
-                                padding: "14px",
-                                fontSize: "16px",
-                                fontWeight: 700,
-                                opacity: (loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? 0.5 : 1,
-                            }}
-                        >
-                            {loading && loadingType === "deposit" ? (
-                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                                    <span className="spinner" /> Processing...
-                                </span>
-                            ) : (
-                                "Provide Liquidity"
-                            )}
-                        </Button>
-                    </div>
-                </Card>
-
-                {/* Withdraw Section */}
-                <Card style={{
-                    background: "linear-gradient(135deg, rgba(249, 115, 22, 0.05) 0%, rgba(239, 68, 68, 0.05) 100%)",
-                    border: "2px solid rgba(249, 115, 22, 0.2)",
-                    padding: "32px",
-                    position: "relative",
-                    overflow: "hidden",
-                    opacity: isWithdrawDisabled ? 0.6 : 1,
-                }}>
-                    <div style={{
-                        position: "absolute",
-                        top: "-50px",
-                        right: "-50px",
-                        width: "200px",
-                        height: "200px",
-                        background: "radial-gradient(circle, rgba(249, 115, 22, 0.1) 0%, transparent 70%)",
-                        borderRadius: "50%",
-                    }} />
-                    <div style={{ position: "relative", zIndex: 1 }}>
-                        <div style={{ 
-                            display: "flex", 
-                            alignItems: "center", 
-                            gap: "12px",
-                            marginBottom: "12px"
-                        }}>
-                            <div style={{
-                                width: "48px",
-                                height: "48px",
-                                background: "linear-gradient(135deg, #f97316 0%, #ef4444 100%)",
-                                borderRadius: "12px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "24px",
-                            }}>
-                                💰
-                            </div>
-                            <div>
-                                <h2 style={{ 
-                                    fontSize: "22px", 
-                                    fontWeight: 700,
-                                    marginBottom: "4px"
-                                }}>
-                                    Withdraw Liquidity
-                                </h2>
-                                <p style={{ 
-                                    fontSize: "13px", 
-                                    color: "var(--text-muted)",
-                                }}>
-                                    Burn LP shares to withdraw
-                                </p>
-                            </div>
-                        </div>
-
-                        {isWithdrawDisabled && (
-                            <div style={{
-                                padding: "14px",
-                                background: "rgba(239, 68, 68, 0.15)",
-                                border: "1px solid rgba(239, 68, 68, 0.3)",
-                                borderRadius: "12px",
-                                marginBottom: "20px",
-                                fontSize: "13px",
-                                color: "#ef4444",
-                                fontWeight: 600,
-                            }}>
-                                ⚠️ Withdrawals disabled: Utilization is {poolOverview?.utilizationPercent}% (max: {poolOverview?.maxUtilizationPercent}%)
-                            </div>
-                        )}
-
-                        <div style={{ marginTop: "28px", marginBottom: "20px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                                <label style={{ 
-                                    fontSize: "14px", 
-                                    fontWeight: 600, 
-                                    display: "block",
-                                    color: "var(--text)"
-                                }}>
-                                    LP Shares to Burn
-                                </label>
-                                {lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
-                                    <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                        You have: {formatAmount(lpPosition.lpSharesFormatted, "TIFA-LP")}
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ position: "relative", marginBottom: "8px" }}>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    min="0"
-                                    max={lpPosition && lpPosition.lpSharesFormatted ? parseFloat(lpPosition.lpSharesFormatted) : undefined}
-                                    value={withdrawShares}
-                                    onChange={(e) => setWithdrawShares(e.target.value)}
-                                    placeholder="0.0000"
-                                    style={{
-                                        width: "100%",
-                                        padding: "16px 90px 16px 20px",
-                                        background: "var(--bg-panel)",
-                                        border: "2px solid var(--border)",
-                                        borderRadius: "12px",
-                                        color: "var(--text)",
-                                        fontSize: "18px",
-                                        fontWeight: 600,
-                                        transition: "all 0.2s",
-                                        outline: "none",
-                                        boxSizing: "border-box",
-                                    }}
-                                    disabled={loading || !address || isWithdrawDisabled}
-                                    onFocus={(e) => {
-                                        if (!isWithdrawDisabled) {
-                                            e.target.style.borderColor = "#f97316";
-                                            e.target.style.boxShadow = "0 0 0 3px rgba(249, 115, 22, 0.1)";
-                                        }
-                                    }}
-                                    onBlur={(e) => {
-                                        e.target.style.borderColor = "var(--border)";
-                                        e.target.style.boxShadow = "none";
-                                    }}
-                                />
-                                <span style={{
-                                    position: "absolute",
-                                    right: "20px",
-                                    top: "50%",
-                                    transform: "translateY(-50%)",
-                                    color: "var(--text-muted)",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    pointerEvents: "none",
-                                }}>
-                                    TIFA-LP
-                                </span>
-                            </div>
-                            {lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 && !isWithdrawDisabled && (
-                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                    {["25", "50", "75", "100"].map((percent) => {
-                                        const totalShares = parseFloat(lpPosition.lpSharesFormatted || "0");
-                                        const shares = (totalShares * parseFloat(percent)) / 100;
-                                        return (
-                                            <button
-                                                key={percent}
-                                                onClick={() => setWithdrawShares(shares.toFixed(4))}
-                                                disabled={loading || !address || shares <= 0}
-                                                style={{
-                                                    padding: "6px 12px",
-                                                    background: "rgba(249, 115, 22, 0.1)",
-                                                    border: "1px solid rgba(249, 115, 22, 0.3)",
-                                                    borderRadius: "8px",
-                                                    fontSize: "12px",
-                                                    fontWeight: 600,
-                                                    color: "#f97316",
-                                                    cursor: (loading || !address || shares <= 0) ? "not-allowed" : "pointer",
-                                                    opacity: (loading || !address || shares <= 0) ? 0.5 : 1,
-                                                    transition: "all 0.2s",
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (!loading && address && shares > 0) {
-                                                        e.currentTarget.style.background = "rgba(249, 115, 22, 0.2)";
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = "rgba(249, 115, 22, 0.1)";
-                                                }}
-                                            >
-                                                {percent}%
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        {expectedWithdrawal !== null && withdrawShares && parseFloat(withdrawShares) > 0 && (
-                            <div style={{
-                                padding: "16px",
-                                background: "rgba(249, 115, 22, 0.15)",
-                                borderRadius: "12px",
-                                marginBottom: "20px",
-                                border: "1px solid rgba(249, 115, 22, 0.3)",
-                            }}>
-                                <p style={{ 
-                                    color: "var(--text-muted)", 
-                                    marginBottom: "6px",
-                                    fontSize: "13px",
-                                    fontWeight: 600
-                                }}>
-                                    Expected Withdrawal
-                                </p>
-                                <p style={{ 
-                                    fontWeight: 700, 
-                                    color: "#f97316",
-                                    fontSize: "18px",
-                                    margin: 0,
-                                }}>
-                                    {formatAmount(expectedWithdrawal.toFixed(2), "TRY")}
-                                </p>
-                            </div>
-                        )}
-
-                        <Button
-                            variant="warning"
-                            onClick={handleWithdraw}
-                            disabled={
-                                loading || 
-                                !address || 
-                                !withdrawShares || 
-                                parseFloat(withdrawShares) <= 0 ||
-                                isWithdrawDisabled
-                            }
-                            style={{ 
-                                width: "100%",
-                                padding: "14px",
-                                fontSize: "16px",
-                                fontWeight: 700,
-                                opacity: (loading && loadingType !== "withdraw") || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled ? 0.5 : 1,
-                            }}
-                        >
-                            {loading && loadingType === "withdraw" ? (
-                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                                    <span className="spinner" /> Processing...
-                                </span>
-                            ) : (
-                                "Withdraw Liquidity"
-                            )}
-                        </Button>
-                    </div>
-                </Card>
-            </div>
-
-            {/* Risk Exposure Panel */}
-            <RiskExposurePanel poolOverview={poolOverview} poolMetrics={poolMetrics} />
-
-            {/* LP Position */}
-            {address && (
-                <Card style={{ 
-                    marginTop: "32px",
-                    background: lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0
-                        ? "linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%)"
-                        : "linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)",
-                    border: lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0
-                        ? "2px solid rgba(34, 197, 94, 0.2)"
-                        : "2px solid rgba(59, 130, 246, 0.2)",
-                    padding: "32px",
-                }}>
-                    <div style={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        justifyContent: "space-between",
-                        marginBottom: "24px",
-                        flexWrap: "wrap",
-                        gap: "12px",
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div style={{
-                                width: "48px",
-                                height: "48px",
-                                background: lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0
-                                    ? "linear-gradient(135deg, #22c55e 0%, #3b82f6 100%)"
-                                    : "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-                                borderRadius: "12px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "24px",
-                            }}>
-                                {lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 ? "📊" : "💼"}
-                            </div>
-                            <div>
-                                <h2 style={{ 
-                                    fontSize: "22px", 
-                                    fontWeight: 700,
-                                    marginBottom: "4px"
-                                }}>
-                                    Your LP Position
-                                </h2>
-                                <p style={{ 
-                                    fontSize: "13px", 
-                                    color: "var(--text-muted)"
-                                }}>
-                                    {isLoadingPosition 
-                                        ? "Loading position..."
-                                        : lpPositionError
-                                        ? "Error loading position"
-                                        : lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 
-                                        ? `Your current liquidity provider position`
-                                        : "No liquidity provided yet"}
-                                </p>
-                            </div>
-                        </div>
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            {lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
-                                <div style={{
-                                    padding: "6px 12px",
-                                    background: "rgba(34, 197, 94, 0.15)",
-                                    borderRadius: "20px",
-                                    fontSize: "12px",
-                                    fontWeight: 600,
-                                    color: "#22c55e"
-                                }}>
-                                    Active
-                                </div>
-                            )}
-                            {!isLoadingPosition && (
-                                <button
-                                    onClick={async () => {
-                                        await Promise.all([
-                                            mutatePool(undefined, { revalidate: true }),
-                                            mutatePosition(undefined, { revalidate: true }),
-                                            mutateMetrics(undefined, { revalidate: true }),
-                                        ]);
-                                    }}
-                                    style={{
-                                        padding: "6px 12px",
-                                        background: "rgba(59, 130, 246, 0.15)",
-                                        border: "1px solid rgba(59, 130, 246, 0.3)",
-                                        borderRadius: "20px",
-                                        fontSize: "12px",
-                                        fontWeight: 600,
-                                        color: "#3b82f6",
-                                        cursor: "pointer",
-                                        transition: "all 0.2s",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = "rgba(59, 130, 246, 0.25)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = "rgba(59, 130, 246, 0.15)";
-                                    }}
-                                >
-                                    🔄 Refresh
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {isLoadingPosition ? (
-                        <div style={{
-                            padding: "40px",
-                            textAlign: "center",
-                        }}>
-                            <div className="spinner" style={{ 
-                                width: "32px", 
-                                height: "32px", 
-                                margin: "0 auto 16px",
-                                borderWidth: "3px"
-                            }} />
-                            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
-                                Loading your LP position...
-                            </p>
-                        </div>
-                    ) : lpPosition && lpPosition.lpSharesFormatted && parseFloat(lpPosition.lpSharesFormatted) > 0 ? (
-                        <>
-                            <div style={{ 
-                                display: "grid", 
-                                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-                                gap: "20px",
-                                marginBottom: "24px",
-                            }}>
-                                <div style={{
-                                    padding: "20px",
-                                    background: "rgba(59, 130, 246, 0.1)",
-                                    borderRadius: "12px",
-                                    border: "1px solid rgba(59, 130, 246, 0.2)",
-                                    transition: "transform 0.2s",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = "translateY(-2px)";
-                                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.2)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
-                                >
-                                    <p style={{ 
-                                        fontSize: "12px", 
-                                        color: "var(--text-muted)", 
-                                        marginBottom: "8px",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                        fontWeight: 600
-                                    }}>
-                                        LP Shares
-                                    </p>
-                                    <p style={{ 
-                                        fontSize: "clamp(20px, 3vw, 28px)", 
-                                        fontWeight: 800,
-                                        color: "#3b82f6",
-                                        margin: 0,
-                                        wordBreak: "break-word",
-                                    }}>
-                                        {formatAmount(lpPosition.lpSharesFormatted, "TIFA-LP")}
-                                    </p>
-                                </div>
-                                <div style={{
-                                    padding: "20px",
-                                    background: "rgba(34, 197, 94, 0.1)",
-                                    borderRadius: "12px",
-                                    border: "1px solid rgba(34, 197, 94, 0.2)",
-                                    transition: "transform 0.2s",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = "translateY(-2px)";
-                                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(34, 197, 94, 0.2)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
-                                >
-                                    <p style={{ 
-                                        fontSize: "12px", 
-                                        color: "var(--text-muted)", 
-                                        marginBottom: "8px",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                        fontWeight: 600
-                                    }}>
-                                        Underlying Value
-                                    </p>
-                                    <p style={{ 
-                                        fontSize: "clamp(20px, 3vw, 28px)", 
-                                        fontWeight: 800, 
-                                        color: "#22c55e",
-                                        margin: 0,
-                                    }}>
-                                        {formatAmount(lpPosition.underlyingValueFormatted, "TRY")}
-                                    </p>
-                                </div>
-                                <div style={{
-                                    padding: "20px",
-                                    background: "rgba(139, 92, 246, 0.1)",
-                                    borderRadius: "12px",
-                                    border: "1px solid rgba(139, 92, 246, 0.2)",
-                                    transition: "transform 0.2s",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = "translateY(-2px)";
-                                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(139, 92, 246, 0.2)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
-                                >
-                                    <p style={{ 
-                                        fontSize: "12px", 
-                                        color: "var(--text-muted)", 
-                                        marginBottom: "8px",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                        fontWeight: 600
-                                    }}>
-                                        Share Price
-                                    </p>
-                                    <p style={{ 
-                                        fontSize: "clamp(20px, 3vw, 28px)", 
-                                        fontWeight: 800,
-                                        color: "#8b5cf6",
-                                        margin: 0,
-                                    }}>
-                                        {formatAmount(lpPosition.sharePriceFormatted, "TRY")}
-                                    </p>
-                                </div>
-                                {poolMetrics && currentAPY > 0 && (
-                                    <div style={{
-                                        padding: "20px",
-                                        background: "rgba(168, 85, 247, 0.1)",
-                                        borderRadius: "12px",
-                                        border: "1px solid rgba(168, 85, 247, 0.2)",
-                                        transition: "transform 0.2s",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = "translateY(-2px)";
-                                        e.currentTarget.style.boxShadow = "0 4px 12px rgba(168, 85, 247, 0.2)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = "translateY(0)";
-                                        e.currentTarget.style.boxShadow = "none";
-                                    }}
-                                    >
-                                        <p style={{ 
-                                            fontSize: "12px", 
-                                            color: "var(--text-muted)", 
-                                            marginBottom: "8px",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.5px",
-                                            fontWeight: 600
-                                        }}>
-                                            Estimated APY
-                                        </p>
-                                        <p style={{ 
-                                            fontSize: "clamp(20px, 3vw, 28px)", 
-                                            fontWeight: 800,
-                                            color: "#a855f7",
-                                            margin: 0,
-                                        }}>
-                                            {currentAPY.toFixed(2)}%
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* PnL and Projected Earnings */}
-                            {positionMetrics && (
-                                <div style={{
-                                    padding: "20px",
-                                    background: "rgba(251, 191, 36, 0.1)",
-                                    borderRadius: "12px",
-                                    border: "1px solid rgba(251, 191, 36, 0.2)",
-                                    marginBottom: "20px",
-                                }}>
-                                    <p style={{ 
-                                        fontSize: "14px", 
-                                        color: "var(--text-muted)", 
-                                        marginBottom: "16px",
-                                        fontWeight: 600
-                                    }}>
-                                        💰 Yield Information
-                                    </p>
-                                    <div style={{ 
-                                        display: "grid", 
-                                        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
-                                        gap: "16px" 
-                                    }}>
-                                        <div>
-                                            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>PnL</p>
-                                            <p style={{ 
-                                                fontSize: "18px", 
-                                                fontWeight: 700, 
-                                                color: positionMetrics.pnl >= 0 ? "#22c55e" : "#ef4444",
-                                                margin: 0,
-                                            }}>
-                                                {positionMetrics.pnl >= 0 ? "+" : ""}{formatAmount(positionMetrics.pnl.toFixed(2), "TRY")}
-                                            </p>
-                                            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", margin: 0 }}>
-                                                ({positionMetrics.pnlPercent >= 0 ? "+" : ""}{positionMetrics.pnlPercent.toFixed(2)}%)
-                                            </p>
-                                        </div>
-                                        {currentAPY > 0 && (
-                                            <>
-                                                <div>
-                                                    <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Projected Annual</p>
-                                                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                                        {formatAmount(positionMetrics.projectedAnnual.toFixed(2), "TRY")}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Projected Monthly</p>
-                                                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                                        {formatAmount(positionMetrics.projectedMonthly.toFixed(2), "TRY")}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 600 }}>Projected Daily</p>
-                                                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#a855f7", margin: 0 }}>
-                                                        {formatAmount(positionMetrics.projectedDaily.toFixed(2), "TRY")}
-                                                    </p>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <div style={{
-                            padding: "40px",
-                            textAlign: "center",
-                            background: "rgba(59, 130, 246, 0.05)",
-                            borderRadius: "12px",
-                            border: "2px dashed rgba(59, 130, 246, 0.3)",
-                        }}>
-                            <div style={{ fontSize: "48px", marginBottom: "16px" }}>💧</div>
-                            <p style={{ 
-                                color: "var(--text)", 
-                                fontSize: "18px",
-                                fontWeight: 600,
-                                marginBottom: "8px"
-                            }}>
-                                No Liquidity Provided Yet
-                            </p>
-                            <p style={{ 
-                                color: "var(--text-muted)", 
-                                fontSize: "14px",
-                                marginBottom: "20px"
-                            }}>
-                                Start earning yield by providing liquidity to the pool
-                            </p>
-                            <Button
-                                variant="primary"
-                                onClick={() => {
-                                    document.getElementById("deposit-input")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                    setTimeout(() => {
-                                        document.getElementById("deposit-input")?.focus();
-                                    }, 500);
-                                }}
-                                style={{
-                                    padding: "12px 24px",
-                                    fontSize: "14px",
-                                    fontWeight: 600,
-                                }}
+                        <div style={styles.tabs}>
+                            <button
+                                style={{ ...styles.tab, ...(activeTab === "deposit" ? styles.tabActive : {}) }}
+                                onClick={() => setActiveTab("deposit")}
                             >
-                                Provide Liquidity →
-                            </Button>
+                                Deposit
+                            </button>
+                            <button
+                                style={{ ...styles.tab, ...(activeTab === "withdraw" ? styles.tabActive : {}) }}
+                                onClick={() => setActiveTab("withdraw")}
+                            >
+                                Withdraw
+                            </button>
+                        </div>
+
+                        {activeTab === "deposit" ? (
+                            <>
+                                {/* TestToken Mint Section */}
+                                <div style={styles.formGroup}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                        <label style={styles.formLabel}>Get TestToken</label>
+                                        <span style={{ fontSize: "12px", color: "#999", fontWeight: 400 }}>Required for deposit</span>
+                                    </div>
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={mintAmount}
+                                            onChange={(e) => setMintAmount(e.target.value)}
+                                            style={{ ...styles.formInput, flex: 1 }}
+                                            placeholder="0.00"
+                                            disabled={loading || !address}
+                                        />
+                                        <button
+                                            style={{
+                                                ...styles.buttonSecondary,
+                                                padding: "10px 20px",
+                                                whiteSpace: "nowrap",
+                                                ...((loading && loadingType !== "mint") || !address || !mintAmount || parseFloat(mintAmount) <= 0 ? styles.buttonDisabled : {}),
+                                            }}
+                                            onClick={handleMintTestToken}
+                                            disabled={loading || !address || !mintAmount || parseFloat(mintAmount) <= 0}
+                                        >
+                                            {loading && loadingType === "mint" ? "Minting..." : "Mint"}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ ...styles.formGroup, marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #e0e0e0" }}>
+                                    <label style={styles.formLabel}>Deposit Amount (TestToken)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={depositAmount}
+                                        onChange={(e) => setDepositAmount(e.target.value)}
+                                        style={styles.formInput}
+                                        placeholder="0.00"
+                                        disabled={loading || !address}
+                                    />
+                                    {expectedLPShares !== null && depositAmount && parseFloat(depositAmount) > 0 && (
+                                        <div style={styles.cardMeta}>
+                                            Expected LP Shares: {expectedLPShares.toFixed(4)} TIFA-LP
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    style={{
+                                        ...styles.buttonPrimary,
+                                        ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? styles.buttonDisabled : {}),
+                                    }}
+                                    onClick={handleDeposit}
+                                    disabled={loading || !address || !depositAmount || parseFloat(depositAmount) <= 0}
+                                >
+                                    {loading && loadingType === "deposit" ? "Processing..." : "Initiate Transfer"}
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                {isWithdrawDisabled && (
+                                    <div style={{
+                                        ...styles.noticeBox,
+                                        background: "#fee2e2",
+                                        borderColor: "#fca5a5",
+                                        color: "#dc2626",
+                                    }}>
+                                        <span style={styles.noticeIcon}>⚠️</span>
+                                        <div>
+                                            <strong>Withdrawals disabled:</strong> Utilization is {poolOverview?.utilizationPercent}% (max: {poolOverview?.maxUtilizationPercent}%)
+                                        </div>
+                                    </div>
+                                )}
+                                <div style={styles.formGroup}>
+                                    <label style={styles.formLabel}>LP Shares to Burn</label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        min="0"
+                                        max={lpPosition?.lpSharesFormatted ? parseFloat(lpPosition.lpSharesFormatted) : undefined}
+                                        value={withdrawShares}
+                                        onChange={(e) => setWithdrawShares(e.target.value)}
+                                        style={styles.formInput}
+                                        placeholder="0.0000"
+                                        disabled={loading || !address || isWithdrawDisabled}
+                                    />
+                                    {lpPosition?.lpSharesFormatted && (
+                                        <div style={styles.cardMeta}>
+                                            Available: {formatAmount(lpPosition.lpSharesFormatted, "TIFA-LP")}
+                                        </div>
+                                    )}
+                                    {expectedWithdrawal !== null && withdrawShares && parseFloat(withdrawShares) > 0 && (
+                                        <div style={styles.cardMeta}>
+                                            Expected withdrawal: {formatAmount(expectedWithdrawal.toFixed(2), "TRY")}
+                                        </div>
+                                    )}
+                                </div>
+                                {lpPosition && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
+                                    <div style={styles.noticeBox}>
+                                        <span style={styles.noticeIcon}>ℹ️</span>
+                                        <div>
+                                            Withdrawals are subject to pool utilization limits. If utilization exceeds {poolOverview?.maxUtilizationPercent}%, withdrawals may be temporarily disabled.
+                                        </div>
+                                    </div>
+                                )}
+                                <button
+                                    style={{
+                                        ...styles.buttonPrimary,
+                                        ...((loading && loadingType !== "withdraw") || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled ? styles.buttonDisabled : {}),
+                                    }}
+                                    onClick={handleWithdraw}
+                                    disabled={loading || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled}
+                                >
+                                    {loading && loadingType === "withdraw" ? "Processing..." : "Initiate Withdrawal"}
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Risk Exposure */}
+                    <div style={styles.section}>
+                        <div style={styles.sectionHeader}>
+                            <h2 style={styles.sectionTitle}>Risk Exposure</h2>
+                            <a href="#" style={styles.downloadLink}>Download Report</a>
+                        </div>
+                        <div style={styles.riskGrid}>
+                            <div>
+                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginBottom: "16px" }}>
+                                    Exposure by Sector
+                                </div>
+                                <ul style={styles.riskList}>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Technology</span>
+                                        <div style={{ flex: 1, marginLeft: "16px" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                <span style={styles.riskValue}>40%</span>
+                                            </div>
+                                            <div style={styles.progressBar}>
+                                                <div style={{ ...styles.progressFill, width: "40%" }}></div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Logistics</span>
+                                        <div style={{ flex: 1, marginLeft: "16px" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                <span style={styles.riskValue}>30%</span>
+                                            </div>
+                                            <div style={styles.progressBar}>
+                                                <div style={{ ...styles.progressFill, width: "30%" }}></div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Healthcare</span>
+                                        <div style={{ flex: 1, marginLeft: "16px" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                <span style={styles.riskValue}>30%</span>
+                                            </div>
+                                            <div style={styles.progressBar}>
+                                                <div style={{ ...styles.progressFill, width: "30%" }}></div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginBottom: "16px" }}>
+                                    Structure
+                                </div>
+                                <ul style={styles.riskList}>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Recourse</span>
+                                        <span style={styles.riskValue}>●</span>
+                                    </li>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Non-Recourse</span>
+                                        <span style={{ ...styles.riskValue, color: "#999" }}>○</span>
+                                    </li>
+                                </ul>
+                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginTop: "24px", marginBottom: "16px" }}>
+                                    Stress Indicators
+                                </div>
+                                <ul style={styles.riskList}>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Default Buffer</span>
+                                        <span style={styles.riskValue}>2.45x</span>
+                                    </li>
+                                    <li style={styles.riskItem}>
+                                        <span style={styles.riskLabel}>Avg. Tenor</span>
+                                        <span style={styles.riskValue}>42 Days</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Transaction Ledger */}
+                <div style={styles.section}>
+                    <div style={styles.ledgerHeader}>
+                        <h2 style={styles.sectionTitle}>Transaction Ledger</h2>
+                        <div style={styles.searchBar}>
+                            <input
+                                type="text"
+                                placeholder="Search ID..."
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                style={styles.searchInput}
+                            />
+                            <button style={styles.filterButton}>
+                                <span>🔍</span>
+                                <span>Filter</span>
+                            </button>
+                        </div>
+                    </div>
+                    <table style={styles.table}>
+                        <thead style={styles.tableHeader}>
+                            <tr>
+                                <th style={styles.tableHeaderCell}>Date</th>
+                                <th style={styles.tableHeaderCell}>Transaction Type</th>
+                                <th style={styles.tableHeaderCell}>Amount</th>
+                                <th style={styles.tableHeaderCell}>Share Price</th>
+                                <th style={styles.tableHeaderCell}>Balance Impact</th>
+                                <th style={styles.tableHeaderCell}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {paginatedTransactions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} style={{ ...styles.tableCell, textAlign: "center", padding: "60px", color: "#666" }}>
+                                        No transactions found
+                                    </td>
+                                </tr>
+                            ) : (
+                                paginatedTransactions.map((tx) => (
+                                    <tr key={tx.id} style={styles.tableRow}>
+                                        <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
+                                            {formatDate(tx.date)}
+                                        </td>
+                                        <td style={styles.tableCell}>{tx.type}</td>
+                                        <td style={styles.tableCell}>
+                                            {formatAmount(tx.amount, "TRY")}
+                                        </td>
+                                        <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
+                                            {formatAmount(tx.sharePrice, "TRY")}
+                                        </td>
+                                        <td style={{
+                                            ...styles.tableCell,
+                                            color: tx.balanceImpact.startsWith("+") ? "#15803d" : "#dc2626",
+                                            fontWeight: 600,
+                                        }}>
+                                            {formatAmount(tx.balanceImpact.replace("+", "").replace("-", ""), "TRY")}
+                                        </td>
+                                        <td style={styles.tableCell}>
+                                            <span style={{ ...styles.statusBadge, ...styles.statusSettled }}>
+                                                {tx.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                    {filteredTransactions.length > 0 && (
+                        <div style={styles.pagination}>
+                            <div style={styles.paginationInfo}>
+                                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)} to {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length} transactions
+                            </div>
+                            <div style={styles.paginationControls}>
+                                <button
+                                    style={{
+                                        ...styles.paginationButton,
+                                        ...(currentPage === 1 ? styles.paginationButtonDisabled : {}),
+                                    }}
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    ←
+                                </button>
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum;
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = currentPage - 2 + i;
+                                    }
+                                    
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            style={{
+                                                ...styles.paginationButton,
+                                                ...(currentPage === pageNum ? styles.paginationButtonActive : {}),
+                                            }}
+                                            onClick={() => setCurrentPage(pageNum)}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+                                {totalPages > 5 && currentPage < totalPages - 2 && (
+                                    <span style={{ padding: "0 8px", color: "#666" }}>...</span>
+                                )}
+                                {totalPages > 5 && (
+                                    <button
+                                        style={{
+                                            ...styles.paginationButton,
+                                            ...(currentPage === totalPages ? styles.paginationButtonActive : {}),
+                                        }}
+                                        onClick={() => setCurrentPage(totalPages)}
+                                    >
+                                        {totalPages}
+                                    </button>
+                                )}
+                                <button
+                                    style={{
+                                        ...styles.paginationButton,
+                                        ...(currentPage === totalPages ? styles.paginationButtonDisabled : {}),
+                                    }}
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    →
+                                </button>
+                            </div>
                         </div>
                     )}
-                </Card>
-            )}
-
-            {!address && (
-                <Card style={{ 
-                    marginTop: "32px", 
-                    textAlign: "center", 
-                    padding: "60px 40px",
-                    background: "rgba(59, 130, 246, 0.05)",
-                    border: "2px dashed rgba(59, 130, 246, 0.3)",
-                }}>
-                    <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-                    <p style={{ 
-                        color: "var(--text-muted)", 
-                        fontSize: "18px",
-                        fontWeight: 600,
-                        marginBottom: "8px"
-                    }}>
-                        Connect Your Wallet
-                    </p>
-                    <p style={{ 
-                        color: "var(--text-muted)", 
-                        fontSize: "14px"
-                    }}>
-                        Please connect your wallet to view and manage your LP position
-                    </p>
-                </Card>
-            )}
+                </div>
+            </div>
         </div>
     );
 }

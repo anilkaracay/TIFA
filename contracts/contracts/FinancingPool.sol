@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./TifaTypes.sol";
@@ -11,7 +12,7 @@ import "./InvoiceRegistry.sol";
 import "./LPShareToken.sol";
 import "./WadMath.sol";
 
-contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
+contract FinancingPool is AccessControl, ReentrancyGuard, Pausable, IERC721Receiver {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
@@ -54,6 +55,11 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
     uint256 public reserveBalance;           // First-loss buffer / reserves
     uint256 public reserveTargetBps;          // Reserve target as basis points of NAV (e.g., 500 = 5%)
     uint256 public maxUtilizationBps;         // Maximum utilization (e.g., 8000 = 80%)
+    
+    // Production Safety Parameters
+    uint256 public maxLoanBpsOfTVL;          // Max single loan as % of NAV (default: 1000 = 10%)
+    uint256 public maxIssuerExposureBps;     // Max issuer exposure as % of NAV (default: 2500 = 25%)
+    mapping(address => uint256) public totalIssuerOutstanding; // Track issuer exposure
     
     // Risk Model Parameters
     uint256 public gracePeriodSeconds;         // Grace period after due date (e.g., 7 days)
@@ -160,6 +166,14 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         bytes32 indexed invoiceId,
         RecourseMode mode
     );
+    
+    // Production Safety Events
+    event PoolPaused(address indexed triggeredBy);
+    event PoolUnpaused(address indexed triggeredBy);
+    event UtilizationLimitHit(uint256 utilizationBps, uint256 attemptedAmount);
+    event SingleLoanLimitHit(bytes32 indexed invoiceId, uint256 attemptedAmount, uint256 maxAllowed);
+    event IssuerExposureUpdated(address indexed issuer, uint256 newExposure);
+    event IssuerExposureLimitHit(address indexed issuer, uint256 attemptedTotal, uint256 maxAllowed);
 
     constructor(
         address invoiceToken_,
@@ -191,6 +205,10 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         maxLtvRecourseBps = 8000; // 80%
         maxLtvNonRecourseBps = 6000; // 60%
         reserveTargetBps = 500; // 5% of NAV
+        
+        // Production Safety Defaults
+        maxLoanBpsOfTVL = 1000; // 10% of NAV
+        maxIssuerExposureBps = 2500; // 25% of NAV
         
         // Note: LP token roles must be granted to this pool address after deployment
         // This is done in the deployment script
@@ -246,7 +264,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         bytes32 invoiceId,
         uint256 amount,
         address to
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         // require(
         //     hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
         //     "FinancingPool: missing role"
@@ -262,13 +280,39 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         uint256 available = availableLiquidity();
         require(amount <= available, "FinancingPool: insufficient liquidity");
 
+        // SAFETY CHECK 1: Utilization Circuit Breaker
+        uint256 currentUtilization = utilization();
+        if (currentUtilization >= maxUtilizationBps) {
+            emit UtilizationLimitHit(currentUtilization, amount);
+            revert("UTILIZATION_LIMIT_REACHED");
+        }
+        
+        // SAFETY CHECK 2: Max Single Loan Size
+        uint256 nav = getNAV();
+        uint256 maxSingleLoan = (nav * maxLoanBpsOfTVL) / 10000;
+        if (amount > maxSingleLoan) {
+            emit SingleLoanLimitHit(invoiceId, amount, maxSingleLoan);
+            revert("MAX_SINGLE_LOAN_EXCEEDED");
+        }
+        
+        // SAFETY CHECK 3: Issuer Exposure Limit
+        address issuer = pos.company;
+        uint256 newIssuerExposure = totalIssuerOutstanding[issuer] + amount;
+        uint256 maxIssuerExposure = (nav * maxIssuerExposureBps) / 10000;
+        if (newIssuerExposure > maxIssuerExposure) {
+            emit IssuerExposureLimitHit(issuer, newIssuerExposure, maxIssuerExposure);
+            revert("ISSUER_EXPOSURE_LIMIT_EXCEEDED");
+        }
+
         pos.usedCredit += amount;
         pos.lastAccrualTs = block.timestamp; // Start accrual from now
         totalBorrowed += amount;
         totalPrincipalOutstanding += amount;
+        totalIssuerOutstanding[issuer] = newIssuerExposure;
         require(liquidityToken.transfer(to, amount), "FinancingPool: transfer failed");
 
         emit CreditDrawn(invoiceId, amount, to);
+        emit IssuerExposureUpdated(issuer, newIssuerExposure);
     }
 
     function repayCredit(
@@ -314,6 +358,16 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
             pos.usedCredit -= principalPaid;
             totalBorrowed -= principalPaid;
             totalPrincipalOutstanding -= principalPaid;
+            
+            // Update issuer exposure
+            address issuer = pos.company;
+            if (totalIssuerOutstanding[issuer] >= principalPaid) {
+                totalIssuerOutstanding[issuer] -= principalPaid;
+                emit IssuerExposureUpdated(issuer, totalIssuerOutstanding[issuer]);
+            } else {
+                totalIssuerOutstanding[issuer] = 0;
+                emit IssuerExposureUpdated(issuer, 0);
+            }
         }
         
         // Update last accrual timestamp
@@ -425,7 +479,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
      * @notice Deposit liquidity into the pool and receive LP shares
      * @param amount Amount of liquidityToken to deposit
      */
-    function deposit(uint256 amount) external nonReentrant {
+    function deposit(uint256 amount) external nonReentrant whenNotPaused {
         require(amount > 0, "FinancingPool: zero amount");
         
         // Transfer tokens from LP to pool
@@ -450,7 +504,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
      * @notice Withdraw liquidity from the pool by burning LP shares
      * @param lpShares Amount of LP shares to burn
      */
-    function withdraw(uint256 lpShares) external nonReentrant {
+    function withdraw(uint256 lpShares) external nonReentrant whenNotPaused {
         require(lpShares > 0, "FinancingPool: zero shares");
         
         // Check utilization constraint
@@ -733,7 +787,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
      * @notice Declare default (only after grace period)
      * @param invoiceId Position to declare default
      */
-    function declareDefault(bytes32 invoiceId) external {
+    function declareDefault(bytes32 invoiceId) external whenNotPaused {
         require(
             hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
             "FinancingPool: missing role"
@@ -762,7 +816,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
      * @param invoiceId Position to pay recourse for
      * @param amount Amount to pay
      */
-    function payRecourse(bytes32 invoiceId, uint256 amount) external nonReentrant {
+    function payRecourse(bytes32 invoiceId, uint256 amount) external nonReentrant whenNotPaused {
         require(_positions[invoiceId].exists, "FinancingPool: not found");
         CollateralPosition storage pos = _positions[invoiceId];
         require(pos.recourseMode == RecourseMode.RECOURSE, "FinancingPool: not recourse");
@@ -796,6 +850,16 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
             pos.usedCredit -= principalPaid;
             totalBorrowed -= principalPaid;
             totalPrincipalOutstanding -= principalPaid;
+            
+            // Update issuer exposure
+            address issuer = pos.company;
+            if (totalIssuerOutstanding[issuer] >= principalPaid) {
+                totalIssuerOutstanding[issuer] -= principalPaid;
+                emit IssuerExposureUpdated(issuer, totalIssuerOutstanding[issuer]);
+            } else {
+                totalIssuerOutstanding[issuer] = 0;
+                emit IssuerExposureUpdated(issuer, 0);
+            }
         }
         
         // If fully paid, resolve default
@@ -876,6 +940,16 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
         totalPrincipalOutstanding -= lossAmount;
         totalLosses += lossAmount;
         
+        // Update issuer exposure
+        address issuer = pos.company;
+        if (totalIssuerOutstanding[issuer] >= lossAmount) {
+            totalIssuerOutstanding[issuer] -= lossAmount;
+            emit IssuerExposureUpdated(issuer, totalIssuerOutstanding[issuer]);
+        } else {
+            totalIssuerOutstanding[issuer] = 0;
+            emit IssuerExposureUpdated(issuer, 0);
+        }
+        
         // Update LP losses (only the portion absorbed by LPs)
         if (lpLoss > 0) {
             lpLosses += lpLoss;
@@ -896,7 +970,7 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
      * @param invoiceId Position to write down
      * @param lossAmount Amount to write down
      */
-    function writeDownLoss(bytes32 invoiceId, uint256 lossAmount) external onlyRole(ADMIN_ROLE) {
+    function writeDownLoss(bytes32 invoiceId, uint256 lossAmount) external onlyRole(ADMIN_ROLE) whenNotPaused {
         require(_positions[invoiceId].exists, "FinancingPool: not found");
         CollateralPosition storage pos = _positions[invoiceId];
         require(
@@ -950,5 +1024,43 @@ contract FinancingPool is AccessControl, ReentrancyGuard, IERC721Receiver {
             
             emit ReserveFunded(toRoute, reserveBalance);
         }
+    }
+    
+    // ============ PRODUCTION SAFETY CONTROLS ============
+    
+    /**
+     * @notice Pause all critical operations (emergency kill switch)
+     * @dev Only ADMIN_ROLE can pause
+     */
+    function pause() external onlyRole(ADMIN_ROLE) {
+        _pause();
+        emit PoolPaused(msg.sender);
+    }
+    
+    /**
+     * @notice Unpause all critical operations
+     * @dev Only ADMIN_ROLE can unpause
+     */
+    function unpause() external onlyRole(ADMIN_ROLE) {
+        _unpause();
+        emit PoolUnpaused(msg.sender);
+    }
+    
+    /**
+     * @notice Set max single loan size (as % of NAV)
+     * @param bps Basis points (e.g., 1000 = 10%)
+     */
+    function setMaxLoanBpsOfTVL(uint256 bps) external onlyRole(ADMIN_ROLE) {
+        require(bps <= 10000, "FinancingPool: invalid bps");
+        maxLoanBpsOfTVL = bps;
+    }
+    
+    /**
+     * @notice Set max issuer exposure (as % of NAV)
+     * @param bps Basis points (e.g., 2500 = 25%)
+     */
+    function setMaxIssuerExposureBps(uint256 bps) external onlyRole(ADMIN_ROLE) {
+        require(bps <= 10000, "FinancingPool: invalid bps");
+        maxIssuerExposureBps = bps;
     }
 }

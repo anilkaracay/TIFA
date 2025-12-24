@@ -1,25 +1,52 @@
-export function formatAmount(amount: string, currency = "TRY") {
+export function formatAmount(amount: string | number | bigint, currency = "TRY") {
     try {
-        const num = Number(amount);
-        if (Number.isNaN(num)) return amount;
-        return new Intl.NumberFormat("tr-TR", {
+        // Safely convert BigInt, number, or string to number
+        let num: number;
+        if (typeof amount === 'bigint') {
+            num = Number(amount);
+        } else if (typeof amount === 'number') {
+            num = amount;
+        } else {
+            num = Number(amount);
+        }
+        
+        if (Number.isNaN(num)) return String(amount);
+        
+        // Format with appropriate decimal places
+        // For currency, use 2 decimals, but preserve significant digits
+        const formatted = new Intl.NumberFormat("tr-TR", {
             style: "currency",
             currency,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
         }).format(num);
+        
+        return formatted;
     } catch {
-        return amount;
+        return String(amount);
     }
 }
 
-export function formatDate(date: string) {
+export function formatDate(date: string | Date, includeTime = false) {
     try {
-        return new Date(date).toLocaleDateString("tr-TR", {
+        const dateObj = typeof date === "string" ? new Date(date) : date;
+        if (includeTime) {
+            return dateObj.toLocaleString("en-US", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            }) + " UTC";
+        }
+        return dateObj.toLocaleDateString("tr-TR", {
             year: "numeric",
             month: "short",
             day: "numeric",
         });
     } catch {
-        return date;
+        return typeof date === "string" ? date : date.toString();
     }
 }
 

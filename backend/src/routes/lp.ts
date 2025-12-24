@@ -3,14 +3,22 @@ import { z } from 'zod';
 import { prisma } from '../db';
 import { provider, signer, loadContract } from '../onchain/provider';
 import { ethers } from 'ethers';
+import { roleResolutionMiddleware, requireRole, requireWallet } from '../middleware/roleAuth';
+import { Role } from '../auth/roles';
+import { emitLPEvent, emitPoolEvent } from '../websocket/server';
 
 export async function registerLPRoutes(app: FastifyInstance) {
+    // Apply role resolution to all routes
+    app.addHook('onRequest', roleResolutionMiddleware);
     
-    // POST /lp/deposit
-    app.post('/deposit', async (req, reply) => {
+    // POST /lp/deposit - LP only
+    app.post('/deposit', { preHandler: [requireWallet, requireRole(Role.LP, Role.ADMIN)] }, async (req, reply) => {
         const body = z.object({
             amount: z.string(), // Amount in liquidityToken units (e.g., "1000000" for 10,000 tokens with 2 decimals)
         }).parse(req.body);
+
+        // Get wallet address from request (set by roleResolutionMiddleware)
+        const userWallet = req.wallet || signer.address;
 
         try {
             const FinancingPool = loadContract("FinancingPool");
@@ -19,29 +27,62 @@ export async function registerLPRoutes(app: FastifyInstance) {
             // TestToken uses 18 decimals (standard ERC20)
             const amount = ethers.utils.parseUnits(body.amount, 18);
             
-            // 1. Approve if needed
-            const allowance = await TestToken.allowance(signer.address, FinancingPool.address);
+            // 1. Approve if needed (using user's wallet, not signer)
+            const userSigner = provider.getSigner(userWallet);
+            const allowance = await TestToken.allowance(userWallet, FinancingPool.address);
             if (allowance.lt(amount)) {
-                const approveTx = await TestToken.approve(FinancingPool.address, amount);
+                const approveTx = await TestToken.connect(userSigner).approve(FinancingPool.address, amount);
                 await approveTx.wait();
             }
             
-            // 2. Deposit
-            const tx = await FinancingPool.deposit(amount);
+            // 2. Deposit (using user's wallet)
+            const tx = await FinancingPool.connect(userSigner).deposit(amount);
             const receipt = await tx.wait();
             
-            // 3. Sync LP position
-            const lpPosition = await FinancingPool.getLPPosition(signer.address);
+            // 3. Sync LP position (for user's wallet) - MUST be done first for foreign key
+            const lpPosition = await FinancingPool.getLPPosition(userWallet);
+            const sharePrice = await FinancingPool.sharePriceWad();
+            
             await prisma.lPPosition.upsert({
-                where: { wallet: signer.address },
+                where: { wallet: userWallet },
                 update: {
                     shares: lpPosition.lpShares.toString(),
                     updatedAt: new Date(),
                 },
                 create: {
-                    wallet: signer.address,
+                    wallet: userWallet,
                     shares: lpPosition.lpShares.toString(),
                 },
+            });
+
+            // 4. Record transaction (for user's wallet) - AFTER position exists
+            await prisma.lPTransaction.create({
+                data: {
+                    wallet: userWallet,
+                    type: 'Deposit',
+                    amount: ethers.utils.formatUnits(amount, 18),
+                    lpShares: ethers.utils.formatUnits(lpPosition.lpShares, 18),
+                    sharePrice: ethers.utils.formatUnits(sharePrice, 18),
+                    balanceImpact: `+${ethers.utils.formatUnits(amount, 18)}`,
+                    txHash: receipt.transactionHash,
+                    blockNumber: receipt.blockNumber.toString(),
+                    status: 'Settled',
+                },
+            });
+
+            // Emit WebSocket events
+            emitLPEvent(userWallet, {
+                type: 'lp.deposited',
+                payload: {
+                    wallet: userWallet,
+                    amount: body.amount,
+                    lpShares: lpPosition.lpShares.toString(),
+                    txHash: receipt.transactionHash,
+                },
+            });
+            emitPoolEvent({
+                type: 'pool.liquidity_changed',
+                payload: {},
             });
 
             return {
@@ -56,11 +97,14 @@ export async function registerLPRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /lp/withdraw
-    app.post('/withdraw', async (req, reply) => {
+    // POST /lp/withdraw - LP only
+    app.post('/withdraw', { preHandler: [requireWallet, requireRole(Role.LP, Role.ADMIN)] }, async (req, reply) => {
         const body = z.object({
             lpShares: z.string(), // LP shares to burn
         }).parse(req.body);
+
+        // Get wallet address from request (set by roleResolutionMiddleware)
+        const userWallet = req.wallet || signer.address;
 
         try {
             const FinancingPool = loadContract("FinancingPool");
@@ -79,22 +123,56 @@ export async function registerLPRoutes(app: FastifyInstance) {
                 });
             }
             
-            // Withdraw
-            const tx = await FinancingPool.withdraw(lpShares);
+            // Withdraw (using user's wallet)
+            const userSigner = provider.getSigner(userWallet);
+            const tx = await FinancingPool.connect(userSigner).withdraw(lpShares);
             const receipt = await tx.wait();
             
-            // Sync LP position
-            const lpPosition = await FinancingPool.getLPPosition(signer.address);
+            // Sync LP position (for user's wallet) - MUST be done first for foreign key
+            const lpPosition = await FinancingPool.getLPPosition(userWallet);
+            const sharePrice = await FinancingPool.sharePriceWad();
+            const withdrawalAmount = await FinancingPool.calculateWithdrawalAmount(lpShares);
+            
             await prisma.lPPosition.upsert({
-                where: { wallet: signer.address },
+                where: { wallet: userWallet },
                 update: {
                     shares: lpPosition.lpShares.toString(),
                     updatedAt: new Date(),
                 },
                 create: {
-                    wallet: signer.address,
+                    wallet: userWallet,
                     shares: lpPosition.lpShares.toString(),
                 },
+            });
+
+            // Record transaction (for user's wallet) - AFTER position exists
+            await prisma.lPTransaction.create({
+                data: {
+                    wallet: userWallet,
+                    type: 'Withdrawal',
+                    amount: ethers.utils.formatUnits(withdrawalAmount, 18),
+                    lpShares: ethers.utils.formatUnits(lpShares, 18),
+                    sharePrice: ethers.utils.formatUnits(sharePrice, 18),
+                    balanceImpact: `-${ethers.utils.formatUnits(withdrawalAmount, 18)}`,
+                    txHash: receipt.transactionHash,
+                    blockNumber: receipt.blockNumber.toString(),
+                    status: 'Settled',
+                },
+            });
+
+            // Emit WebSocket events
+            emitLPEvent(userWallet, {
+                type: 'lp.withdrawn',
+                payload: {
+                    wallet: userWallet,
+                    lpShares: body.lpShares,
+                    remainingShares: lpPosition.lpShares.toString(),
+                    txHash: receipt.transactionHash,
+                },
+            });
+            emitPoolEvent({
+                type: 'pool.liquidity_changed',
+                payload: {},
             });
 
             return {
@@ -162,7 +240,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
             const availableLiquidity = await FinancingPool.availableLiquidity();
             const lpTokenSupply = await LPShareToken.totalSupply();
             const nav = await FinancingPool.getNAV();
-            const lpSharePrice = await FinancingPool.sharePriceWad();
+            const lpSharePrice = await FinancingPool.getLPSharePrice(); // Use public function instead of internal sharePriceWad()
             const borrowAprWad = await FinancingPool.borrowAprWad();
             const protocolFeeBps = await FinancingPool.protocolFeeBps();
             const poolStartTime = await FinancingPool.poolStartTime();
@@ -234,7 +312,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
             const LPShareToken = loadContract("LPShareToken");
             
             const nav = await FinancingPool.getNAV();
-            const sharePriceWad = await FinancingPool.sharePriceWad();
+            const sharePriceWad = await FinancingPool.getLPSharePrice(); // Use public function instead of internal sharePriceWad()
             const totalPrincipalOutstanding = await FinancingPool.totalPrincipalOutstanding();
             const totalInterestAccrued = await FinancingPool.totalInterestAccrued();
             const totalLosses = await FinancingPool.totalLosses();
@@ -287,6 +365,143 @@ export async function registerLPRoutes(app: FastifyInstance) {
         } catch (e: any) {
             console.error("Failed to fetch pool metrics:", e);
             return reply.code(500).send({ error: e.message || "Failed to fetch pool metrics" });
+        }
+    });
+
+    // POST /lp/record-transaction - Record a transaction from frontend (when deposit/withdraw happens on-chain)
+    app.post('/record-transaction', async (req, reply) => {
+        try {
+            console.log('[LP Transaction] Received request:', {
+                headers: req.headers,
+                body: req.body,
+            });
+
+            const body = z.object({
+                type: z.enum(['Deposit', 'Withdrawal']),
+                amount: z.string(),
+                lpShares: z.string(),
+                sharePrice: z.string(),
+                txHash: z.string(),
+                blockNumber: z.string(),
+            }).parse(req.body);
+
+            // Get wallet from request (set by roleResolutionMiddleware or from header)
+            const userWallet = req.wallet || req.headers['x-wallet-address'] as string || (req.body as any).wallet;
+            
+            console.log('[LP Transaction] Extracted wallet:', userWallet);
+            
+            if (!userWallet) {
+                console.error('[LP Transaction] No wallet address found in request');
+                return reply.code(400).send({ error: 'Wallet address is required' });
+            }
+
+            // Calculate balance impact
+            const balanceImpact = body.type === 'Deposit' 
+                ? `+${body.amount}` 
+                : `-${body.amount}`;
+
+            // CRITICAL: First ensure LPPosition exists (required for foreign key)
+            await prisma.lPPosition.upsert({
+                where: { wallet: userWallet },
+                update: {
+                    shares: body.lpShares,
+                    updatedAt: new Date(),
+                },
+                create: {
+                    wallet: userWallet,
+                    shares: body.lpShares,
+                },
+            });
+
+            // Now record transaction (LPPosition must exist first for foreign key)
+            await prisma.lPTransaction.create({
+                data: {
+                    wallet: userWallet,
+                    type: body.type,
+                    amount: body.amount,
+                    lpShares: body.lpShares,
+                    sharePrice: ethers.utils.formatUnits(ethers.BigNumber.from(body.sharePrice), 18),
+                    balanceImpact: balanceImpact,
+                    txHash: body.txHash,
+                    blockNumber: body.blockNumber,
+                    status: 'Settled',
+                },
+            });
+
+            // Emit WebSocket event
+            emitLPEvent(userWallet, {
+                type: body.type === 'Deposit' ? 'lp.deposited' : 'lp.withdrawn',
+                payload: {
+                    wallet: userWallet,
+                    amount: body.amount,
+                    lpShares: body.lpShares,
+                    txHash: body.txHash,
+                },
+            });
+
+            console.log(`[LP Transaction] Successfully recorded ${body.type} for wallet ${userWallet}:`, {
+                amount: body.amount,
+                lpShares: body.lpShares,
+                txHash: body.txHash,
+            });
+            return reply.send({ success: true });
+        } catch (e: any) {
+            console.error("[LP Transaction] Failed to record LP transaction:", e);
+            console.error("[LP Transaction] Error details:", {
+                headers: req.headers,
+                body: req.body,
+                error: e.message,
+                stack: e.stack,
+            });
+            return reply.code(500).send({ error: e.message || "Failed to record transaction" });
+        }
+    });
+
+    // GET /lp/transactions - Get transaction history for LP
+    app.get('/transactions', async (req, reply) => {
+        const query = z.object({
+            wallet: z.string().optional(),
+            limit: z.coerce.number().optional().default(50),
+            offset: z.coerce.number().optional().default(0),
+        }).parse(req.query);
+
+        // Use wallet from query, request, or fallback to signer
+        const wallet = query.wallet || req.wallet || signer.address;
+
+        console.log('[LP Transactions] Fetching transactions for wallet:', wallet);
+
+        try {
+            const transactions = await prisma.lPTransaction.findMany({
+                where: { wallet },
+                orderBy: { createdAt: 'desc' },
+                take: query.limit,
+                skip: query.offset,
+            });
+
+            const total = await prisma.lPTransaction.count({
+                where: { wallet },
+            });
+
+            console.log('[LP Transactions] Found', transactions.length, 'transactions for wallet', wallet);
+
+            return {
+                transactions: transactions.map(tx => ({
+                    id: tx.id,
+                    date: tx.createdAt.toISOString(),
+                    type: tx.type,
+                    amount: tx.amount,
+                    sharePrice: tx.sharePrice,
+                    balanceImpact: tx.balanceImpact,
+                    status: tx.status,
+                    txHash: tx.txHash,
+                })),
+                total,
+                limit: query.limit,
+                offset: query.offset,
+            };
+        } catch (e: any) {
+            console.error("Failed to fetch LP transactions:", e);
+            return reply.code(500).send({ error: e.message || "Failed to fetch transactions" });
         }
     });
 }

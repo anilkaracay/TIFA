@@ -4,6 +4,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { env } from './env';
 import { registerRoutes } from './routes';
+import { registerWebSocketServer } from './websocket/server';
 
 async function main() {
     const app = Fastify({ logger: true });
@@ -11,7 +12,7 @@ async function main() {
     await app.register(cors, {
         origin: '*',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control']
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'x-wallet-address']
     });
 
     await app.register(swagger, {
@@ -29,12 +30,23 @@ async function main() {
 
     await registerRoutes(app);
 
+    // Register WebSocket server
+    await registerWebSocketServer(app);
+
     // Start Listeners
     try {
         const { startEventListeners } = require('./onchain/listener');
         startEventListeners();
     } catch (e) {
         console.warn("Retrying listener setup or skipping if provider unavailable:", e);
+    }
+
+    // Start Reconciliation Job
+    try {
+        const { startReconciliationJob } = require('./jobs/reconciliationJob');
+        startReconciliationJob();
+    } catch (e) {
+        console.warn("Reconciliation job setup failed:", e);
     }
 
     try {

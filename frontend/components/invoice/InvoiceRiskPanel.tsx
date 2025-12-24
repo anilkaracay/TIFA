@@ -111,7 +111,14 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
     const lossImpact = useMemo(() => {
         if (!positionData || !reserveBalance) return null;
 
-        const totalDebt = positionData.usedCredit + positionData.interestAccrued;
+        // Safely convert to BigInt for calculations
+        const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
+            ? positionData.usedCredit 
+            : BigInt(positionData.usedCredit?.toString() || '0');
+        const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
+            ? positionData.interestAccrued
+            : BigInt(positionData.interestAccrued?.toString() || '0');
+        const totalDebtBigInt = usedCreditBigInt + interestAccruedBigInt;
         const isRecourse = positionData.recourseMode === 0;
 
         if (isRecourse) {
@@ -123,8 +130,8 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
         }
 
         // Non-recourse: reserve absorbs first, then LP
-        const reserveAbsorbs = totalDebt > reserveBalance ? reserveBalance : totalDebt;
-        const lpImpact = totalDebt > reserveBalance ? totalDebt - reserveBalance : 0n;
+        const reserveAbsorbs = totalDebtBigInt > reserveBalance ? reserveBalance : totalDebtBigInt;
+        const lpImpact = totalDebtBigInt > reserveBalance ? totalDebtBigInt - reserveBalance : 0n;
 
         return {
             reserveAbsorbs,
@@ -142,7 +149,14 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
         try {
             setLoading(true);
             const pool = Deployments.FinancingPool;
-            const totalDebt = positionData.usedCredit + positionData.interestAccrued;
+            // Safely convert to BigInt for contract call
+            const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
+                ? positionData.usedCredit 
+                : BigInt(positionData.usedCredit?.toString() || '0');
+            const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
+                ? positionData.interestAccrued
+                : BigInt(positionData.interestAccrued?.toString() || '0');
+            const totalDebt = usedCreditBigInt + interestAccruedBigInt;
 
             const invoiceIdHex = invoice.invoiceIdOnChain.startsWith("0x")
                 ? invoice.invoiceIdOnChain as `0x${string}`
@@ -220,7 +234,15 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
     // TODO: Proper issuer check - invoice.companyId is a database ID, not wallet address
     // For now, we'll show actions if wallet is connected (can be improved with backend check)
     const isIssuer = address !== undefined; // Simplified: show to connected wallet
-    const totalDebt = positionData.usedCredit + positionData.interestAccrued;
+    // Safely convert to BigInt for addition - ensure both are BigInt
+    const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
+        ? positionData.usedCredit 
+        : BigInt(positionData.usedCredit?.toString() || '0');
+    const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
+        ? positionData.interestAccrued
+        : BigInt(positionData.interestAccrued?.toString() || '0');
+    const totalDebtBigInt = usedCreditBigInt + interestAccruedBigInt;
+    const totalDebt = Number(totalDebtBigInt);
 
     return (
         <Card style={{ padding: "24px" }}>
@@ -307,7 +329,7 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                 </div>
 
                 {/* Loss Impact Estimate */}
-                {lossImpact && totalDebt > 0n && (
+                {lossImpact && totalDebtBigInt > 0n && (
                     <div style={{ padding: "12px", background: isRecourse ? "rgba(34, 197, 94, 0.1)" : "rgba(249, 115, 22, 0.1)", borderRadius: "8px", border: `1px solid ${isRecourse ? "rgba(34, 197, 94, 0.3)" : "rgba(249, 115, 22, 0.3)"}` }}>
                         <p style={{ fontSize: "12px", fontWeight: 600, marginBottom: "8px", color: "var(--text)" }}>
                             Estimated Loss Impact (if default happens now)
@@ -335,7 +357,7 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
 
             {/* Actions */}
             <div style={{ paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
-                {isIssuer && isRecourse && positionData.isInDefault && totalDebt > 0n && (
+                {isIssuer && isRecourse && positionData.isInDefault && totalDebtBigInt > 0n && (
                     <Button
                         variant="primary"
                         onClick={handlePayRecourse}

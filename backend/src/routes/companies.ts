@@ -4,6 +4,25 @@ import { z } from 'zod';
 
 export async function registerCompanyRoutes(app: FastifyInstance) {
 
+    // POST /companies - Create a new company
+    app.post('/', async (req, reply) => {
+        const body = z.object({
+            id: z.string().optional(), // Optional, will generate if not provided
+            externalId: z.string().optional(),
+            name: z.string(),
+        }).parse(req.body);
+
+        const company = await prisma.company.create({
+            data: {
+                id: body.id || undefined, // Prisma will generate cuid if not provided
+                externalId: body.externalId || undefined,
+                name: body.name,
+            }
+        });
+
+        return company;
+    });
+
     // GET /companies
     app.get('/', async (req, reply) => {
         const query = z.object({
