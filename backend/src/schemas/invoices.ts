@@ -28,6 +28,7 @@ export const PaymentNotificationSchema = z.object({
 export const FinancingRequestSchema = z.object({
     targetLtvBps: z.number().int().optional(),
     amount: z.string().optional(),
+    txHash: z.string().optional(), // If provided, on-chain transaction already completed
 });
 
 export const RecoursePaymentSchema = z.object({

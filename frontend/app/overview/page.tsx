@@ -341,20 +341,43 @@ export default function OverviewPage() {
     const metrics = useMemo(() => {
         if (!invoices || !poolOverview) return null;
 
-        const activeInvoices = invoices.filter(inv => 
-            inv.status === "ISSUED" || inv.status === "TOKENIZED" || inv.status === "FINANCED" || inv.status === "PARTIALLY_PAID"
-        ).length;
+        const activeInvoices = invoices.filter(inv => {
+            const status = (inv.status || "").toUpperCase();
+            return status === "ISSUED" || status === "TOKENIZED" || status === "FINANCED" || 
+                   status === "PARTIALLY_PAID" || status === "PENDING" || status === "APPROVED" ||
+                   inv.isFinanced === true;
+        }).length;
 
         const totalFinanced = invoices
-            .filter(inv => inv.isFinanced)
-            .reduce((sum, inv) => sum + parseFloat(inv.usedCredit || "0") / 100, 0);
+            .filter(inv => inv.isFinanced && inv.usedCredit && inv.usedCredit !== "0")
+            .reduce((sum, inv) => {
+                // usedCredit comes from backend as string in cents (e.g., "6000000" for 60000 TL)
+                // Always divide by 100 to convert from cents to TL
+                const usedCreditNum = parseFloat(inv.usedCredit || "0");
+                return sum + (usedCreditNum / 100);
+            }, 0);
 
         const statusDistribution = {
-            ISSUED: invoices.filter(inv => inv.status === "ISSUED").length,
-            TOKENIZED: invoices.filter(inv => inv.status === "TOKENIZED").length,
-            FINANCED: invoices.filter(inv => inv.status === "FINANCED" || inv.isFinanced).length,
-            REPAID: invoices.filter(inv => inv.status === "PAID").length,
-            DEFAULTED: invoices.filter(inv => inv.status === "DEFAULTED").length,
+            ISSUED: invoices.filter(inv => {
+                const status = (inv.status || "").toUpperCase();
+                return status === "ISSUED" || status === "PENDING" || status === "APPROVED";
+            }).length,
+            TOKENIZED: invoices.filter(inv => {
+                const status = (inv.status || "").toUpperCase();
+                return status === "TOKENIZED";
+            }).length,
+            FINANCED: invoices.filter(inv => {
+                const status = (inv.status || "").toUpperCase();
+                return status === "FINANCED" || inv.isFinanced === true;
+            }).length,
+            REPAID: invoices.filter(inv => {
+                const status = (inv.status || "").toUpperCase();
+                return status === "PAID" || status === "REPAID";
+            }).length,
+            DEFAULTED: invoices.filter(inv => {
+                const status = (inv.status || "").toUpperCase();
+                return status === "DEFAULTED";
+            }).length,
         };
 
         // Upcoming maturities (within 7 days)
@@ -365,11 +388,29 @@ export default function OverviewPage() {
             return dueDate >= now && dueDate <= sevenDaysFromNow && inv.status !== "PAID";
         }).length;
 
+        // Debug logging
+        console.log('[Overview] Metrics calculation:', {
+            invoicesCount: invoices.length,
+            activeInvoices,
+            totalFinanced,
+            poolOverview: {
+                availableLiquidityFormatted: poolOverview.availableLiquidityFormatted,
+                utilizationPercent: poolOverview.utilizationPercent,
+                availableLiquidity: poolOverview.availableLiquidity,
+                utilization: poolOverview.utilization,
+            },
+            statusDistribution,
+        });
+
         return {
             activeInvoices,
             totalFinanced,
-            liquidityAvailable: parseFloat(poolOverview.availableLiquidityFormatted || "0"),
-            utilization: parseFloat(poolOverview.utilizationPercent || "0"),
+            liquidityAvailable: poolOverview.availableLiquidityFormatted 
+                ? parseFloat(poolOverview.availableLiquidityFormatted) 
+                : (poolOverview.availableLiquidity ? parseFloat(poolOverview.availableLiquidity) / 1e18 : 0),
+            utilization: poolOverview.utilizationPercent 
+                ? parseFloat(poolOverview.utilizationPercent) 
+                : (poolOverview.utilization ? parseFloat(poolOverview.utilization) : 0),
             statusDistribution,
             upcomingMaturities,
         };
@@ -469,7 +510,6 @@ export default function OverviewPage() {
                             {metrics?.totalFinanced ? formatAmount(metrics.totalFinanced.toString(), "TRY") : "₺0"}
                         </div>
                         <div style={styles.kpiDelta}>Outstanding principal</div>
-                        <div style={styles.kpiIcon}>💰</div>
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Liquidity Available</div>
@@ -477,7 +517,6 @@ export default function OverviewPage() {
                             {metrics?.liquidityAvailable ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : "₺0"}
                         </div>
                         <div style={styles.kpiDelta}>Pool capacity</div>
-                        <div style={styles.kpiIcon}>💧</div>
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Utilization Ratio</div>
@@ -485,7 +524,6 @@ export default function OverviewPage() {
                         <div style={styles.progressBar}>
                             <div style={{ ...styles.progressFill, width: `${metrics?.utilization || 0}%` }}></div>
                         </div>
-                        <div style={styles.kpiIcon}>📊</div>
                     </div>
                 </div>
 

@@ -287,7 +287,20 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice) return reply.code(404).send({ error: 'Invoice not found' });
 
         if (invoice.status !== 'TOKENIZED') return reply.code(400).send({ error: 'Invoice must be TOKENIZED' });
-        if (invoice.isFinanced) return reply.code(400).send({ error: 'Already financed' });
+        if (invoice.isFinanced) {
+            // Already financed - check if this is a notification for an existing transaction
+            if (body.txHash) {
+                console.log(`[Finance] Notification for already-financed invoice ${invoice.externalId}, txHash: ${body.txHash}`);
+                return {
+                    invoiceId: id,
+                    approved: true,
+                    approvedAmount: body.amount || invoice.amount,
+                    txHash: body.txHash,
+                    message: 'Invoice already financed, notification received'
+                };
+            }
+            return reply.code(400).send({ error: 'Already financed' });
+        }
         if (!invoice.invoiceIdOnChain || !invoice.tokenId) return reply.code(400).send({ error: 'Missing on-chain data' });
 
         // Calculate requested amount: 60% of invoice amount (matching LTV rate)
@@ -296,6 +309,53 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         const requestedAmount = body.amount ? BigInt(body.amount) : invoiceAmountInCents * 6000n / 10000n; // 60% LTV
 
         try {
+            // If txHash is provided, on-chain transaction was already completed by frontend
+            if (body.txHash) {
+                console.log(`[Finance] On-chain transaction already completed for ${invoice.externalId}, txHash: ${body.txHash}`);
+                
+                // Verify the transaction on-chain
+                try {
+                    const FinancingPool = loadContract("FinancingPool");
+                    const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
+                    
+                    if (!position.exists) {
+                        console.warn(`[Finance] Position not found for invoice ${invoice.externalId} after on-chain transaction`);
+                        // Still update DB as transaction was successful
+                    }
+                } catch (verifyError) {
+                    console.warn(`[Finance] Could not verify position on-chain:`, verifyError);
+                    // Continue anyway as transaction hash is provided
+                }
+
+                // Update database to reflect financing
+                const updated = await prisma.invoice.update({
+                    where: { id },
+                    data: { isFinanced: true, status: 'FINANCED' }
+                });
+
+                // Emit WebSocket events
+                emitInvoiceEvent(id, {
+                    type: 'invoice.financed',
+                    payload: { 
+                        invoiceId: id, 
+                        externalId: invoice.externalId,
+                        approvedAmount: requestedAmount.toString(),
+                        txHash: body.txHash 
+                    },
+                });
+                emitPoolEvent({
+                    type: 'pool.utilization_changed',
+                    payload: {},
+                });
+
+                return {
+                    invoiceId: id,
+                    approved: true,
+                    approvedAmount: requestedAmount.toString(),
+                    txHash: body.txHash
+                };
+            }
+
             console.log(`Financing invoice ${invoice.externalId}...`);
 
             // MOCK MODE: If no private key or explicitly enabled

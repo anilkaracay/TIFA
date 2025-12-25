@@ -102,17 +102,17 @@ export default function AdminPanelPage() {
                 args: [],
             });
 
-            setMessage("⏳ Pausing pool... Waiting for confirmation...");
+            setMessage("Pausing pool... Waiting for confirmation...");
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: tx });
             
             if (receipt.status === 'success') {
-                setMessage("✅ Pool paused successfully");
+                setMessage("Pool paused successfully");
                 mutatePoolStatus();
             } else {
-                setMessage("❌ Transaction failed");
+                setMessage("Transaction failed");
             }
         } catch (e: any) {
-            setMessage(`❌ Error: ${e.message || 'Failed to pause pool'}`);
+            setMessage(`Error: ${e.message || 'Failed to pause pool'}`);
         } finally {
             setLoading(false);
             setLoadingAction(null);
@@ -138,17 +138,17 @@ export default function AdminPanelPage() {
                 args: [],
             });
 
-            setMessage("⏳ Unpausing pool... Waiting for confirmation...");
+            setMessage("Unpausing pool... Waiting for confirmation...");
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: tx });
             
             if (receipt.status === 'success') {
-                setMessage("✅ Pool unpaused successfully");
+                setMessage("Pool unpaused successfully");
                 mutatePoolStatus();
             } else {
-                setMessage("❌ Transaction failed");
+                setMessage("Transaction failed");
             }
         } catch (e: any) {
-            setMessage(`❌ Error: ${e.message || 'Failed to unpause pool'}`);
+            setMessage(`Error: ${e.message || 'Failed to unpause pool'}`);
         } finally {
             setLoading(false);
             setLoadingAction(null);
@@ -174,7 +174,7 @@ export default function AdminPanelPage() {
 
             <div style={{ marginBottom: "32px" }}>
                 <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-                    ⚙️ Admin Panel
+                    Admin Panel
                 </h1>
                 <p style={{ color: "var(--text-muted)" }}>
                     Manage protocol parameters and emergency controls
@@ -223,9 +223,9 @@ export default function AdminPanelPage() {
                 <Card style={{ 
                     marginBottom: "24px", 
                     padding: "16px",
-                    background: typeof message === 'string' && message.includes('✅') 
+                    background: typeof message === 'string' && (message.includes('successfully') || message.includes('success'))
                         ? "rgba(34, 197, 94, 0.1)" 
-                        : typeof message === 'string' && message.includes('❌')
+                        : typeof message === 'string' && (message.includes('failed') || message.includes('Error:'))
                         ? "rgba(239, 68, 68, 0.1)"
                         : "rgba(59, 130, 246, 0.1)",
                 }}>
@@ -257,7 +257,7 @@ export default function AdminPanelPage() {
                                 fontWeight: 600,
                                 color: poolStatus.paused ? "#ef4444" : "#22c55e",
                             }}>
-                                {poolStatus.paused ? "⛔ PAUSED" : "✅ ACTIVE"}
+                                {poolStatus.paused ? "PAUSED" : "ACTIVE"}
                             </div>
                         )}
                     </div>

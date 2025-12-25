@@ -198,21 +198,15 @@ const styles = {
         marginBottom: "24px",
     },
     sectionHeader: {
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
         marginBottom: "24px",
         paddingBottom: "16px",
-        borderBottom: "1px solid #f0f0f0",
-    },
-    sectionIcon: {
-        fontSize: "20px",
-        color: "#666",
+        borderBottom: "1px solid #e5e7eb",
     },
     sectionTitle: {
         fontSize: "18px",
         fontWeight: 600,
         color: "#1a1a1a",
+        margin: 0,
     },
     financialGrid: {
         display: "grid",
@@ -559,6 +553,193 @@ const styles = {
         padding: "12px",
         borderBottom: "1px solid #e5e7eb",
     },
+    // Financial Control Surface Styles
+    financialControlSurface: {
+        background: "#1e293b", // deep navy
+        borderRadius: "8px",
+        border: "1px solid #334155",
+        padding: "24px",
+        marginBottom: "24px",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    },
+    fcsHeader: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingBottom: "16px",
+        borderBottom: "1px solid #334155",
+        marginBottom: "16px",
+    },
+    fcsHeaderLeft: {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+    },
+    fcsHeaderRight: {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+    },
+    fcsRiskLabel: {
+        fontSize: "10px",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        color: "#94a3b8",
+        textTransform: "uppercase" as const,
+    },
+    fcsRiskBadgeContainer: {
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+    },
+    fcsRiskBadge: {
+        padding: "4px 12px",
+        borderRadius: "12px",
+        fontSize: "11px",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        border: "1px solid",
+        background: "transparent",
+    },
+    fcsInfoTooltip: {
+        fontSize: "11px",
+        color: "#64748b",
+        cursor: "help",
+        fontWeight: 600,
+        width: "16px",
+        height: "16px",
+        borderRadius: "50%",
+        border: "1px solid #64748b",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        lineHeight: "1",
+    },
+    fcsStatusLabel: {
+        fontSize: "10px",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        color: "#94a3b8",
+        textTransform: "uppercase" as const,
+    },
+    fcsStatusBadge: {
+        fontSize: "11px",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+    },
+    fcsAiStrip: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "10px 12px",
+        background: "rgba(59, 130, 246, 0.08)",
+        borderRadius: "4px",
+        marginBottom: "20px",
+        border: "1px solid rgba(59, 130, 246, 0.15)",
+    },
+    fcsAiContent: {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    fcsAiPulse: {
+        width: "6px",
+        height: "6px",
+        borderRadius: "50%",
+        background: "#3b82f6",
+        animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+    },
+    fcsAiText: {
+        fontSize: "11px",
+        color: "#cbd5e1",
+        fontWeight: 500,
+    },
+    fcsAiTimestamp: {
+        fontSize: "10px",
+        color: "#94a3b8",
+    },
+    fcsFinancialState: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "32px",
+        marginBottom: "24px",
+    },
+    fcsFinancialColumn: {
+        display: "flex",
+        flexDirection: "column" as const,
+        gap: "20px",
+    },
+    fcsFinancialMetric: {
+        display: "flex",
+        flexDirection: "column" as const,
+    },
+    fcsMetricLabel: {
+        fontSize: "10px",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        color: "#94a3b8",
+        textTransform: "uppercase" as const,
+        marginBottom: "6px",
+    },
+    fcsMetricValue: {
+        fontSize: "18px",
+        fontWeight: 600,
+        color: "#f1f5f9",
+        lineHeight: "1.3",
+    },
+    fcsMetricNote: {
+        fontSize: "11px",
+        color: "#94a3b8",
+        marginTop: "4px",
+    },
+    fcsActionLayer: {
+        paddingTop: "20px",
+        borderTop: "1px solid #334155",
+    },
+    fcsActionButtons: {
+        display: "flex",
+        gap: "12px",
+        marginBottom: "12px",
+    },
+    fcsActionPrimary: {
+        padding: "10px 20px",
+        fontSize: "13px",
+        fontWeight: 500,
+        background: "#3b82f6",
+        border: "none",
+        borderRadius: "4px",
+        color: "#ffffff",
+        cursor: "pointer",
+        transition: "0.2s",
+    },
+    fcsActionSecondary: {
+        padding: "10px 20px",
+        fontSize: "13px",
+        fontWeight: 500,
+        background: "transparent",
+        border: "1px solid #475569",
+        borderRadius: "4px",
+        color: "#cbd5e1",
+        cursor: "pointer",
+        transition: "0.2s",
+    },
+    fcsActionWarning: {
+        borderColor: "#f59e0b",
+        color: "#fbbf24",
+    },
+    fcsWarningLine: {
+        fontSize: "11px",
+        color: "#f59e0b",
+        marginBottom: "12px",
+        paddingLeft: "12px",
+        borderLeft: "2px solid #f59e0b",
+    },
+    fcsComplianceNote: {
+        fontSize: "10px",
+        color: "#64748b",
+        fontStyle: "italic",
+        marginTop: "8px",
+    },
 };
 
 export default function InvoiceDetailPage() {
@@ -693,38 +874,6 @@ export default function InvoiceDetailPage() {
         return diffDays;
     }, [inv]);
 
-    // Calculate repayment progress
-    const repaymentProgress = useMemo(() => {
-        if (!inv) return { paid: 0, total: 0, percentage: 0 };
-        
-        let paidAmount: number;
-        let totalAmount: number;
-        
-        // Safely convert BigInt or string to number
-        const safeToNumber = (value: any): number => {
-            if (value === null || value === undefined) return 0;
-            if (typeof value === 'bigint') return Number(value);
-            if (typeof value === 'string') return Number(value) || 0;
-            if (typeof value === 'number') return value;
-            return Number(value.toString()) || 0;
-        };
-        
-        if (inv.isFinanced && inv.usedCredit !== undefined) {
-            const paidCents = safeToNumber(inv.cumulativePaid);
-            const remainingDebtCents = safeToNumber(inv.usedCredit);
-            const totalDebtCents = paidCents + remainingDebtCents;
-            paidAmount = paidCents / 100;
-            totalAmount = totalDebtCents / 100;
-        } else {
-            const paidCents = safeToNumber(inv.cumulativePaid);
-            const invoiceAmount = safeToNumber(inv.amount);
-            paidAmount = paidCents / 100;
-            totalAmount = invoiceAmount;
-        }
-        
-        const percentage = totalAmount > 0 ? Math.min(100, Math.round((paidAmount / totalAmount) * 100)) : 0;
-        return { paid: paidAmount, total: totalAmount, percentage };
-    }, [inv]);
 
     // Get status badge style
     const getStatusBadgeStyle = (status: string) => {
@@ -973,20 +1122,48 @@ export default function InvoiceDetailPage() {
                 // Step 4: Notify backend
                 showToast('info', 'Step 4/4: Notifying backend...');
                 try {
-                    await requestFinancing(
+                    const backendResponse = await requestFinancing(
                         inv.id, 
                         address, 
                         receipt.transactionHash,
                         creditToDraw.toString()
                     );
-                    // Convert BigInt to number safely, then divide by 100
-                    const creditDrawnNumber = Number(creditToDraw) / 100;
-                    showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
-                    await mutateInvoice();
-                    await mutateTruth();
+                    
+                    // Check if backend successfully processed the notification
+                    if (backendResponse && (backendResponse.approved || backendResponse.invoiceId)) {
+                        // Convert BigInt to number safely, then divide by 100
+                        const creditDrawnNumber = Number(creditToDraw) / 100;
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        await mutateInvoice();
+                        await mutateTruth();
+                    } else {
+                        // Backend returned unexpected response, but transaction was successful
+                        console.warn('[Finance] Backend returned unexpected response:', backendResponse);
+                        const creditDrawnNumber = Number(creditToDraw) / 100;
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        // Still refresh to get latest state
+                        await mutateInvoice();
+                        await mutateTruth();
+                    }
                 } catch (backendError: any) {
                     console.error('[Finance] Backend notification failed:', backendError);
-                    showToast('warning', 'Credit drawn on-chain, but backend sync failed. Please refresh.');
+                    
+                    // Check if error is "Already financed" - this means backend already has the state
+                    if (backendError.message && backendError.message.includes('Already financed')) {
+                        console.log('[Finance] Invoice already financed in backend, refreshing state...');
+                        const creditDrawnNumber = Number(creditToDraw) / 100;
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        await mutateInvoice();
+                        await mutateTruth();
+                    } else {
+                        // Real error - show warning but don't block user
+                        console.warn('[Finance] Backend sync may have failed, but on-chain transaction was successful');
+                        const creditDrawnNumber = Number(creditToDraw) / 100;
+                        showToast('warning', `Credit drawn on-chain (${formatAmount(creditDrawnNumber, inv.currency || "TRY")}). Backend sync may be delayed.`);
+                        // Still refresh to get latest state
+                        await mutateInvoice();
+                        await mutateTruth();
+                    }
                 }
             }
         } catch (e: any) {
@@ -1049,6 +1226,9 @@ export default function InvoiceDetailPage() {
         const recourseModeNum = safeToNumber(positionData.recourseMode || "1"); // 0 = RECOURSE, 1 = NON_RECOURSE
         const isInDefaultBool = Boolean(positionData.isInDefault || false);
         const graceEndsAtStr = positionData.graceEndsAt ? String(safeToNumber(positionData.graceEndsAt)) : "0";
+        const defaultDeclaredAtStr = positionData.defaultDeclaredAt && positionData.defaultDeclaredAt > 0n 
+            ? String(safeToNumber(positionData.defaultDeclaredAt)) 
+            : null;
         const totalDebtNum = usedCreditNum + interestAccruedNum;
         
         // Ensure all values are primitive numbers/booleans/strings (not BigInt)
@@ -1061,9 +1241,79 @@ export default function InvoiceDetailPage() {
             recourseMode: Number(recourseModeNum),
             isInDefault: Boolean(isInDefaultBool),
             graceEndsAt: String(graceEndsAtStr),
+            defaultDeclaredAt: defaultDeclaredAtStr,
             totalDebt: Number(totalDebtNum),
         };
     }, [positionData, inv]);
+
+    // Calculate repayment progress (after creditLineInfo is defined)
+    const repaymentProgress = useMemo(() => {
+        if (!inv) return { paid: 0, total: 0, percentage: 0 };
+        
+        let paidAmount: number;
+        let totalAmount: number;
+        
+        // Safely convert BigInt or string to number
+        const safeToNumber = (value: any): number => {
+            if (value === null || value === undefined) return 0;
+            if (typeof value === 'bigint') return Number(value);
+            if (typeof value === 'string') return Number(value) || 0;
+            if (typeof value === 'number') return value;
+            return Number(value.toString()) || 0;
+        };
+        
+        if (inv.isFinanced && creditLineInfo) {
+            // For financed invoices:
+            // - Paid = cumulativePaid (already paid amount)
+            // - Current debt = usedCredit + interestAccrued (remaining debt)
+            // - Total debt = current debt + paid = usedCredit + interestAccrued + cumulativePaid
+            const paidCents = safeToNumber(inv.cumulativePaid);
+            const usedCreditNum = Number(creditLineInfo.usedCredit) * 100; // Convert back to cents
+            const interestAccruedNum = Number(creditLineInfo.interestAccrued) * 100; // Convert back to cents
+            const currentDebtCents = usedCreditNum + interestAccruedNum;
+            const totalDebtCents = currentDebtCents + paidCents; // Total = remaining + paid
+            
+            paidAmount = paidCents / 100;
+            totalAmount = totalDebtCents / 100;
+        } else if (inv.isFinanced && inv.usedCredit !== undefined) {
+            // Fallback: use inv.usedCredit if creditLineInfo not available
+            const paidCents = safeToNumber(inv.cumulativePaid);
+            const remainingDebtCents = safeToNumber(inv.usedCredit);
+            const totalDebtCents = remainingDebtCents + paidCents; // Total = remaining + paid
+            
+            paidAmount = paidCents / 100;
+            totalAmount = totalDebtCents / 100;
+        } else {
+            // For non-financed invoices, use invoice amount
+            const paidCents = safeToNumber(inv.cumulativePaid);
+            const invoiceAmount = safeToNumber(inv.amount);
+            paidAmount = paidCents / 100;
+            totalAmount = invoiceAmount;
+        }
+        
+        // Ensure paid doesn't exceed total
+        paidAmount = Math.min(paidAmount, totalAmount);
+        const percentage = totalAmount > 0 ? Math.min(100, Math.round((paidAmount / totalAmount) * 100)) : 0;
+        return { paid: paidAmount, total: totalAmount, percentage };
+    }, [inv, creditLineInfo]);
+
+    // Calculate dynamic payment status based on repayment progress
+    const paymentStatus = useMemo(() => {
+        if (!inv || !repaymentProgress) return inv?.status || "pending";
+        
+        // If fully paid
+        if (repaymentProgress.total > 0 && repaymentProgress.paid >= repaymentProgress.total) {
+            return "PAID";
+        }
+        
+        // If partially paid
+        if (repaymentProgress.paid > 0 && repaymentProgress.paid < repaymentProgress.total) {
+            return "PARTIALLY_PAID";
+        }
+        
+        // Otherwise use invoice status
+        return inv.status || "pending";
+    }, [inv, repaymentProgress]);
 
     // Calculate recourse obligation
     const recourseObligation = useMemo(() => {
@@ -1074,89 +1324,164 @@ export default function InvoiceDetailPage() {
         return Number(creditLineInfo.totalDebt);
     }, [creditLineInfo]);
 
+    // Calculate timeline status (from InvoiceRiskPanel logic)
+    const timelineStatus = useMemo(() => {
+        if (!positionData) return null;
+
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        const dueDate = positionData.dueDate;
+        const graceEndsAt = positionData.graceEndsAt;
+
+        if (positionData.isInDefault) {
+            return { status: "defaulted", label: "Defaulted", color: "#ef4444" };
+        }
+        if (graceEndsAt > 0n && now < graceEndsAt) {
+            return { status: "in_grace", label: "In Grace", color: "#f59e0b" };
+        }
+        if (dueDate > 0n && now >= dueDate) {
+            return { status: "overdue", label: "Overdue", color: "#ef4444" };
+        }
+        if (positionData.usedCredit > 0n) {
+            return { status: "active", label: "Active", color: "#22c55e" };
+        }
+        return { status: "active", label: "Active", color: "#22c55e" };
+    }, [positionData]);
+
     // Build audit trail from invoice data
     const auditTrail = useMemo(() => {
         if (!inv) return [];
         
         const trail = [];
+        const createdAtTime = new Date(inv.createdAt).getTime();
+        const updatedAtTime = new Date(inv.updatedAt).getTime();
         
-        // Invoice Issued
+        // 1. Invoice Issued (first event - uses createdAt)
         trail.push({
             event: "Invoice Issued",
             description: `Invoice ${inv.externalId} was created and issued.`,
             timestamp: inv.createdAt,
+            order: 1,
             link: null,
         });
         
-        // Invoice Tokenized
+        // 2. Invoice Tokenized (happens after issue, before financing)
         if ((inv.status as string) === "TOKENIZED" || (inv.status as string) === "FINANCED" || inv.isFinanced) {
+            // Use updatedAt if tokenized, but ensure it's after createdAt
+            const tokenizedTime = Math.max(createdAtTime + 1000, updatedAtTime - 2000);
             trail.push({
                 event: "Invoice Tokenized",
                 description: `Invoice #${inv.externalId} minted as NFT on-chain.`,
-                timestamp: inv.updatedAt,
+                timestamp: new Date(tokenizedTime).toISOString(),
+                order: 2,
                 link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/tx/${inv.invoiceIdOnChain}` : null,
             });
         }
         
-        // Collateral Locked
+        // 3. Collateral Locked (happens during financing, before disbursement)
         if (inv.isFinanced && inv.invoiceIdOnChain) {
+            // Collateral is locked right before financing disbursement
+            const collateralTime = Math.max(createdAtTime + 2000, updatedAtTime - 1000);
             trail.push({
                 event: "Collateral Locked",
                 description: "Asset token locked in smart contract vault.",
-                timestamp: inv.updatedAt,
+                timestamp: new Date(collateralTime).toISOString(),
+                order: 3,
                 link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/address/${Deployments.FinancingPool.address}` : null,
             });
         }
         
-        // Financing Disbursed
+        // 4. Financing Disbursed (final step of financing)
         if (inv.isFinanced) {
             trail.push({
                 event: "Financing Disbursed",
                 description: "Funds released to issuer wallet. Financing active.",
                 timestamp: inv.updatedAt,
+                order: 4,
                 link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/tx/${inv.invoiceIdOnChain}` : null,
             });
         }
         
-        // Payments
+        // 5. Payments (happen after financing)
         if (inv.payments && inv.payments.length > 0) {
             inv.payments.forEach((payment: any) => {
                 trail.push({
                     event: payment.amount === repaymentProgress.total ? "Full Repayment Received" : "Partial Repayment Received",
                     description: `A repayment of ${formatAmount(payment.amount, payment.currency)} was processed successfully.`,
                     timestamp: payment.paidAt,
+                    order: 5,
                     link: null,
                 });
             });
         }
         
-        // Sort by timestamp (newest first)
-        return trail.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        // Sort by order first (logical sequence), then by timestamp (oldest first)
+        // Then reverse to show newest first (top to bottom)
+        return trail.sort((a, b) => {
+            if (a.order !== b.order) {
+                return a.order - b.order;
+            }
+            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+        }).reverse();
     }, [inv, repaymentProgress]);
 
     if (isLoading) {
         return (
+            <>
+                <style>{`
+                    @keyframes pulse {
+                        0%, 100% {
+                            opacity: 1;
+                        }
+                        50% {
+                            opacity: 0.5;
+                        }
+                    }
+                `}</style>
             <div style={styles.page}>
                 <div style={styles.container}>
                     <p style={{ padding: "60px", textAlign: "center", color: "#666" }}>Loading invoice...</p>
                 </div>
             </div>
+            </>
         );
     }
 
     if (error || !inv) {
         return (
+            <>
+                <style>{`
+                    @keyframes pulse {
+                        0%, 100% {
+                            opacity: 1;
+                        }
+                        50% {
+                            opacity: 0.5;
+                        }
+                    }
+                `}</style>
             <div style={styles.page}>
                 <div style={styles.container}>
                     <p style={{ padding: "60px", textAlign: "center", color: "#dc2626" }}>Failed to load invoice detail.</p>
                 </div>
             </div>
+            </>
         );
     }
 
     const pathname = usePathname();
 
     return (
+        <>
+            <style>{`
+                @keyframes pulse {
+                    0%, 100% {
+                        opacity: 1;
+                    }
+                    50% {
+                        opacity: 0.5;
+                    }
+                }
+            `}</style>
         <div style={styles.page}>
             {/* Top Navbar */}
             <nav style={styles.navbar}>
@@ -1196,7 +1521,7 @@ export default function InvoiceDetailPage() {
                 {/* Warning Banner */}
                 {invoiceTruth?.dbOutOfSync && (
                     <div style={styles.warningBanner}>
-                        <span>⚠️</span>
+                        <span style={{ fontWeight: 700, color: "#f59e0b" }}>WARNING</span>
                         <div style={styles.warningText}>
                             <strong>Backend Cache Out of Sync:</strong> Backend database differs from on-chain state. Showing on-chain status.
                         </div>
@@ -1218,13 +1543,12 @@ export default function InvoiceDetailPage() {
                                 </>
                             )}
                         </div>
-                        <span style={getStatusBadgeStyle(inv.status)}>
-                            {inv.status}
+                        <span style={getStatusBadgeStyle(paymentStatus)}>
+                            {paymentStatus}
                         </span>
                     </div>
                     <div style={styles.headerActions}>
                         <button style={styles.buttonSecondary}>
-                            <span>📥</span>
                             <span>Download PDF</span>
                         </button>
                         {(inv.status as string) === "TOKENIZED" && !inv.isFinanced && (
@@ -1287,7 +1611,6 @@ export default function InvoiceDetailPage() {
                 {/* Financial State Section */}
                 <div style={styles.section}>
                     <div style={styles.sectionHeader}>
-                        <span style={styles.sectionIcon}>$</span>
                         <h2 style={styles.sectionTitle}>Financial State</h2>
                     </div>
                     <div style={styles.financialGrid}>
@@ -1295,7 +1618,9 @@ export default function InvoiceDetailPage() {
                             <div style={styles.financialItem}>
                                 <div style={styles.financialLabel}>Principal Outstanding</div>
                                 <div style={styles.financialValue}>
-                                    {inv.isFinanced && inv.usedCredit
+                                    {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0
+                                        ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                        : inv.isFinanced && inv.usedCredit
                                         ? (() => {
                                             // Safely convert BigInt or number to number, then divide by 100
                                             const usedCreditNum = typeof inv.usedCredit === 'bigint' 
@@ -1311,16 +1636,19 @@ export default function InvoiceDetailPage() {
                                     </div>
                                 )}
                             </div>
-                            {inv.isFinanced && (
+                            {inv.isFinanced && creditLineInfo && (
                                 <div style={styles.financialItem}>
                                     <div style={styles.financialLabel}>Accrued Interest</div>
                                     <div style={{ ...styles.financialValue, color: "#f97316" }}>
-                                        {/* TODO: Fetch from contract */}
-                                        {formatAmount("0", inv.currency || "TRY")}
+                                        {creditLineInfo.interestAccrued > 0
+                                            ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                            : "—"}
                                     </div>
+                                    {creditLineInfo.interestAccrued > 0 && (
                                     <div style={styles.financialNote}>
-                                        + $20.50 daily rate
+                                            Accruing daily
                                     </div>
+                                    )}
                                 </div>
                             )}
                             <div style={styles.financialItem}>
@@ -1349,7 +1677,7 @@ export default function InvoiceDetailPage() {
                                             onClick={() => copyToClipboard(inv.invoiceIdOnChain!)}
                                             title="Copy address"
                                         >
-                                            📋
+                                            Copy
                                         </button>
                                         <a
                                             href={`https://sepolia.basescan.org/address/${inv.invoiceIdOnChain}`}
@@ -1358,22 +1686,34 @@ export default function InvoiceDetailPage() {
                                             style={styles.iconButton}
                                             title="View on BaseScan"
                                         >
-                                            🔗
+                                            View
                                         </a>
                                     </div>
                                 </div>
                             )}
-                            {inv.isFinanced && (
+                            {inv.isFinanced && creditLineInfo && (
                                 <div style={styles.financialItem}>
                                     <div style={styles.financialLabel}>Collateral Health</div>
                                     <div style={styles.healthFactor}>
                                         <div style={styles.healthFactorLabel}>Current Valuation</div>
                                         <div style={styles.healthFactorValue}>
-                                            {formatAmount(inv.amount, inv.currency || "TRY")}
+                                            {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
                                         </div>
                                         <div style={styles.healthFactorLabel}>Health Factor</div>
-                                        <div style={styles.healthFactorValue}>1.25</div>
-                                        <div style={styles.healthFactorStatus}>Safe</div>
+                                        <div style={styles.healthFactorValue}>
+                                            {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
+                                                ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit).toFixed(2)
+                                                : "—"}
+                                        </div>
+                                        <div style={styles.healthFactorStatus}>
+                                            {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
+                                                ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.2
+                                                    ? "Safe"
+                                                    : (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.0
+                                                    ? "Warning"
+                                                    : "Critical"
+                                                : "—"}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1385,7 +1725,6 @@ export default function InvoiceDetailPage() {
                 {inv.isFinanced && creditLineInfo && (
                     <div style={styles.section}>
                         <div style={styles.sectionHeader}>
-                            <span style={styles.sectionIcon}>💳</span>
                             <h2 style={styles.sectionTitle}>Credit Line Management</h2>
                         </div>
                         <div style={styles.creditLineCard}>
@@ -1433,102 +1772,167 @@ export default function InvoiceDetailPage() {
                     </div>
                 )}
 
-                {/* Recourse Payment Section */}
-                {creditLineInfo && creditLineInfo.recourseMode === 0 && creditLineInfo.isInDefault && recourseObligation && (
-                    <div style={styles.recourseSection}>
-                        <div style={styles.recourseTitle}>Recourse Payment Required</div>
-                        <div style={{ marginBottom: "16px", fontSize: "14px", color: "#7c2d12" }}>
-                            This invoice is in RECOURSE mode and has been declared in default. You are required to pay the recourse obligation.
-                        </div>
-                        <div style={{ marginBottom: "16px" }}>
-                            <div style={styles.creditLineLabel}>Recourse Obligation</div>
-                            <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
-                                {formatAmount(Number(recourseObligation), inv.currency || "TRY")}
-                            </div>
-                        </div>
-                        <button
-                            style={styles.buttonPrimary}
-                            onClick={() => setShowRecourseModal(true)}
-                            disabled={loading || !address}
-                        >
-                            Pay Recourse
-                        </button>
-                    </div>
-                )}
-
-                {/* Payment Recording Section */}
-                {inv.isFinanced && (
-                    <div style={styles.section}>
-                        <div style={styles.sectionHeader}>
-                            <span style={styles.sectionIcon}>💰</span>
-                            <h2 style={styles.sectionTitle}>Payment Recording</h2>
-                        </div>
-                        <button
-                            style={styles.buttonPrimary}
-                            onClick={() => setShowPaymentModal(true)}
-                            disabled={loading || !address}
-                        >
-                            Record Payment
-                        </button>
-                        {inv.payments && inv.payments.length > 0 && (
-                            <div style={styles.paymentHistory}>
-                                <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "12px", marginTop: "20px" }}>
-                                    Payment History
+                {/* Financial Control Surface - Unified Institutional Panel */}
+                {inv.isFinanced && positionData && creditLineInfo && (
+                    <div style={styles.financialControlSurface}>
+                        {/* Header Layer - Risk Context */}
+                        <div style={styles.fcsHeader}>
+                            <div style={styles.fcsHeaderLeft}>
+                                <span style={styles.fcsRiskLabel}>RISK MODE</span>
+                                <div style={styles.fcsRiskBadgeContainer}>
+                                    <span style={{
+                                        ...styles.fcsRiskBadge,
+                                        borderColor: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
+                                        color: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
+                                    }}>
+                                        {positionData.recourseMode === 0 ? "RECOURSE" : "NON-RECOURSE"}
+                                    </span>
+                                    <span
+                                        style={styles.fcsInfoTooltip}
+                                        title={
+                                            positionData.recourseMode === 0
+                                                ? "Recourse: If debtor defaults, issuer is obligated to repay. LP losses are minimized."
+                                                : "Non-Recourse: If debtor defaults, pool bears the loss. Reserve protects LPs first."
+                                        }
+                                    >
+                                        i
+                                    </span>
                                 </div>
-                                {inv.payments.map((payment: any, index: number) => (
-                                    <div key={index} style={styles.paymentHistoryItem}>
-                                        <div>
-                                            <div style={{ fontSize: "14px", fontWeight: 500 }}>
-                                                {formatAmount(payment.amount, payment.currency)}
-                                            </div>
-                                            <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                                                {formatDate(payment.paidAt, true)}
-                                                {payment.psp && ` • ${payment.psp}`}
-                                            </div>
+                            </div>
+                            <div style={styles.fcsHeaderRight}>
+                                <span style={styles.fcsStatusLabel}>SYSTEM STATUS</span>
+                                <span style={{
+                                    ...styles.fcsStatusBadge,
+                                    color: creditLineInfo.isInDefault ? "#ef4444" : timelineStatus?.status === "overdue" ? "#f59e0b" : "#22c55e",
+                                }}>
+                                    {creditLineInfo.isInDefault ? "DEFAULTED" : timelineStatus?.label || "ACTIVE"}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* AI Monitoring Strip */}
+                        <div style={styles.fcsAiStrip}>
+                            <div style={styles.fcsAiContent}>
+                                <div style={styles.fcsAiPulse}></div>
+                                <span style={styles.fcsAiText}>AI Risk Agent monitoring payment behavior in real time</span>
+                            </div>
+                            <span style={styles.fcsAiTimestamp}>
+                                Last evaluation: {formatDate(new Date().toISOString(), true)}
+                            </span>
+                        </div>
+
+                        {/* Core Financial State - Two Columns */}
+                        <div style={styles.fcsFinancialState}>
+                            <div style={styles.fcsFinancialColumn}>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>OUTSTANDING PRINCIPAL</div>
+                                    <div style={styles.fcsMetricValue}>
+                                        {creditLineInfo.usedCredit > 0
+                                            ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                            : "—"}
+                                    </div>
+                                </div>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>ACCRUED INTEREST</div>
+                                    <div style={{ ...styles.fcsMetricValue, color: "#f97316" }}>
+                                        {creditLineInfo.interestAccrued > 0
+                                            ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                            : "—"}
+                                    </div>
+                                </div>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>NEXT DUE DATE</div>
+                                    <div style={styles.fcsMetricValue}>
+                                        {positionData.dueDate > 0n
+                                            ? formatDate(new Date(Number(positionData.dueDate) * 1000).toISOString())
+                                            : "—"}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={styles.fcsFinancialColumn}>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>LAST PAYMENT RECORDED</div>
+                                    <div style={styles.fcsMetricValue}>
+                                        {inv.payments && inv.payments.length > 0
+                                            ? formatAmount(inv.payments[inv.payments.length - 1].amount, inv.payments[inv.payments.length - 1].currency)
+                                            : "—"}
+                                    </div>
+                                    {inv.payments && inv.payments.length > 0 && (
+                                        <div style={styles.fcsMetricNote}>
+                                            {formatDate(inv.payments[inv.payments.length - 1].paidAt, true)}
                                         </div>
+                                    )}
+                                </div>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>DAYS OUTSTANDING</div>
+                                    <div style={styles.fcsMetricValue}>
+                                        {daysUntilMaturity !== null ? Math.abs(daysUntilMaturity) : "—"}
                                     </div>
-                                ))}
+                                </div>
+                                <div style={styles.fcsFinancialMetric}>
+                                    <div style={styles.fcsMetricLabel}>GRACE PERIOD STATUS</div>
+                                    <div style={styles.fcsMetricValue}>
+                                        {creditLineInfo.graceEndsAt !== "0"
+                                            ? `Active until ${formatDate(new Date(parseInt(creditLineInfo.graceEndsAt) * 1000).toISOString())}`
+                                            : "—"}
+                                    </div>
+                                </div>
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
 
-                {/* Default Handling Section (Admin Only) */}
-                {userRole?.isAdmin && inv.isFinanced && creditLineInfo && (
-                    <div style={styles.defaultSection}>
-                        <div style={styles.defaultTitle}>Default Handling</div>
-                        {creditLineInfo.isInDefault ? (
-                            <div style={{ fontSize: "14px", color: "#991b1b", marginBottom: "12px" }}>
-                                This invoice has been declared in default.
-                            </div>
-                        ) : (
-                            <>
-                                {creditLineInfo.graceEndsAt !== "0" && (
-                                    <div style={{ fontSize: "14px", color: "#7c2d12", marginBottom: "12px" }}>
-                                        Grace period ends: {new Date(parseInt(creditLineInfo.graceEndsAt) * 1000).toLocaleString()}
-                                    </div>
-                                )}
+                        {/* Action Layer */}
+                        <div style={styles.fcsActionLayer}>
+                            <div style={styles.fcsActionButtons}>
                                 <button
-                                    style={styles.buttonPrimary}
-                                    onClick={() => setShowDefaultModal(true)}
-                                    disabled={loading || !address || creditLineInfo.graceEndsAt === "0"}
+                                    style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                    onClick={() => setShowPaymentModal(true)}
+                                    disabled={loading || !address}
                                 >
-                                    Declare Default
+                                    Record Payment
                                 </button>
-                            </>
-                        )}
+                                {userRole?.isAdmin && (
+                                    <button
+                                        style={{
+                                            ...((loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault)
+                                                ? styles.fcsActionSecondaryDisabled
+                                                : {
+                                                    ...styles.fcsActionSecondary,
+                                                    ...(creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault
+                                                        ? styles.fcsActionWarning
+                                                        : {}),
+                                                }),
+                                        }}
+                                        onClick={() => setShowDefaultModal(true)}
+                                        disabled={loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault}
+                                    >
+                                        Declare Default
+                                    </button>
+                                )}
+                                {creditLineInfo && creditLineInfo.recourseMode === 0 && creditLineInfo.isInDefault && recourseObligation && (
+                                    <button
+                                        style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                        onClick={() => setShowRecourseModal(true)}
+                                        disabled={loading || !address}
+                                    >
+                                        Pay Recourse
+                                    </button>
+                                )}
+                            </div>
+                            {creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault && (
+                                <div style={styles.fcsWarningLine}>
+                                    Default declaration available. Grace period has ended.
+                                </div>
+                            )}
+                            <div style={styles.fcsComplianceNote}>
+                                Actions are logged and require on-chain confirmation.
+                            </div>
+                        </div>
                     </div>
-                )}
-
-                {/* Risk & Terms Section */}
-                {inv.isFinanced && (
-                    <InvoiceRiskPanel invoice={inv} />
                 )}
 
                 {/* Audit Trail */}
                 <div style={styles.section}>
                     <div style={styles.sectionHeader}>
-                        <span style={styles.sectionIcon}>🕐</span>
                         <h2 style={styles.sectionTitle}>Audit Trail</h2>
                     </div>
                     <ul style={styles.auditTrail}>
@@ -1575,7 +1979,7 @@ export default function InvoiceDetailPage() {
                                 step="0.01"
                                 min="0"
                             />
-                        </div>
+        </div>
                         <div style={styles.formGroup}>
                             <label style={styles.formLabel}>Currency</label>
                             <select
@@ -1723,6 +2127,7 @@ export default function InvoiceDetailPage() {
                     </div>
                 </div>
             )}
-        </div>
+            </div>
+        </>
     );
 }

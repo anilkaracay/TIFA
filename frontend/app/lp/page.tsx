@@ -898,7 +898,6 @@ export default function LPDashboardPage() {
                     </div>
                     <div style={styles.overviewCard}>
                         <div style={styles.cardLabel}>
-                            <span>📊</span>
                             <span>Net Yield (TTM)</span>
                         </div>
                         <div style={styles.cardValue}>
@@ -1016,7 +1015,7 @@ export default function LPDashboardPage() {
                                         borderColor: "#fca5a5",
                                         color: "#dc2626",
                                     }}>
-                                        <span style={styles.noticeIcon}>⚠️</span>
+                                        <span style={styles.noticeIcon}>WARNING</span>
                                         <div>
                                             <strong>Withdrawals disabled:</strong> Utilization is {poolOverview?.utilizationPercent}% (max: {poolOverview?.maxUtilizationPercent}%)
                                         </div>
@@ -1048,7 +1047,7 @@ export default function LPDashboardPage() {
                                 </div>
                                 {lpPosition && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
                                     <div style={styles.noticeBox}>
-                                        <span style={styles.noticeIcon}>ℹ️</span>
+                                        <span style={styles.noticeIcon}>INFO</span>
                                         <div>
                                             Withdrawals are subject to pool utilization limits. If utilization exceeds {poolOverview?.maxUtilizationPercent}%, withdrawals may be temporarily disabled.
                                         </div>

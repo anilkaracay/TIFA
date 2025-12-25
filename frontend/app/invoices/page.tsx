@@ -1013,7 +1013,7 @@ export default function InvoicesPage() {
 
             await publicClient.waitForTransactionReceipt({ hash: tx });
 
-            setMessage(`✅ Repayment successful! Amount: ${formatAmount(repayAmount, selectedInvoiceForRepay.currency || "TRY")}`);
+            setMessage(`Repayment successful! Amount: ${formatAmount(repayAmount, selectedInvoiceForRepay.currency || "TRY")}`);
             
             setTimeout(async () => {
                 await mutate();
@@ -1098,7 +1098,7 @@ export default function InvoicesPage() {
                 {message && (
                     <div style={{
                         ...styles.message,
-                        ...(typeof message === "string" && message.includes("✅") ? styles.messageSuccess :
+                        ...(typeof message === "string" && (message.includes("successful") || message.includes("success")) ? styles.messageSuccess :
                             typeof message === "string" && message.includes("Error") ? styles.messageError :
                             styles.messageInfo)
                     }}>
@@ -1120,7 +1120,6 @@ export default function InvoicesPage() {
                             onClick={handleExportCSV}
                             disabled={!filteredInvoices.length}
                         >
-                            <span>📥</span>
                             <span>Export CSV</span>
                         </button>
                         <button

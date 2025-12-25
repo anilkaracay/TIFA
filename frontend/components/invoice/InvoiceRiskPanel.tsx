@@ -259,10 +259,13 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                     </Badge>
                     <span
                         style={{
-                            fontSize: "12px",
-                            color: "var(--text-muted)",
+                            fontSize: "11px",
+                            color: "#2563eb",
                             cursor: "help",
                             marginLeft: "4px",
+                            fontWeight: 500,
+                            textDecoration: "underline",
+                            textDecorationStyle: "dotted",
                         }}
                         title={
                             isRecourse
@@ -270,7 +273,7 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                                 : "Non-Recourse: If debtor defaults, pool bears the loss. Reserve protects LPs first."
                         }
                     >
-                        ℹ️
+                        Info
                     </span>
                 </div>
                 <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0, lineHeight: "1.5" }}>
@@ -317,13 +320,13 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                     <div>
                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Outstanding Principal</span>
                         <p style={{ margin: "4px 0 0 0", fontSize: "16px", fontWeight: 700 }}>
-                            {formatAmount((Number(positionData.usedCredit) / 1e18).toFixed(2), invoice.currency)}
+                            {formatAmount(Number(positionData.usedCredit) / 1e18, invoice.currency)}
                         </p>
                     </div>
                     <div>
                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Accrued Interest</span>
                         <p style={{ margin: "4px 0 0 0", fontSize: "16px", fontWeight: 700, color: "#f97316" }}>
-                            {formatAmount((Number(positionData.interestAccrued) / 1e18).toFixed(2), invoice.currency)}
+                            {formatAmount(Number(positionData.interestAccrued) / 1e18, invoice.currency)}
                         </p>
                     </div>
                 </div>
@@ -338,13 +341,13 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                             <div style={{ marginBottom: "4px" }}>
                                 <span style={{ color: "var(--text-muted)" }}>Reserve absorbs: </span>
                                 <span style={{ fontWeight: 600 }}>
-                                    {formatAmount((Number(lossImpact.reserveAbsorbs) / 1e18).toFixed(2), invoice.currency)}
+                                    {formatAmount(Number(lossImpact.reserveAbsorbs) / 1e18, invoice.currency)}
                                 </span>
                             </div>
                             <div style={{ marginBottom: "4px" }}>
                                 <span style={{ color: "var(--text-muted)" }}>LP impact: </span>
                                 <span style={{ fontWeight: 600, color: lossImpact.lpImpact > 0n ? "#ef4444" : "#22c55e" }}>
-                                    {formatAmount((Number(lossImpact.lpImpact) / 1e18).toFixed(2), invoice.currency)}
+                                    {formatAmount(Number(lossImpact.lpImpact) / 1e18, invoice.currency)}
                                 </span>
                             </div>
                             <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "8px 0 0 0", fontStyle: "italic" }}>
