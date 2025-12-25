@@ -161,15 +161,17 @@ const styles = {
     },
     aiEngineHeader: {
         display: "flex",
-        gap: "32px",
+        gap: "40px",
         alignItems: "center",
-        padding: "20px 28px",
+        padding: "16px 24px",
         background: "#ffffff",
         border: "1px solid #e5e7eb",
         borderRadius: "8px",
         marginBottom: "32px",
-        position: "relative",
+        position: "relative" as const,
         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+        fontSize: "13px",
+        color: "#374151",
     },
     aiEngineHeaderActive: {
         borderImage: `${aiGradients.border} 1`,
@@ -179,6 +181,8 @@ const styles = {
         display: "flex",
         alignItems: "center",
         gap: "8px",
+        fontSize: "13px",
+        color: "#374151",
     },
     statusItemWithBar: {
         display: "flex",
@@ -999,42 +1003,80 @@ export default function AgentConsolePage() {
                         ...styles.aiEngineHeader,
                         ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? styles.aiEngineHeaderActive : {})
                     }}>
+                        {/* Engine Status */}
                         <div style={styles.statusItem}>
                             <span style={{
                                 ...styles.statusDot,
                                 ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle),
-                                background: data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? "#3b82f6" : "#9ca3af",
+                                background: data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? "#22c55e" : "#9ca3af",
                             }}></span>
-                            <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : data.systemStatus.engineStatus}</span>
+                            <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : `${data.systemStatus.engineStatus}-Nominal`}</span>
                         </div>
+                        
+                        {/* Last Decision */}
+                        {(() => {
+                            // Get the most recent decision timestamp
+                            // Backend returns decisionTraces sorted by createdAt DESC, so first item is most recent
+                            let lastDecisionTime: Date | null = null;
+                            
+                            // Try decisionTraces first (most reliable, sorted by backend)
+                            if (data.decisionTraces && data.decisionTraces.length > 0) {
+                                // decisionTraces are already sorted DESC by backend, so first is most recent
+                                const mostRecentTrace = data.decisionTraces[0];
+                                lastDecisionTime = new Date(mostRecentTrace.timestamp);
+                            } 
+                            // Fallback to recommendations
+                            else if (data.recommendations && data.recommendations.length > 0) {
+                                // Find most recent recommendation
+                                const timestamps = data.recommendations.map(r => new Date(r.timestamp).getTime());
+                                const maxTime = Math.max(...timestamps);
+                                lastDecisionTime = new Date(maxTime);
+                            } 
+                            // Final fallback to systemStatus.lastEvaluation
+                            else {
+                                lastDecisionTime = new Date(data.systemStatus.lastEvaluation);
+                            }
+                            
+                            // Format: MM/DD/YYYY, HH:MM:SS AM/PM UTC
+                            const formatDecisionTime = (date: Date): string => {
+                                // Validate date
+                                if (isNaN(date.getTime())) {
+                                    return "N/A";
+                                }
+                                
+                                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                const day = String(date.getUTCDate()).padStart(2, '0');
+                                const year = date.getUTCFullYear();
+                                let hours = date.getUTCHours();
+                                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                                const ampm = hours >= 12 ? 'PM' : 'AM';
+                                hours = hours % 12;
+                                hours = hours ? hours : 12;
+                                const hoursStr = String(hours).padStart(2, '0');
+                                return `${month}/${day}/${year}, ${hoursStr}:${minutes}:${seconds} ${ampm} UTC`;
+                            };
+                            
+                            return (
+                                <div style={styles.statusItem}>
+                                    <span><strong>Last Decision:</strong> {lastDecisionTime ? formatDecisionTime(lastDecisionTime) : "N/A"}</span>
+                                </div>
+                            );
+                        })()}
+                        
+                        {/* Active Rules */}
                         <div style={styles.statusItem}>
-                            <span style={{
-                                ...styles.statusDot,
-                                ...(isConnected ? {} : styles.statusDotIdle),
-                                background: isConnected ? "#10b981" : "#ef4444",
-                            }}></span>
-                            <span><strong>WebSocket:</strong> {isConnected ? "Connected" : "Disconnected"}</span>
+                            <span><strong>Active Rules:</strong> {
+                                agentConfig && systemParams 
+                                    ? `Risk Threshold: ${agentConfig.riskThreshold}, LTV: ${(systemParams.ltvBps / 100).toFixed(0)}%`
+                                    : "N/A"
+                            }</span>
                         </div>
+                        
+                        {/* System Load */}
                         <div style={styles.statusItem}>
-                            <span><strong>Active Agents:</strong> {data.systemStatus.activeAgents}</span>
+                            <span><strong>System Load:</strong> {data.systemStatus.systemLoad.toFixed(1)}%</span>
                         </div>
-                        <div style={styles.statusItem}>
-                            <span><strong>Last Evaluation:</strong> {formatTimestamp(data.systemStatus.lastEvaluation)}</span>
-                        </div>
-                        <div style={styles.statusItemWithBar}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px" }}>
-                                <span><strong>System Load:</strong></span>
-                                <span>{data.systemStatus.systemLoad}%</span>
-                            </div>
-                            <div style={styles.systemLoadBar}>
-                                <div style={{ ...styles.systemLoadFill, width: `${data.systemStatus.systemLoad}%` }}></div>
-                            </div>
-                        </div>
-                        {agentConfig && (
-                            <div style={styles.statusItem}>
-                                <span><strong>Risk Threshold:</strong> {agentConfig.riskThreshold}</span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
