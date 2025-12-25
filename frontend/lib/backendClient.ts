@@ -770,6 +770,9 @@ export interface AgentConsoleData {
         state: string;
         lastAction: string | Date;
         confidence: number;
+        workload?: number;
+        signalCount?: number;
+        lastActionSummary?: string;
     }>;
     signals: Array<{
         id: string;
@@ -782,6 +785,11 @@ export interface AgentConsoleData {
     decisionTraces: Array<{
         id: string;
         timestamp: string | Date;
+        reasoningPipeline?: Array<{
+            step: string;
+            label: string;
+            content: any;
+        }>;
         inputs: any;
         signals: any[];
         evaluation: any;
@@ -903,6 +911,78 @@ export async function updateAgentConfig(
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to update agent config");
+    }
+    return res.json();
+}
+
+export interface RiskBreakdown {
+    invoiceId: string;
+    invoiceExternalId: string;
+    factors: Array<{
+        name: string;
+        impact: number;
+        description: string;
+    }>;
+    finalScore: number;
+    timestamp: string;
+}
+
+export async function fetchRiskBreakdown(invoiceId: string): Promise<RiskBreakdown> {
+    const res = await fetch(`${BACKEND_URL}/agent/risk-breakdown/${invoiceId}`, {
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        throw new Error("Failed to fetch risk breakdown");
+    }
+    return res.json();
+}
+
+export interface SystemParameters {
+    riskThreshold: number;
+    ltvBps: number;
+    utilizationThresholdBps: number;
+    maxUtilizationBps: number;
+    maxLoanBpsOfTVL: number | null;
+    maxIssuerExposureBps: number | null;
+    lastUpdated: string;
+}
+
+export async function fetchSystemParameters(): Promise<SystemParameters> {
+    const res = await fetch(`${BACKEND_URL}/agent/system-parameters`, {
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        throw new Error("Failed to fetch system parameters");
+    }
+    return res.json();
+}
+
+export interface PredictiveIntelligence {
+    horizon: string;
+    invoicesAtRisk: number;
+    invoicesAtRiskDetails: Array<{
+        invoiceId: string;
+        externalId: string;
+        currentRisk: number;
+        projectedRisk: number;
+        reason: string;
+    }>;
+    poolUtilizationProjection: {
+        current: number;
+        projected: number;
+    };
+    expectedFinancings: number;
+    expectedFinancingBlocks: number;
+    safetyWarnings: string[];
+    timestamp: string;
+}
+
+export async function fetchPredictiveIntelligence(): Promise<PredictiveIntelligence> {
+    const res = await fetch(`${BACKEND_URL}/agent/predictions`, {
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        throw new Error("Failed to fetch predictive intelligence");
     }
     return res.json();
 }

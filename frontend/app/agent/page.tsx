@@ -4,61 +4,120 @@ import React, { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Navbar from "../../components/Navbar";
 import { useAccount } from "wagmi";
-import { fetchAgentConsole, AgentConsoleData, fetchAgentConfig, pauseAgent, resumeAgent, updateAgentConfig, AgentConfig } from "../../lib/backendClient";
+import { fetchAgentConsole, AgentConsoleData, fetchAgentConfig, pauseAgent, resumeAgent, updateAgentConfig, AgentConfig, fetchSystemParameters, fetchPredictiveIntelligence, SystemParameters, PredictiveIntelligence } from "../../lib/backendClient";
 import { useWebSocket } from "../../lib/websocketClient";
+
+// Premium AI gradient system - blue-violet-indigo
+const aiGradients = {
+    primary: "linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%)",
+    active: "linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%)",
+    subtle: "linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 50%, rgba(139, 92, 246, 0.1) 100%)",
+    border: "linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 50%, rgba(139, 92, 246, 0.3) 100%)",
+    progress: "linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%)",
+};
 
 // Institutional design styles - same as Portfolio Analytics
 const styles = {
     page: {
         minHeight: "100vh",
         background: "#ffffff",
+        backgroundImage: "url('/agentPageBG.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
         padding: "0",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
         color: "#1a1a1a",
         display: "flex",
         flexDirection: "column",
+        position: "relative",
+    },
+    pageOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(255, 255, 255, 0.15)",
+        zIndex: 0,
+    },
+    pageContent: {
+        position: "relative",
+        zIndex: 1,
     },
     navbar: {
-        background: "#ffffff",
-        borderBottom: "1px solid #e0e0e0",
-        padding: "16px 40px",
+        background: "rgba(255, 255, 255, 0.98)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+        borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+        padding: "0 48px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        height: "72px",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        position: "sticky" as const,
+        top: 0,
+        zIndex: 1000,
     },
     navLeft: {
         display: "flex",
         alignItems: "center",
-        gap: "32px",
+        gap: "48px",
     },
     navTitle: {
-        fontSize: "20px",
+        fontSize: "22px",
         fontWeight: 700,
-        color: "#1a1a1a",
+        color: "#0f172a",
+        letterSpacing: "-0.02em",
+        background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
     },
     navLinks: {
         display: "flex",
-        gap: "24px",
+        gap: "8px",
         alignItems: "center",
     },
     navLink: {
         textDecoration: "none",
-        color: "#666",
-        fontSize: "14px",
+        color: "#64748b",
+        fontSize: "15px",
         fontWeight: 500,
-        padding: "8px 0",
-        borderBottom: "2px solid transparent",
-        transition: "0.2s",
+        padding: "10px 16px",
+        borderRadius: "8px",
+        borderBottom: "none",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        position: "relative" as const,
+        letterSpacing: "-0.01em",
+    },
+    navLinkHover: {
+        color: "#1e293b",
+        background: "rgba(15, 23, 42, 0.04)",
     },
     navLinkActive: {
         color: "#2563eb",
-        borderBottomColor: "#2563eb",
+        background: "rgba(37, 99, 235, 0.08)",
+        fontWeight: 600,
+    },
+    navLinkActiveIndicator: {
+        position: "absolute" as const,
+        bottom: "8px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "4px",
+        height: "4px",
+        borderRadius: "50%",
+        background: "#2563eb",
     },
     navRight: {
         display: "flex",
         alignItems: "center",
+        gap: "16px",
     },
     container: {
         maxWidth: "1400px",
@@ -66,6 +125,9 @@ const styles = {
         padding: "40px",
         flex: 1,
         width: "100%",
+        background: "rgba(255, 255, 255, 0.3)",
+        backdropFilter: "blur(3px)",
+        borderRadius: "8px",
     },
     header: {
         marginBottom: "32px",
@@ -90,11 +152,53 @@ const styles = {
         marginTop: "16px",
         fontSize: "12px",
         color: "#6b7280",
+        padding: "16px 24px",
+        background: "#fafbfc",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        position: "relative",
+        overflow: "hidden",
+    },
+    aiEngineHeader: {
+        display: "flex",
+        gap: "32px",
+        alignItems: "center",
+        padding: "20px 28px",
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        marginBottom: "32px",
+        position: "relative",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+    },
+    aiEngineHeaderActive: {
+        borderImage: `${aiGradients.border} 1`,
+        boxShadow: `0 0 0 1px rgba(59, 130, 246, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05)`,
     },
     statusItem: {
         display: "flex",
         alignItems: "center",
         gap: "8px",
+    },
+    statusItemWithBar: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "6px",
+        minWidth: "120px",
+    },
+    systemLoadBar: {
+        height: "4px",
+        background: "#f3f4f6",
+        borderRadius: "2px",
+        overflow: "hidden",
+        position: "relative",
+    },
+    systemLoadFill: {
+        height: "100%",
+        background: aiGradients.progress,
+        borderRadius: "2px",
+        transition: "width 0.6s ease",
+        animation: "shimmer 2s infinite",
     },
     statusDot: {
         width: "8px",
@@ -118,15 +222,38 @@ const styles = {
         marginBottom: "40px",
     },
     agentCard: {
-        background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "0",
+        background: "rgba(255, 255, 255, 0.95)",
+        backdropFilter: "blur(8px)",
+        border: "1px solid rgba(229, 231, 235, 0.8)",
+        borderRadius: "8px",
         padding: "20px",
         position: "relative",
+        transition: "all 0.3s ease",
+    },
+    agentCardActive: {
+        border: `1px solid transparent`,
+        background: `linear-gradient(#ffffff, #ffffff) padding-box, ${aiGradients.border} border-box`,
+        boxShadow: `0 0 0 1px rgba(59, 130, 246, 0.1), 0 2px 8px rgba(59, 130, 246, 0.08)`,
+    },
+    agentCardIdle: {
+        border: "1px solid #e5e7eb",
+        opacity: 0.85,
     },
     agentCardAlert: {
         borderColor: "#f59e0b",
         backgroundColor: "#fffbeb",
+        boxShadow: "0 0 0 1px rgba(245, 158, 11, 0.1)",
+    },
+    agentActivityLine: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: "2px",
+        background: aiGradients.progress,
+        borderRadius: "8px 8px 0 0",
+        animation: "pulseLine 2s ease-in-out infinite",
+        opacity: 0.6,
     },
     agentName: {
         fontSize: "14px",
@@ -173,28 +300,58 @@ const styles = {
     },
     confidenceFill: {
         height: "100%",
-        background: "#2563eb",
+        background: aiGradients.progress,
         borderRadius: "2px",
-        transition: "width 0.3s ease",
+        transition: "width 0.6s ease",
+        backgroundSize: "200% 100%",
+        animation: "shimmer 2s infinite",
+    },
+    lastActionSummary: {
+        fontSize: "11px",
+        color: "#6b7280",
+        marginTop: "8px",
+        paddingTop: "8px",
+        borderTop: "1px solid #f3f4f6",
+        fontStyle: "italic",
     },
     signalsPanel: {
         background: "#ffffff",
         border: "1px solid #e5e7eb",
-        borderRadius: "0",
+        borderRadius: "8px",
         padding: "24px",
         marginBottom: "40px",
         maxHeight: "400px",
         overflowY: "auto",
+        position: "relative",
     },
     signalsTitle: {
-        fontSize: "14px",
+        fontSize: "16px",
         fontWeight: 600,
         color: "#1a1a1a",
         marginBottom: "20px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    signalsTitleLabel: {
+        fontSize: "11px",
+        fontWeight: 500,
+        color: "#6b7280",
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+        marginLeft: "auto",
     },
     signalItem: {
-        padding: "12px 0",
+        padding: "14px 0",
         borderBottom: "1px solid #f3f4f6",
+        animation: "fadeInSlide 0.4s ease-out",
+        transition: "background 0.2s ease",
+    },
+    signalItemHigh: {
+        background: "rgba(220, 38, 38, 0.02)",
+        borderRadius: "4px",
+        padding: "14px 12px",
+        marginBottom: "4px",
     },
     signalHeader: {
         display: "flex",
@@ -236,15 +393,35 @@ const styles = {
     traceSection: {
         background: "#ffffff",
         border: "1px solid #e5e7eb",
-        borderRadius: "0",
-        padding: "24px",
+        borderRadius: "8px",
+        padding: "28px",
         marginBottom: "40px",
+        position: "relative",
     },
     traceTitle: {
-        fontSize: "14px",
+        fontSize: "16px",
         fontWeight: 600,
         color: "#1a1a1a",
-        marginBottom: "20px",
+        marginBottom: "8px",
+    },
+    traceSubtitle: {
+        fontSize: "11px",
+        color: "#6b7280",
+        marginBottom: "24px",
+        fontStyle: "italic",
+    },
+    traceStepper: {
+        position: "relative",
+        paddingLeft: "24px",
+    },
+    traceConnector: {
+        position: "absolute",
+        left: "11px",
+        top: "24px",
+        bottom: "-8px",
+        width: "2px",
+        background: aiGradients.border,
+        borderRadius: "1px",
     },
     traceItem: {
         padding: "20px 0",
@@ -418,12 +595,38 @@ const styles = {
     },
 };
 
-// Add CSS animation for pulsing dots
+// Add CSS animations for premium AI interface
 const styleSheet = document.createElement("style");
 styleSheet.textContent = `
     @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
+    }
+    @keyframes shimmer {
+        0% {
+            background-position: -200% 0;
+        }
+        100% {
+            background-position: 200% 0;
+        }
+    }
+    @keyframes pulseLine {
+        0%, 100% {
+            opacity: 0.4;
+        }
+        50% {
+            opacity: 0.8;
+        }
+    }
+    @keyframes fadeInSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 `;
 if (typeof document !== "undefined" && !document.getElementById("agent-console-styles")) {
@@ -440,6 +643,123 @@ function formatTimestamp(timestamp: string | Date): string {
         minute: "2-digit",
         second: "2-digit",
     });
+}
+
+// Risk Composition Panel Component
+function RiskCompositionPanel({ invoiceId, riskScore }: { invoiceId: string; riskScore?: number }) {
+    const [breakdown, setBreakdown] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+
+    useEffect(() => {
+        if (expanded && !breakdown && !loading) {
+            setLoading(true);
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/agent/risk-breakdown/${invoiceId}`)
+                .then(res => res.json())
+                .then(data => {
+                    setBreakdown(data);
+                    setLoading(false);
+                })
+                .catch(() => setLoading(false));
+        }
+    }, [expanded, invoiceId, breakdown, loading]);
+
+    if (!expanded) {
+        return (
+            <button
+                onClick={() => setExpanded(true)}
+                style={{
+                    fontSize: "11px",
+                    color: "#2563eb",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "4px 0",
+                    textDecoration: "underline",
+                }}
+            >
+                Show risk breakdown →
+            </button>
+        );
+    }
+
+    if (loading) {
+        return <div style={{ fontSize: "11px", color: "#6b7280" }}>Loading risk breakdown...</div>;
+    }
+
+    if (!breakdown) {
+        return <div style={{ fontSize: "11px", color: "#9ca3af" }}>Risk breakdown not available</div>;
+    }
+
+    return (
+        <div style={{
+            marginTop: "12px",
+            padding: "12px",
+            background: "#f9fafb",
+            border: "1px solid #e5e7eb",
+            borderRadius: "4px",
+            fontSize: "11px",
+        }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <div style={{ fontWeight: 600, color: "#1a1a1a" }}>Risk Composition</div>
+                <button
+                    onClick={() => setExpanded(false)}
+                    style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#6b7280",
+                        fontSize: "10px",
+                    }}
+                >
+                    Hide
+                </button>
+            </div>
+            {breakdown.factors && breakdown.factors.length > 0 ? (
+                <>
+                    {breakdown.factors.map((factor: any, i: number) => (
+                        <div key={i} style={{ 
+                            display: "flex", 
+                            justifyContent: "space-between", 
+                            alignItems: "center",
+                            marginBottom: "6px",
+                            paddingBottom: "6px",
+                            borderBottom: i < breakdown.factors.length - 1 ? "1px solid #e5e7eb" : "none",
+                        }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 500, color: "#374151" }}>{factor.name}</div>
+                                <div style={{ fontSize: "10px", color: "#6b7280", marginTop: "2px" }}>{factor.description}</div>
+                            </div>
+                            <div style={{ 
+                                fontWeight: 600, 
+                                color: factor.impact > 0 ? "#dc2626" : factor.impact < 0 ? "#16a34a" : "#6b7280",
+                                marginLeft: "12px",
+                                minWidth: "40px",
+                                textAlign: "right",
+                            }}>
+                                {factor.impact > 0 ? "+" : ""}{factor.impact}
+                            </div>
+                        </div>
+                    ))}
+                    <div style={{ 
+                        marginTop: "8px", 
+                        paddingTop: "8px", 
+                        borderTop: "1px solid #e5e7eb",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                    }}>
+                        <div style={{ fontWeight: 600, color: "#1a1a1a" }}>Final Score</div>
+                        <div style={{ fontWeight: 700, fontSize: "14px", color: breakdown.finalScore >= 50 ? "#dc2626" : "#16a34a" }}>
+                            {breakdown.finalScore} / 100
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div style={{ color: "#9ca3af" }}>No risk factors available</div>
+            )}
+        </div>
+    );
 }
 
 function formatRelativeTime(timestamp: string | Date): string {
@@ -471,10 +791,23 @@ export default function AgentConsolePage() {
         { refreshInterval: 5000 }
     );
 
+    const { data: systemParams } = useSWR<SystemParameters>(
+        "system-parameters",
+        () => fetchSystemParameters(),
+        { refreshInterval: 10000 }
+    );
+
+    const { data: predictions } = useSWR<PredictiveIntelligence>(
+        "predictive-intelligence",
+        () => fetchPredictiveIntelligence(),
+        { refreshInterval: 30000 }
+    );
+
     const [transparencyExpanded, setTransparencyExpanded] = useState(false);
     const [controlLoading, setControlLoading] = useState<string | null>(null);
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [riskThreshold, setRiskThreshold] = useState(50);
+    const [showAllTraces, setShowAllTraces] = useState(false);
 
     // WebSocket integration for real-time updates
     const { subscribe, isConnected } = useWebSocket("global");
@@ -586,34 +919,13 @@ export default function AgentConsolePage() {
     if (isLoading) {
         return (
             <div style={styles.page}>
-                <nav style={styles.navbar}>
-                    <div style={styles.navLeft}>
-                        <div style={styles.navTitle}>TIFA Dashboard</div>
-                        <div style={styles.navLinks}>
-                            <Link href="/overview" style={{ ...styles.navLink, ...(pathname === "/overview" ? styles.navLinkActive : {}) }}>
-                                Overview
-                            </Link>
-                            <Link href="/" style={{ ...styles.navLink, ...(pathname === "/" ? styles.navLinkActive : {}) }}>
-                                Invoices
-                            </Link>
-                            <Link href="/lp" style={{ ...styles.navLink, ...(pathname === "/lp" ? styles.navLinkActive : {}) }}>
-                                LP Dashboard
-                            </Link>
-                            <Link href="/analytics" style={{ ...styles.navLink, ...(pathname === "/analytics" ? styles.navLinkActive : {}) }}>
-                                Analytics
-                            </Link>
-                            <Link href="/agent" style={{ ...styles.navLink, ...(pathname === "/agent" ? styles.navLinkActive : {}) }}>
-                                Agent Console
-                            </Link>
+                <div style={styles.pageOverlay}></div>
+                <div style={styles.pageContent}>
+                    <Navbar />
+                    <div style={styles.container}>
+                        <div style={{ textAlign: "center", padding: "60px", color: "#6b7280" }}>
+                            Loading agent console...
                         </div>
-                    </div>
-                    <div style={styles.navRight}>
-                        <ConnectButton />
-                    </div>
-                </nav>
-                <div style={styles.container}>
-                    <div style={{ textAlign: "center", padding: "60px", color: "#6b7280" }}>
-                        Loading agent console...
                     </div>
                 </div>
             </div>
@@ -623,34 +935,13 @@ export default function AgentConsolePage() {
     if (error || !data) {
         return (
             <div style={styles.page}>
-                <nav style={styles.navbar}>
-                    <div style={styles.navLeft}>
-                        <div style={styles.navTitle}>TIFA Dashboard</div>
-                        <div style={styles.navLinks}>
-                            <Link href="/overview" style={{ ...styles.navLink, ...(pathname === "/overview" ? styles.navLinkActive : {}) }}>
-                                Overview
-                            </Link>
-                            <Link href="/" style={{ ...styles.navLink, ...(pathname === "/" ? styles.navLinkActive : {}) }}>
-                                Invoices
-                            </Link>
-                            <Link href="/lp" style={{ ...styles.navLink, ...(pathname === "/lp" ? styles.navLinkActive : {}) }}>
-                                LP Dashboard
-                            </Link>
-                            <Link href="/analytics" style={{ ...styles.navLink, ...(pathname === "/analytics" ? styles.navLinkActive : {}) }}>
-                                Analytics
-                            </Link>
-                            <Link href="/agent" style={{ ...styles.navLink, ...(pathname === "/agent" ? styles.navLinkActive : {}) }}>
-                                Agent Console
-                            </Link>
+                <div style={styles.pageOverlay}></div>
+                <div style={styles.pageContent}>
+                    <Navbar />
+                    <div style={styles.container}>
+                        <div style={{ textAlign: "center", padding: "60px", color: "#dc2626" }}>
+                            Failed to load agent console data.
                         </div>
-                    </div>
-                    <div style={styles.navRight}>
-                        <ConnectButton />
-                    </div>
-                </nav>
-                <div style={styles.container}>
-                    <div style={{ textAlign: "center", padding: "60px", color: "#dc2626" }}>
-                        Failed to load agent console data.
                     </div>
                 </div>
             </div>
@@ -659,32 +950,42 @@ export default function AgentConsolePage() {
 
     return (
         <div style={styles.page}>
-            {/* Top Navbar */}
-            <nav style={styles.navbar}>
-                <div style={styles.navLeft}>
-                    <div style={styles.navTitle}>TIFA Dashboard</div>
-                    <div style={styles.navLinks}>
-                        <Link href="/overview" style={{ ...styles.navLink, ...(pathname === "/overview" ? styles.navLinkActive : {}) }}>
-                            Overview
-                        </Link>
-                        <Link href="/" style={{ ...styles.navLink, ...(pathname === "/" ? styles.navLinkActive : {}) }}>
-                            Invoices
-                        </Link>
-                        <Link href="/lp" style={{ ...styles.navLink, ...(pathname === "/lp" ? styles.navLinkActive : {}) }}>
-                            LP Dashboard
-                        </Link>
-                        <Link href="/analytics" style={{ ...styles.navLink, ...(pathname === "/analytics" ? styles.navLinkActive : {}) }}>
-                            Analytics
-                        </Link>
-                        <Link href="/agent" style={{ ...styles.navLink, ...(pathname === "/agent" ? styles.navLinkActive : {}) }}>
-                            Agent Console
-                        </Link>
-                    </div>
-                </div>
-                <div style={styles.navRight}>
-                    <ConnectButton />
-                </div>
-            </nav>
+            <style>{`
+                .nav-link-modern {
+                    text-decoration: none;
+                    color: #64748b;
+                    font-size: 15px;
+                    font-weight: 500;
+                    padding: 10px 16px;
+                    border-radius: 8px;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    position: relative;
+                    letter-spacing: -0.01em;
+                }
+                .nav-link-modern:hover {
+                    color: #1e293b;
+                    background: rgba(15, 23, 42, 0.04);
+                }
+                .nav-link-modern.active {
+                    color: #2563eb;
+                    background: rgba(37, 99, 235, 0.08);
+                    font-weight: 600;
+                }
+                .nav-link-modern.active::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 8px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 4px;
+                    height: 4px;
+                    border-radius: 50%;
+                    background: #2563eb;
+                }
+            `}</style>
+            <div style={styles.pageOverlay}></div>
+            <div style={styles.pageContent}>
+            <Navbar />
 
             <div style={styles.container}>
                 {/* Page Header */}
@@ -693,11 +994,16 @@ export default function AgentConsolePage() {
                     <div style={styles.subtitle}>
                         Autonomous risk monitoring and decision support system.
                     </div>
-                    <div style={styles.statusBar}>
+                    {/* AI Engine Status Bar - Premium Header */}
+                    <div style={{
+                        ...styles.aiEngineHeader,
+                        ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? styles.aiEngineHeaderActive : {})
+                    }}>
                         <div style={styles.statusItem}>
                             <span style={{
                                 ...styles.statusDot,
-                                ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle)
+                                ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle),
+                                background: data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? "#3b82f6" : "#9ca3af",
                             }}></span>
                             <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : data.systemStatus.engineStatus}</span>
                         </div>
@@ -713,10 +1019,16 @@ export default function AgentConsolePage() {
                             <span><strong>Active Agents:</strong> {data.systemStatus.activeAgents}</span>
                         </div>
                         <div style={styles.statusItem}>
-                            <span><strong>Last Evaluation Cycle:</strong> {formatTimestamp(data.systemStatus.lastEvaluation)}</span>
+                            <span><strong>Last Evaluation:</strong> {formatTimestamp(data.systemStatus.lastEvaluation)}</span>
                         </div>
-                        <div style={styles.statusItem}>
-                            <span><strong>System Load:</strong> {data.systemStatus.systemLoad}%</span>
+                        <div style={styles.statusItemWithBar}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px" }}>
+                                <span><strong>System Load:</strong></span>
+                                <span>{data.systemStatus.systemLoad}%</span>
+                            </div>
+                            <div style={styles.systemLoadBar}>
+                                <div style={{ ...styles.systemLoadFill, width: `${data.systemStatus.systemLoad}%` }}></div>
+                            </div>
                         </div>
                         {agentConfig && (
                             <div style={styles.statusItem}>
@@ -737,8 +1049,14 @@ export default function AgentConsolePage() {
                             agent.state === "Alerting" ? styles.statusDotAlert :
                             styles.statusDotIdle;
 
+                        const isActive = agent.state === "Active";
+                        const cardStyle = isActive ? styles.agentCardActive : 
+                                        agent.state === "Idle" ? styles.agentCardIdle :
+                                        isAlerting ? styles.agentCardAlert : styles.agentCard;
+
                         return (
-                            <div key={agent.id} style={{ ...styles.agentCard, ...(isAlerting ? styles.agentCardAlert : {}) }}>
+                            <div key={agent.id} style={{ ...styles.agentCard, ...cardStyle }}>
+                                {isActive && <div style={styles.agentActivityLine}></div>}
                                 <div style={styles.agentName}>{agent.name}</div>
                                 <div style={styles.agentScope}>{agent.scope}</div>
                                 <div style={{ ...styles.agentState, ...stateStyle }}>
@@ -748,9 +1066,26 @@ export default function AgentConsolePage() {
                                     <div style={{ ...styles.confidenceFill, width: `${agent.confidence}%` }}></div>
                                 </div>
                                 <div style={styles.agentMeta}>
-                                    <span>Confidence: {agent.confidence}%</span>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                        <span>Confidence: {agent.confidence}%</span>
+                                        {(agent.workload !== undefined || agent.signalCount !== undefined) && (
+                                            <div style={{ display: "flex", gap: "12px", fontSize: "10px", color: "#6b7280" }}>
+                                                {agent.workload !== undefined && (
+                                                    <span>Workload: {agent.workload}/h</span>
+                                                )}
+                                                {agent.signalCount !== undefined && (
+                                                    <span>Signals: {agent.signalCount}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                     <span>{formatRelativeTime(agent.lastAction)}</span>
                                 </div>
+                                {(agent as any).lastActionSummary && (
+                                    <div style={styles.lastActionSummary}>
+                                        {(agent as any).lastActionSummary}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -758,104 +1093,391 @@ export default function AgentConsolePage() {
 
                 {/* Two Column Layout: Signals & Decision Traces */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "40px" }}>
-                    {/* Live Signals Panel */}
+                    {/* Real-Time AI Awareness Stream */}
                     <div style={styles.signalsPanel}>
-                        <div style={styles.signalsTitle}>Live Signals & Insights</div>
-                        {data.signals.map((signal) => {
-                            const severityStyle = signal.severity === "High" ? styles.severityHigh :
-                                signal.severity === "Medium" ? styles.severityMedium :
-                                styles.severityLow;
+                        <div style={styles.signalsTitle}>
+                            Real-Time AI Awareness Stream
+                            <span style={styles.signalsTitleLabel}>Live</span>
+                        </div>
+                        {data.signals.length === 0 ? (
+                            <div style={{ padding: "20px", textAlign: "center", color: "#9ca3af", fontSize: "12px" }}>
+                                No signals detected in the last evaluation cycle.
+                            </div>
+                        ) : (
+                            data.signals.map((signal) => {
+                                const severityStyle = signal.severity === "High" ? styles.severityHigh :
+                                    signal.severity === "Medium" ? styles.severityMedium :
+                                    styles.severityLow;
 
-                            return (
-                                <div key={signal.id} style={styles.signalItem}>
-                                    <div style={styles.signalHeader}>
-                                        <div style={styles.signalMessage}>{signal.message}</div>
-                                        <span style={{ ...styles.severityBadge, ...severityStyle }}>
-                                            {signal.severity}
-                </span>
-                                    </div>
-                                    <div style={styles.signalMeta}>
-                                        <span>{formatTimestamp(signal.timestamp)}</span>
-                                        <span>{signal.sourceAgent.replace(/-/g, " ")}</span>
-                                        {signal.context.invoiceId && (
-                                            <Link 
-                                                href={`/invoices/${signal.context.invoiceId}`}
-                                                style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
-                                            >
-                                                View invoice
-                                            </Link>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                // Determine impact
+                                let impact = "None";
+                                if (signal.context.txHash) {
+                                    impact = "Executed";
+                                } else if (signal.message.toLowerCase().includes("blocked")) {
+                                    impact = "Blocked";
+                                } else if (signal.message.toLowerCase().includes("skipped")) {
+                                    impact = "Skipped";
+                                }
 
-                    {/* Decision Traces */}
-                    <div style={styles.traceSection}>
-                        <div style={styles.traceTitle}>Decision Trace View</div>
-                        {data.decisionTraces.map((trace, idx) => (
-                            <div key={trace.id} style={styles.traceItem}>
-                                <div style={styles.traceTimeline}></div>
-                                <div style={styles.traceDot}></div>
-                                <div style={styles.traceTimestamp}>{formatTimestamp(trace.timestamp)}</div>
-                                
-                                <div style={styles.traceStep}>
-                                    <div style={styles.traceStepLabel}>Inputs</div>
-                                    <div style={styles.traceStepContent}>
-                                        Invoice: {trace.inputs.invoiceId ? (
-                                            <Link href={`/invoices/${trace.inputs.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
-                                                {trace.inputs.invoiceId}
-                                            </Link>
-                                        ) : "N/A"}, 
-                                        Status: {trace.inputs.previousStatus || "N/A"}, 
-                                        Risk: {trace.inputs.riskScore || "N/A"}
-                                        {trace.inputs.invoiceOnChainId && (
-                                            <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "8px" }}>
-                                                (On-chain: {trace.inputs.invoiceOnChainId.slice(0, 10)}...)
+                                return (
+                                    <div key={signal.id} style={{
+                                        ...styles.signalItem,
+                                        ...(signal.severity === "High" ? styles.signalItemHigh : {})
+                                    }}>
+                                        <div style={styles.signalHeader}>
+                                            <div style={styles.signalMessage}>
+                                                <span style={{ fontWeight: 500, color: "#1a1a1a" }}>
+                                                    {signal.sourceAgent.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase())}:
+                                                </span> {signal.message}
+                                            </div>
+                                            <span style={{ ...styles.severityBadge, ...severityStyle }}>
+                                                {signal.severity}
                                             </span>
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                <div style={styles.traceStep}>
-                                    <div style={styles.traceStepLabel}>Signals</div>
-                                    <div style={styles.traceStepContent}>
-                                        {trace.signals.length > 0 
-                                            ? trace.signals.map(s => s.message).join("; ")
-                                            : "No signals"}
-                                    </div>
-                                </div>
-                                
-                                <div style={styles.traceStep}>
-                                    <div style={styles.traceStepLabel}>Evaluation</div>
-                                    <div style={styles.traceStepContent}>
-                                        {trace.evaluation.reasoning}
-                                        {trace.evaluation.txHash && (
-                                            <div style={{ marginTop: "4px", fontSize: "11px" }}>
+                                        </div>
+                                        <div style={styles.signalMeta}>
+                                            <span>{formatTimestamp(signal.timestamp)}</span>
+                                            <span style={{ textTransform: "capitalize" }}>{signal.sourceAgent.replace(/-/g, " ")}</span>
+                                            <span style={{ fontSize: "10px", color: "#6b7280" }}>Impact: {impact}</span>
+                                            {signal.context.invoiceId && (
+                                                <Link 
+                                                    href={`/invoices/${signal.context.invoiceId}`}
+                                                    style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
+                                                >
+                                                    View invoice →
+                                                </Link>
+                                            )}
+                                            {signal.context.txHash && (
                                                 <a 
-                                                    href={`https://sepolia.etherscan.io/tx/${trace.evaluation.txHash}`}
+                                                    href={`https://sepolia.etherscan.io/tx/${signal.context.txHash}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    style={{ color: "#2563eb", textDecoration: "none" }}
+                                                    style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
                                                 >
-                                                    View transaction ↗
+                                                    TX ↗
                                                 </a>
+                                            )}
+                                        </div>
+                                        {signal.context.riskScore !== null && signal.context.riskScore !== undefined && (
+                                            <div style={{ marginTop: "8px", fontSize: "11px", color: "#6b7280" }}>
+                                                Risk Score: {signal.context.riskScore}/100
                                             </div>
                                         )}
                                     </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Decision Traces - AI Reasoning Pipeline */}
+                    <div style={styles.traceSection}>
+                        <div style={styles.traceTitle}>AI Reasoning Pipeline</div>
+                        <div style={styles.traceSubtitle}>
+                            Autonomous reasoning trace — generated per decision
+                        </div>
+                        {(showAllTraces ? data.decisionTraces : data.decisionTraces.slice(0, 2)).map((trace, idx) => {
+                            const hasPipeline = trace.reasoningPipeline && trace.reasoningPipeline.length > 0;
+                            
+                            return (
+                                <div key={trace.id} style={styles.traceItem}>
+                                    <div style={styles.traceTimeline}></div>
+                                    <div style={styles.traceDot}></div>
+                                    <div style={styles.traceTimestamp}>{formatTimestamp(trace.timestamp)}</div>
+                                    
+                                    {hasPipeline ? (
+                                        // New reasoning pipeline view with stepper
+                                        <div style={styles.traceStepper}>
+                                            {trace.reasoningPipeline!.map((step, stepIdx) => (
+                                                <div key={stepIdx} style={styles.traceStep}>
+                                                    {stepIdx < trace.reasoningPipeline!.length - 1 && (
+                                                        <div style={styles.traceConnector}></div>
+                                                    )}
+                                                    <div style={styles.traceStepLabel}>
+                                                        {stepIdx + 1}. {step.label}
+                                                    </div>
+                                                    <div style={styles.traceStepContent}>
+                                                    {step.step === "inputs" && (
+                                                        <div>
+                                                            Invoice: {step.content.invoiceId ? (
+                                                                <Link href={`/invoices/${step.content.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                                    {step.content.invoiceId}
+                                                                </Link>
+                                                            ) : "N/A"}, 
+                                                            Status: {step.content.previousStatus || "N/A"}, 
+                                                            Risk Score: {step.content.riskScore || "N/A"}
+                                                            {step.content.invoiceOnChainId && (
+                                                                <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "8px" }}>
+                                                                    (On-chain: {step.content.invoiceOnChainId.slice(0, 10)}...)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {step.step === "signals" && (
+                                                        <div>
+                                                            {Array.isArray(step.content) ? (
+                                                                step.content.map((s: any, i: number) => (
+                                                                    <div key={i} style={{ marginBottom: "4px", fontSize: "12px" }}>
+                                                                        <span style={{ fontWeight: 500 }}>{s.source}:</span> {s.message} 
+                                                                        <span style={{ marginLeft: "8px", fontSize: "10px", color: s.severity === "High" ? "#dc2626" : s.severity === "Medium" ? "#f59e0b" : "#6b7280" }}>
+                                                                            [{s.severity}]
+                                                                        </span>
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <span>No signals detected</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {step.step === "evaluation" && (
+                                                        <div>
+                                                            <div style={{ marginBottom: "8px" }}>
+                                                                Risk Score: <strong>{step.content.riskScore}</strong> / 100
+                                                                <br />
+                                                                Threshold: {step.content.threshold} 
+                                                                <span style={{ color: step.content.passed ? "#16a34a" : "#dc2626", marginLeft: "8px" }}>
+                                                                    {step.content.passed ? "✓ Passed" : "✗ Failed"}
+                                                                </span>
+                                                            </div>
+                                                            {trace.inputs.invoiceId && (
+                                                                <RiskCompositionPanel invoiceId={trace.inputs.invoiceId} riskScore={step.content.riskScore} />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {step.step === "safety" && (
+                                                        <div>
+                                                            <div style={{ marginBottom: "4px" }}>
+                                                                Checks: {Array.isArray(step.content.checks) ? step.content.checks.join(", ") : step.content.checks}
+                                                            </div>
+                                                            <div style={{ color: "#dc2626", fontSize: "12px" }}>
+                                                                Result: {step.content.result} - {step.content.reason}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {step.step === "decision" && (
+                                                        <div>
+                                                            <div style={{ marginBottom: "4px" }}>
+                                                                Action: <strong>{step.content.actionType}</strong>
+                                                                {step.content.nextStatus && (
+                                                                    <span style={{ marginLeft: "8px" }}>
+                                                                        → {step.content.nextStatus}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                                                                {step.content.reasoning}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {step.step === "execution" && (
+                                                        <div>
+                                                            Status: <strong style={{ color: step.content.status === "SUCCESS" ? "#16a34a" : step.content.status === "BLOCKED" ? "#f59e0b" : "#dc2626" }}>
+                                                                {step.content.status}
+                                                            </strong>
+                                                            {step.content.txHash && (
+                                                                <div style={{ marginTop: "4px", fontSize: "11px" }}>
+                                                                    <a 
+                                                                        href={`https://sepolia.etherscan.io/tx/${step.content.txHash}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        style={{ color: "#2563eb", textDecoration: "none" }}
+                                                                    >
+                                                                        View transaction ↗
+                                                                    </a>
+                                                                </div>
+                                                            )}
+                                                            {step.content.reason && (
+                                                                <div style={{ marginTop: "4px", fontSize: "11px", color: "#6b7280" }}>
+                                                                    {step.content.reason}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        // Fallback to old format if no pipeline
+                                        <>
+                                            <div style={styles.traceStep}>
+                                                <div style={styles.traceStepLabel}>Inputs</div>
+                                                <div style={styles.traceStepContent}>
+                                                    Invoice: {trace.inputs.invoiceId ? (
+                                                        <Link href={`/invoices/${trace.inputs.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                            {trace.inputs.invoiceId}
+                                                        </Link>
+                                                    ) : "N/A"}, 
+                                                    Status: {trace.inputs.previousStatus || "N/A"}, 
+                                                    Risk: {trace.inputs.riskScore || "N/A"}
+                                                </div>
+                                            </div>
+                                            <div style={styles.traceStep}>
+                                                <div style={styles.traceStepLabel}>Evaluation</div>
+                                                <div style={styles.traceStepContent}>
+                                                    {trace.evaluation.reasoning}
+                                                </div>
+                                            </div>
+                                            <div style={styles.traceStep}>
+                                                <div style={styles.traceStepLabel}>Recommendation</div>
+                                                <div style={styles.traceStepContent}>
+                                                    {trace.recommendation.action} (Confidence: {trace.recommendation.confidence}%)
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                
-                                <div style={styles.traceStep}>
-                                    <div style={styles.traceStepLabel}>Recommendation</div>
-                                    <div style={styles.traceStepContent}>
-                                        {trace.recommendation.action} (Confidence: {trace.recommendation.confidence}%)
-                                    </div>
-                                </div>
+                            );
+                        })}
+                        {data.decisionTraces.length > 2 && !showAllTraces && (
+                            <div style={{ textAlign: "center", marginTop: "24px" }}>
+                                <button
+                                    onClick={() => setShowAllTraces(true)}
+                                    style={{
+                                        padding: "10px 24px",
+                                        background: "#ffffff",
+                                        border: "1px solid #e5e7eb",
+                                        borderRadius: "4px",
+                                        color: "#2563eb",
+                                        fontSize: "13px",
+                                        fontWeight: 500,
+                                        cursor: "pointer",
+                                        transition: "all 0.2s",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.background = "#f9fafb";
+                                        e.currentTarget.style.borderColor = "#2563eb";
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.background = "#ffffff";
+                                        e.currentTarget.style.borderColor = "#e5e7eb";
+                                    }}
+                                >
+                                    Load More ({data.decisionTraces.length - 2} more)
+                                </button>
                             </div>
-                        ))}
+                        )}
+                        {showAllTraces && data.decisionTraces.length > 2 && (
+                            <div style={{ textAlign: "center", marginTop: "24px" }}>
+                                <button
+                                    onClick={() => setShowAllTraces(false)}
+                                    style={{
+                                        padding: "10px 24px",
+                                        background: "#ffffff",
+                                        border: "1px solid #e5e7eb",
+                                        borderRadius: "4px",
+                                        color: "#6b7280",
+                                        fontSize: "13px",
+                                        fontWeight: 500,
+                                        cursor: "pointer",
+                                        transition: "all 0.2s",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.background = "#f9fafb";
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.background = "#ffffff";
+                                    }}
+                                >
+                                    Show Less
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {/* Short-Term AI Outlook */}
+                {predictions && (
+                    <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
+                        <div style={styles.recommendationsTitle}>Short-Term AI Outlook (24h)</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Invoices at Risk</div>
+                                <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.invoicesAtRisk > 0 ? "#dc2626" : "#16a34a" }}>
+                                    {predictions.invoicesAtRisk}
+                                </div>
+                            </div>
+                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Financings</div>
+                                <div style={{ fontSize: "20px", fontWeight: 600 }}>{predictions.expectedFinancings}</div>
+                            </div>
+                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Blocks</div>
+                                <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.expectedFinancingBlocks > 0 ? "#f59e0b" : "#16a34a" }}>
+                                    {predictions.expectedFinancingBlocks}
+                                </div>
+                            </div>
+                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Pool Utilization</div>
+                                <div style={{ fontSize: "20px", fontWeight: 600 }}>
+                                    {predictions.poolUtilizationProjection.current.toFixed(1)}%
+                                </div>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                    Projected: {predictions.poolUtilizationProjection.projected.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+                        {predictions.safetyWarnings.length > 0 && (
+                            <div style={{ padding: "12px", background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "4px", marginBottom: "16px" }}>
+                                <div style={{ fontSize: "12px", fontWeight: 600, color: "#92400e", marginBottom: "4px" }}>Safety Warnings</div>
+                                {predictions.safetyWarnings.map((warning, i) => (
+                                    <div key={i} style={{ fontSize: "11px", color: "#92400e" }}>• {warning}</div>
+                                ))}
+                            </div>
+                        )}
+                        {predictions.invoicesAtRiskDetails.length > 0 && (
+                            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px" }}>
+                                <div style={{ fontWeight: 600, marginBottom: "8px" }}>Top Risk Invoices:</div>
+                                {predictions.invoicesAtRiskDetails.slice(0, 5).map((inv, i) => (
+                                    <div key={i} style={{ marginBottom: "4px", fontSize: "11px" }}>
+                                        <Link href={`/invoices/${inv.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                            {inv.externalId}
+                                        </Link>
+                                        {" "}— Risk: {inv.currentRisk}/100 ({inv.reason})
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Active Policy Parameters */}
+                {systemParams && (
+                    <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
+                        <div style={styles.recommendationsTitle}>Active Policy Parameters</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Risk Threshold</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.riskThreshold}</div>
+                            </div>
+                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>LTV</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.ltvBps / 100}%</div>
+                            </div>
+                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Utilization Threshold</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.utilizationThresholdBps / 100}%</div>
+                            </div>
+                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Utilization</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxUtilizationBps / 100}%</div>
+                            </div>
+                            {systemParams.maxLoanBpsOfTVL && (
+                                <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Single Loan</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxLoanBpsOfTVL / 100}%</div>
+                                </div>
+                            )}
+                            {systemParams.maxIssuerExposureBps && (
+                                <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Issuer Exposure</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxIssuerExposureBps / 100}%</div>
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "12px" }}>
+                            Last updated: {formatTimestamp(systemParams.lastUpdated)}
+                        </div>
+                    </div>
+                )}
 
                 {/* Recommendations Section */}
                 <div style={styles.recommendationsSection}>
@@ -874,10 +1496,10 @@ export default function AgentConsolePage() {
                     ))}
                 </div>
 
-                {/* Agent Control Panel */}
+                {/* Human-in-the-Loop Controls */}
                 <div style={styles.controlPanel}>
-                    <div style={styles.controlPanelTitle}>Agent Control Panel</div>
-                    <div>
+                    <div style={styles.controlPanelTitle}>Human-in-the-Loop Controls</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginBottom: "16px" }}>
                         {agentConfig?.paused ? (
                             <button 
                                 style={{ ...styles.controlButton, background: "#10b981", color: "#fff" }}
@@ -900,11 +1522,29 @@ export default function AgentConsolePage() {
                             onClick={handleAdjustSensitivity}
                             disabled={controlLoading !== null}
                         >
-                            Adjust Sensitivity
+                            Adjust Risk Threshold
                         </button>
-                        <span style={{ fontSize: "11px", color: "#9ca3af", marginTop: "8px", display: "block" }}>
-                            {agentConfig?.paused ? "Agent engine is currently paused." : "Administrative controls require elevated permissions."}
-                        </span>
+                        <button 
+                            style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
+                            disabled
+                            title="Not yet implemented"
+                        >
+                            Force Re-evaluation
+                        </button>
+                        <button 
+                            style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
+                            disabled
+                            title="Requires admin approval"
+                        >
+                            Manual Override
+                        </button>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#9ca3af" }}>
+                        {agentConfig?.paused ? (
+                            <span style={{ color: "#f59e0b" }}>⚠️ Agent engine is currently paused. All automated actions are suspended.</span>
+                        ) : (
+                            <span>Administrative controls require elevated permissions. System is operating autonomously.</span>
+                        )}
                     </div>
                 </div>
 
@@ -1035,6 +1675,7 @@ export default function AgentConsolePage() {
                         {data.auditLog.exportable && <a href="#" style={{ color: "#2563eb", textDecoration: "none", marginLeft: "8px" }}>Export Log</a>}
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

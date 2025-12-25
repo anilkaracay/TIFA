@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Navbar from "../../components/Navbar";
 import { fetchInvoices, fetchPoolOverview, fetchPoolLimits, PoolOverview, PoolLimits, Invoice } from "../../lib/backendClient";
 import { formatAmount, formatDate } from "../../lib/format";
 import { useWebSocket } from "../../lib/websocketClient";
@@ -20,44 +20,61 @@ const styles = {
         flexDirection: "column",
     },
     navbar: {
-        background: "#ffffff",
-        borderBottom: "1px solid #e0e0e0",
-        padding: "16px 40px",
+        background: "rgba(255, 255, 255, 0.98)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+        borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+        padding: "0 48px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        height: "72px",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        position: "sticky" as const,
+        top: 0,
+        zIndex: 1000,
     },
     navLeft: {
         display: "flex",
         alignItems: "center",
-        gap: "32px",
+        gap: "48px",
     },
     navTitle: {
-        fontSize: "20px",
+        fontSize: "22px",
         fontWeight: 700,
-        color: "#1a1a1a",
+        color: "#0f172a",
+        letterSpacing: "-0.02em",
+        background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
     },
     navLinks: {
         display: "flex",
-        gap: "24px",
+        gap: "8px",
         alignItems: "center",
     },
     navLink: {
         textDecoration: "none",
-        color: "#666",
-        fontSize: "14px",
+        color: "#64748b",
+        fontSize: "15px",
         fontWeight: 500,
-        padding: "8px 0",
-        borderBottom: "2px solid transparent",
-        transition: "0.2s",
+        padding: "10px 16px",
+        borderRadius: "8px",
+        borderBottom: "none",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        position: "relative" as const,
+        letterSpacing: "-0.01em",
     },
     navLinkActive: {
         color: "#2563eb",
-        borderBottomColor: "#2563eb",
+        background: "rgba(37, 99, 235, 0.08)",
+        fontWeight: 600,
     },
     navRight: {
         display: "flex",
         alignItems: "center",
+        gap: "16px",
     },
     container: {
         maxWidth: "1400px",
@@ -890,33 +907,7 @@ export default function OverviewPage() {
 
     return (
         <div style={styles.page}>
-            {/* Top Navbar - Always visible */}
-            <nav style={styles.navbar}>
-                <div style={styles.navLeft}>
-                    <div style={styles.navTitle}>TIFA Dashboard</div>
-                    <div style={styles.navLinks}>
-                        <Link href="/overview" style={{ ...styles.navLink, ...(pathname === "/overview" ? styles.navLinkActive : {}) }}>
-                            Overview
-                        </Link>
-                        <Link href="/" style={{ ...styles.navLink, ...(pathname === "/" ? styles.navLinkActive : {}) }}>
-                            Invoices
-                        </Link>
-                        <Link href="/lp" style={{ ...styles.navLink, ...(pathname === "/lp" ? styles.navLinkActive : {}) }}>
-                            LP Dashboard
-                        </Link>
-                        <Link href="/analytics" style={{ ...styles.navLink, ...(pathname === "/analytics" ? styles.navLinkActive : {}) }}>
-                            Analytics
-                        </Link>
-                        <Link href="/agent" style={{ ...styles.navLink, ...(pathname === "/agent" ? styles.navLinkActive : {}) }}>
-                            Agent Console
-                        </Link>
-                    </div>
-                </div>
-                <div style={styles.navRight}>
-                    {/* ConnectButton needs WagmiProvider, which is provided by Providers in root layout */}
-                    <ConnectButton />
-                </div>
-            </nav>
+            <Navbar />
 
             {/* Main Content */}
             <div style={styles.container}>
