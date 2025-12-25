@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { fetchAgentConsole, AgentConsoleData } from "../../lib/backendClient";
+import { useAccount } from "wagmi";
+import { fetchAgentConsole, AgentConsoleData, fetchAgentConfig, pauseAgent, resumeAgent, updateAgentConfig, AgentConfig } from "../../lib/backendClient";
 import { useWebSocket } from "../../lib/websocketClient";
 
 // Institutional design styles - same as Portfolio Analytics
@@ -457,13 +458,130 @@ function formatRelativeTime(timestamp: string | Date): string {
 
 export default function AgentConsolePage() {
     const pathname = usePathname();
-    const { data, error, isLoading } = useSWR<AgentConsoleData>(
+    const { address } = useAccount();
+    const { data, error, isLoading, mutate } = useSWR<AgentConsoleData>(
         "agent-console",
         () => fetchAgentConsole(),
-        { refreshInterval: 5000 } // Refresh every 5 seconds
+        { refreshInterval: 3000 } // Refresh every 3 seconds
+    );
+
+    const { data: agentConfig, mutate: mutateConfig } = useSWR<AgentConfig>(
+        "agent-config",
+        () => fetchAgentConfig(),
+        { refreshInterval: 5000 }
     );
 
     const [transparencyExpanded, setTransparencyExpanded] = useState(false);
+    const [controlLoading, setControlLoading] = useState<string | null>(null);
+    const [showConfigModal, setShowConfigModal] = useState(false);
+    const [riskThreshold, setRiskThreshold] = useState(50);
+
+    // WebSocket integration for real-time updates
+    const { subscribe, isConnected } = useWebSocket("global");
+
+    useEffect(() => {
+        if (!subscribe) return;
+
+        // Subscribe to agent decision events
+        const unsubscribeDecision = subscribe("agent.decision", (event) => {
+            // Refresh console data when new decision arrives
+            mutate();
+        });
+
+        // Subscribe to agent pause/resume events
+        const unsubscribePaused = subscribe("agent.paused", (event) => {
+            mutate();
+            mutateConfig();
+        });
+
+        const unsubscribeResumed = subscribe("agent.resumed", (event) => {
+            mutate();
+            mutateConfig();
+        });
+
+        const unsubscribeConfig = subscribe("agent.config.updated", (event) => {
+            mutateConfig();
+        });
+
+        return () => {
+            unsubscribeDecision();
+            unsubscribePaused();
+            unsubscribeResumed();
+            unsubscribeConfig();
+        };
+    }, [subscribe, mutate, mutateConfig]);
+
+    // Update risk threshold when config loads
+    useEffect(() => {
+        if (agentConfig) {
+            setRiskThreshold(agentConfig.riskThreshold);
+        }
+    }, [agentConfig]);
+
+    const handlePause = async () => {
+        if (!address) {
+            alert("Please connect your wallet");
+            return;
+        }
+
+        if (!confirm("Are you sure you want to pause the AI agent engine? This will stop all automated actions.")) {
+            return;
+        }
+
+        setControlLoading("pause");
+        try {
+            await pauseAgent(address);
+            mutate();
+            mutateConfig();
+            alert("Agent engine paused successfully");
+        } catch (err: any) {
+            alert(`Failed to pause agent: ${err.message}`);
+        } finally {
+            setControlLoading(null);
+        }
+    };
+
+    const handleResume = async () => {
+        if (!address) {
+            alert("Please connect your wallet");
+            return;
+        }
+
+        setControlLoading("resume");
+        try {
+            await resumeAgent(address);
+            mutate();
+            mutateConfig();
+            alert("Agent engine resumed successfully");
+        } catch (err: any) {
+            alert(`Failed to resume agent: ${err.message}`);
+        } finally {
+            setControlLoading(null);
+        }
+    };
+
+    const handleAdjustSensitivity = () => {
+        setShowConfigModal(true);
+    };
+
+    const handleSaveConfig = async () => {
+        if (!address) {
+            alert("Please connect your wallet");
+            return;
+        }
+
+        setControlLoading("config");
+        try {
+            await updateAgentConfig(address, { riskThreshold });
+            mutateConfig();
+            setShowConfigModal(false);
+            alert("Agent configuration updated successfully");
+        } catch (err: any) {
+            alert(`Failed to update config: ${err.message}`);
+        } finally {
+            setControlLoading(null);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -579,9 +697,17 @@ export default function AgentConsolePage() {
                         <div style={styles.statusItem}>
                             <span style={{
                                 ...styles.statusDot,
-                                ...(data.systemStatus.engineStatus === "Running" ? {} : styles.statusDotIdle)
+                                ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle)
                             }}></span>
-                            <span><strong>Engine Status:</strong> {data.systemStatus.engineStatus}</span>
+                            <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : data.systemStatus.engineStatus}</span>
+                        </div>
+                        <div style={styles.statusItem}>
+                            <span style={{
+                                ...styles.statusDot,
+                                ...(isConnected ? {} : styles.statusDotIdle),
+                                background: isConnected ? "#10b981" : "#ef4444",
+                            }}></span>
+                            <span><strong>WebSocket:</strong> {isConnected ? "Connected" : "Disconnected"}</span>
                         </div>
                         <div style={styles.statusItem}>
                             <span><strong>Active Agents:</strong> {data.systemStatus.activeAgents}</span>
@@ -592,6 +718,11 @@ export default function AgentConsolePage() {
                         <div style={styles.statusItem}>
                             <span><strong>System Load:</strong> {data.systemStatus.systemLoad}%</span>
                         </div>
+                        {agentConfig && (
+                            <div style={styles.statusItem}>
+                                <span><strong>Risk Threshold:</strong> {agentConfig.riskThreshold}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -645,10 +776,15 @@ export default function AgentConsolePage() {
                                     </div>
                                     <div style={styles.signalMeta}>
                                         <span>{formatTimestamp(signal.timestamp)}</span>
-                                        <span>{signal.sourceAgent.replace("-", " ")}</span>
-                                        <a href="#" style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}>
-                                            View context
-                                        </a>
+                                        <span>{signal.sourceAgent.replace(/-/g, " ")}</span>
+                                        {signal.context.invoiceId && (
+                                            <Link 
+                                                href={`/invoices/${signal.context.invoiceId}`}
+                                                style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
+                                            >
+                                                View invoice
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -667,9 +803,18 @@ export default function AgentConsolePage() {
                                 <div style={styles.traceStep}>
                                     <div style={styles.traceStepLabel}>Inputs</div>
                                     <div style={styles.traceStepContent}>
-                                        Invoice: {trace.inputs.invoiceId || "N/A"}, 
+                                        Invoice: {trace.inputs.invoiceId ? (
+                                            <Link href={`/invoices/${trace.inputs.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                {trace.inputs.invoiceId}
+                                            </Link>
+                                        ) : "N/A"}, 
                                         Status: {trace.inputs.previousStatus || "N/A"}, 
                                         Risk: {trace.inputs.riskScore || "N/A"}
+                                        {trace.inputs.invoiceOnChainId && (
+                                            <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "8px" }}>
+                                                (On-chain: {trace.inputs.invoiceOnChainId.slice(0, 10)}...)
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -686,6 +831,18 @@ export default function AgentConsolePage() {
                                     <div style={styles.traceStepLabel}>Evaluation</div>
                                     <div style={styles.traceStepContent}>
                                         {trace.evaluation.reasoning}
+                                        {trace.evaluation.txHash && (
+                                            <div style={{ marginTop: "4px", fontSize: "11px" }}>
+                                                <a 
+                                                    href={`https://sepolia.etherscan.io/tx/${trace.evaluation.txHash}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: "#2563eb", textDecoration: "none" }}
+                                                >
+                                                    View transaction ↗
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -721,17 +878,115 @@ export default function AgentConsolePage() {
                 <div style={styles.controlPanel}>
                     <div style={styles.controlPanelTitle}>Agent Control Panel</div>
                     <div>
-                        <button style={styles.controlButton} onClick={() => alert("This action requires confirmation.")}>
-                            Pause AI Engine
-                        </button>
-                        <button style={styles.controlButton} onClick={() => alert("This action requires confirmation.")}>
+                        {agentConfig?.paused ? (
+                            <button 
+                                style={{ ...styles.controlButton, background: "#10b981", color: "#fff" }}
+                                onClick={handleResume}
+                                disabled={controlLoading === "resume"}
+                            >
+                                {controlLoading === "resume" ? "Resuming..." : "Resume AI Engine"}
+                            </button>
+                        ) : (
+                            <button 
+                                style={{ ...styles.controlButton, background: "#ef4444", color: "#fff" }}
+                                onClick={handlePause}
+                                disabled={controlLoading === "pause"}
+                            >
+                                {controlLoading === "pause" ? "Pausing..." : "Pause AI Engine"}
+                            </button>
+                        )}
+                        <button 
+                            style={styles.controlButton}
+                            onClick={handleAdjustSensitivity}
+                            disabled={controlLoading !== null}
+                        >
                             Adjust Sensitivity
                         </button>
-                        <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                            Administrative controls require elevated permissions.
+                        <span style={{ fontSize: "11px", color: "#9ca3af", marginTop: "8px", display: "block" }}>
+                            {agentConfig?.paused ? "Agent engine is currently paused." : "Administrative controls require elevated permissions."}
                         </span>
                     </div>
                 </div>
+
+                {/* Config Modal */}
+                {showConfigModal && (
+                    <div style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                    }}>
+                        <div style={{
+                            background: "#fff",
+                            padding: "32px",
+                            borderRadius: "8px",
+                            maxWidth: "500px",
+                            width: "90%",
+                            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                        }}>
+                            <h3 style={{ marginTop: 0, marginBottom: "24px", fontSize: "18px", fontWeight: 600 }}>
+                                Adjust Agent Sensitivity
+                            </h3>
+                            <div style={{ marginBottom: "24px" }}>
+                                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
+                                    Risk Threshold: {riskThreshold}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={riskThreshold}
+                                    onChange={(e) => setRiskThreshold(Number(e.target.value))}
+                                    style={{ width: "100%" }}
+                                />
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                    <span>Low Risk (0)</span>
+                                    <span>High Risk (100)</span>
+                                </div>
+                                <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
+                                    Invoices with risk scores below this threshold will be automatically financed.
+                                </p>
+                            </div>
+                            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                                <button
+                                    onClick={() => setShowConfigModal(false)}
+                                    style={{
+                                        padding: "8px 16px",
+                                        border: "1px solid #e5e7eb",
+                                        background: "#fff",
+                                        borderRadius: "6px",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveConfig}
+                                    disabled={controlLoading === "config"}
+                                    style={{
+                                        padding: "8px 16px",
+                                        border: "none",
+                                        background: "#2563eb",
+                                        color: "#fff",
+                                        borderRadius: "6px",
+                                        cursor: controlLoading === "config" ? "not-allowed" : "pointer",
+                                        fontSize: "14px",
+                                        opacity: controlLoading === "config" ? 0.6 : 1,
+                                    }}
+                                >
+                                    {controlLoading === "config" ? "Saving..." : "Save"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Model Transparency */}
                 <div style={styles.transparencySection}>

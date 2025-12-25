@@ -824,6 +824,89 @@ export async function fetchAgentConsole(): Promise<AgentConsoleData> {
     return res.json();
 }
 
+export interface AgentHealth {
+    status: "healthy" | "paused" | "degraded";
+    paused: boolean;
+    lastHeartbeat: string;
+    uptime: string;
+    lastDecisionId: string | null;
+}
+
+export async function fetchAgentHealth(): Promise<AgentHealth> {
+    const res = await fetch(`${BACKEND_URL}/agent/health`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        throw new Error("Failed to fetch agent health");
+    }
+    return res.json();
+}
+
+export interface AgentConfig {
+    paused: boolean;
+    riskThreshold: number;
+    lastUpdated: string;
+}
+
+export async function fetchAgentConfig(): Promise<AgentConfig> {
+    const res = await fetch(`${BACKEND_URL}/agent/config`, { 
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        throw new Error("Failed to fetch agent config");
+    }
+    return res.json();
+}
+
+export async function pauseAgent(walletAddress: string): Promise<{ success: boolean; paused: boolean }> {
+    const res = await fetch(`${BACKEND_URL}/agent/pause`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-address": walletAddress,
+        },
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to pause agent");
+    }
+    return res.json();
+}
+
+export async function resumeAgent(walletAddress: string): Promise<{ success: boolean; paused: boolean }> {
+    const res = await fetch(`${BACKEND_URL}/agent/resume`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-address": walletAddress,
+        },
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to resume agent");
+    }
+    return res.json();
+}
+
+export async function updateAgentConfig(
+    walletAddress: string,
+    config: { riskThreshold?: number; paused?: boolean }
+): Promise<{ success: boolean; config: AgentConfig }> {
+    const res = await fetch(`${BACKEND_URL}/agent/config`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-address": walletAddress,
+        },
+        body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to update agent config");
+    }
+    return res.json();
+}
+
 // Risk Exposure API functions
 export async function fetchRiskSnapshot(poolId?: string): Promise<RiskSnapshot> {
     try {

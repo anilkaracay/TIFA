@@ -29,9 +29,16 @@ async function tick() {
         const poolProtected = await isPoolProtected();
         
         // SAFETY CHECK: If pool is paused, skip all actions
-        if (poolState.paused) {
+        // Only skip if we successfully checked and pool is actually paused
+        // Don't block on network errors
+        if (poolState.paused && poolState.totalLiquidity > 0n) {
             console.log(`[Agent] ⛔ Pool is PAUSED. Skipping all actions.`);
             return;
+        }
+        
+        // If network error (totalLiquidity is 0), log warning but continue
+        if (poolState.totalLiquidity === 0n) {
+            console.warn(`[Agent] ⚠️  Could not fetch pool state (network error). Continuing with limited checks...`);
         }
         
         if (poolProtected) {

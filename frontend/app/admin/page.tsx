@@ -3,13 +3,13 @@
 import React, { useState } from "react";
 import useSWR from "swr";
 import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { formatUnits } from "viem";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { RoleGate } from "../../components/auth/RoleGate";
 import { Role, resolveUserRole, getRoleDisplayName } from "../../lib/roles";
 import { fetchUserRole } from "../../lib/backendClient";
 import Deployments from "../../lib/deployments.json";
-import { ethers } from "ethers";
 import { useWebSocket } from "../../lib/websocketClient";
 import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
@@ -312,7 +312,7 @@ export default function AdminPanelPage() {
                         <div style={{ padding: "16px", background: "var(--bg-panel)", borderRadius: "8px" }}>
                             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Reserve Balance</p>
                             <p style={{ fontSize: "18px", fontWeight: 700 }}>
-                                {ethers.utils.formatUnits(poolStatus.reserveBalance || '0', 18)} TRY
+                                {formatUnits(BigInt(poolStatus.reserveBalance || '0'), 18)} TRY
                             </p>
                         </div>
                         <div style={{ padding: "16px", background: "var(--bg-panel)", borderRadius: "8px" }}>

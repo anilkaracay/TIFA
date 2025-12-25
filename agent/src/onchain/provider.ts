@@ -3,7 +3,11 @@ import deployments from "./deployments.json";
 import { env } from "../env";
 
 // Initialize provider from env RPC URL
-export const provider = new ethers.providers.JsonRpcProvider(env.BASE_SEPOLIA_RPC);
+// Add explicit network configuration to avoid detection issues
+export const provider = new ethers.providers.JsonRpcProvider({
+    url: env.BASE_SEPOLIA_RPC,
+    timeout: 30000,
+});
 
 // Initialize wallet with private key
 export const signer = env.PRIVATE_KEY
