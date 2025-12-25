@@ -6,6 +6,8 @@ import { roleResolutionMiddleware, requireRole, requireWallet } from "../middlew
 import { Role } from "../auth/roles";
 import * as fs from "fs";
 import * as path from "path";
+import { differenceInDays } from "date-fns";
+import { loadContract } from "../onchain/provider";
 
 const AgentDecisionSchema = z.object({
     invoiceId: z.string().optional(),
@@ -51,6 +53,70 @@ function saveAgentConfig(config: { paused: boolean; riskThreshold: number; lastU
         console.error("[AgentConfig] Failed to save config file:", e);
         throw e;
     }
+}
+
+// Risk scoring breakdown calculation (matches agent logic)
+function computeRiskBreakdown(invoice: any, poolUtilization?: number): {
+    factors: Array<{ name: string; impact: number; description: string }>;
+    finalScore: number;
+} {
+    const amount = BigInt(invoice.amount || "0");
+    const paid = BigInt(invoice.cumulativePaid || "0");
+    const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
+    const overdue = dueDate ? Math.max(0, differenceInDays(new Date(), dueDate)) : 0;
+
+    const factors: Array<{ name: string; impact: number; description: string }> = [];
+    let score = 0;
+
+    // Overdue factor
+    if (overdue > 0) {
+        const overdueImpact = Math.min(60, overdue * 5);
+        factors.push({
+            name: `Overdue (${overdue}d)`,
+            impact: overdueImpact,
+            description: `${overdue} days overdue × 5 points per day (max 60)`,
+        });
+        score += overdueImpact;
+    }
+
+    // Partial payment factor
+    if (amount > 0n && paid > amount / 2n) {
+        factors.push({
+            name: "Partial payment detected",
+            impact: -10,
+            description: `More than 50% paid (${paid.toString()} / ${amount.toString()})`,
+        });
+        score -= 10;
+    }
+
+    // High value factor
+    const highValueThreshold = 1000n * 10n ** 18n;
+    if (amount > highValueThreshold) {
+        factors.push({
+            name: "High invoice amount",
+            impact: 10,
+            description: `Amount exceeds threshold (${amount.toString()})`,
+        });
+        score += 10;
+    }
+
+    // Pool utilization pressure (if provided)
+    if (poolUtilization !== undefined && poolUtilization > 70) {
+        const utilizationImpact = Math.floor((poolUtilization - 70) / 5); // +2 per 5% above 70%
+        if (utilizationImpact > 0) {
+            factors.push({
+                name: `Pool utilization pressure`,
+                impact: utilizationImpact,
+                description: `Pool utilization ${poolUtilization.toFixed(1)}% (threshold: 70%)`,
+            });
+            score += utilizationImpact;
+        }
+    }
+
+    // Normalize to 0-100
+    const finalScore = Math.max(0, Math.min(100, score));
+
+    return { factors, finalScore };
 }
 
 export async function registerAgentRoutes(app: FastifyInstance) {
@@ -156,13 +222,47 @@ export async function registerAgentRoutes(app: FastifyInstance) {
                 },
             };
 
-            // Build dynamic agent list from actual activity
-            const agents = agentStats.map((stat) => {
-                const def = agentDefinitions[stat.actionType] || {
-                    id: stat.actionType.toLowerCase().replace(/_/g, "-"),
-                    name: `${stat.actionType.replace(/_/g, " ")} Agent`,
-                    scope: `Handles ${stat.actionType.replace(/_/g, " ")} actions`,
-                };
+            // Core system agents that should always be visible
+            const coreAgents: Array<{ id: string; name: string; scope: string }> = [
+                {
+                    id: "risk-scoring",
+                    name: "Risk Scoring Agent",
+                    scope: "Computes and explains risk scores for all invoices using multiple factors",
+                },
+                {
+                    id: "status-management",
+                    name: "Status Management Agent",
+                    scope: "Monitors and updates invoice status based on payment events",
+                },
+                {
+                    id: "auto-financing",
+                    name: "Auto-Financing Agent",
+                    scope: "Automatically approves and draws financing for eligible invoices",
+                },
+                {
+                    id: "safety-guard",
+                    name: "Safety Guard Agent",
+                    scope: "Blocks financing when safety limits are exceeded",
+                },
+                {
+                    id: "pool-protection",
+                    name: "Pool Protection Agent",
+                    scope: "Protects pool from over-utilization and exposure risks",
+                },
+            ];
+
+            // Build agent map from actual activity
+            const agentActivityMap = new Map<string, {
+                state: string;
+                lastAction: Date;
+                confidence: number;
+                workload: number;
+                signalCount: number;
+            }>();
+
+            agentStats.forEach((stat) => {
+                const def = agentDefinitions[stat.actionType];
+                if (!def) return;
 
                 const lastAction = stat._max.createdAt || new Date(Date.now() - 3600000);
                 const timeSinceLastAction = Date.now() - lastAction.getTime();
@@ -181,77 +281,101 @@ export async function registerAgentRoutes(app: FastifyInstance) {
                 const avgRisk = stat._avg.riskScore || 50;
                 const confidence = Math.max(50, Math.min(100, 100 - avgRisk + (stat._count > 10 ? 10 : 0)));
 
-                return {
-                    id: def.id,
-                    name: def.name,
-                    scope: def.scope,
+                // Calculate workload (decisions in last hour)
+                const decisionsLastHour = recentDecisions.filter(d => 
+                    d.actionType === stat.actionType && 
+                    d.createdAt >= lastHour
+                ).length;
+
+                // Count signals from this agent
+                const agentSignals = recentDecisions.filter(d => 
+                    d.actionType === stat.actionType
+                ).slice(0, 20).length;
+
+                agentActivityMap.set(def.id, {
                     state,
                     lastAction,
                     confidence: Math.round(confidence),
+                    workload: decisionsLastHour,
+                    signalCount: agentSignals,
+                });
+            });
+
+            // Build final agent list - always show all core agents
+            const agents = coreAgents.map((coreAgent) => {
+                const activity = agentActivityMap.get(coreAgent.id);
+                
+                // Get last action summary for this agent
+                let lastActionSummary: string | null = null;
+                const agentDecisions = recentDecisions.filter(d => {
+                    if (coreAgent.id === "risk-scoring") {
+                        return d.riskScore !== null && d.riskScore !== undefined;
+                    }
+                    const def = agentDefinitions[d.actionType];
+                    return def && def.id === coreAgent.id;
+                });
+                
+                if (agentDecisions.length > 0) {
+                    const lastDecision = agentDecisions[0];
+                    if (lastDecision.actionType.includes("BLOCKED")) {
+                        lastActionSummary = `Blocked ${lastDecision.actionType.includes("FINANCE") ? "financing" : "action"}${lastDecision.invoiceExternalId ? ` for ${lastDecision.invoiceExternalId}` : ""}`;
+                    } else if (lastDecision.actionType === "FINANCE") {
+                        lastActionSummary = `Approved financing${lastDecision.invoiceExternalId ? ` for ${lastDecision.invoiceExternalId}` : ""}`;
+                    } else if (lastDecision.actionType === "STATUS_UPDATE") {
+                        lastActionSummary = `Updated status${lastDecision.nextStatus ? ` to ${lastDecision.nextStatus}` : ""}${lastDecision.invoiceExternalId ? ` for ${lastDecision.invoiceExternalId}` : ""}`;
+                    } else if (lastDecision.message) {
+                        lastActionSummary = lastDecision.message.length > 60 ? lastDecision.message.substring(0, 60) + "..." : lastDecision.message;
+                    } else {
+                        lastActionSummary = `Processed ${agentDecisions.length} ${agentDecisions.length === 1 ? "decision" : "decisions"}`;
+                    }
+                }
+                
+                // For Risk Scoring Agent, check if any decision has a risk score
+                if (coreAgent.id === "risk-scoring") {
+                    const hasRiskScores = recentDecisions.some(d => d.riskScore !== null && d.riskScore !== undefined);
+                    const riskScoreDecisions = recentDecisions.filter(d => d.riskScore !== null && d.riskScore !== undefined);
+                    const lastRiskScore = riskScoreDecisions[0]?.createdAt || new Date(Date.now() - 3600000);
+                    const timeSince = Date.now() - lastRiskScore.getTime();
+                    
+                    return {
+                        id: coreAgent.id,
+                        name: coreAgent.name,
+                        scope: coreAgent.scope,
+                        state: timeSince < 5 * 60 * 1000 ? "Active" : timeSince < 60 * 60 * 1000 ? "Active" : "Idle",
+                        lastAction: lastRiskScore,
+                        confidence: hasRiskScores ? 85 : 75,
+                        workload: riskScoreDecisions.filter(d => d.createdAt >= lastHour).length,
+                        signalCount: riskScoreDecisions.length,
+                        lastActionSummary: lastActionSummary || "No recent activity",
+                    };
+                }
+                
+                // For other agents, use activity data or defaults
+                if (activity) {
+                    return {
+                        id: coreAgent.id,
+                        name: coreAgent.name,
+                        scope: coreAgent.scope,
+                        ...activity,
+                        lastActionSummary: lastActionSummary || "No recent activity",
+                    };
+                }
+                
+                // Default values for agents with no recent activity
+                return {
+                    id: coreAgent.id,
+                    name: coreAgent.name,
+                    scope: coreAgent.scope,
+                    state: "Idle",
+                    lastAction: new Date(Date.now() - 3600000),
+                    confidence: coreAgent.id === "safety-guard" ? 95 : coreAgent.id === "pool-protection" ? 92 : coreAgent.id === "auto-financing" ? 90 : 85,
+                    workload: 0,
+                    signalCount: 0,
+                    lastActionSummary: "No recent activity",
                 };
             });
 
-            // If no agents found, add default agents based on recent decisions
-            if (agents.length === 0 && recentDecisions.length > 0) {
-                const uniqueActionTypes = [...new Set(recentDecisions.map(d => d.actionType))];
-                uniqueActionTypes.forEach((actionType) => {
-                    const def = agentDefinitions[actionType] || {
-                        id: actionType.toLowerCase().replace(/_/g, "-"),
-                        name: `${actionType.replace(/_/g, " ")} Agent`,
-                        scope: `Handles ${actionType.replace(/_/g, " ")} actions`,
-                    };
-                    const relatedDecisions = recentDecisions.filter(d => d.actionType === actionType);
-                    const lastAction = relatedDecisions[0]?.createdAt || new Date(Date.now() - 3600000);
-                    const avgRisk = relatedDecisions.reduce((sum, d) => sum + (d.riskScore || 50), 0) / relatedDecisions.length;
-                    
-                    agents.push({
-                        id: def.id,
-                        name: def.name,
-                        scope: def.scope,
-                        state: "Active",
-                        lastAction,
-                        confidence: Math.round(Math.max(50, Math.min(100, 100 - avgRisk))),
-                    });
-                });
-            }
-
-            // If still no agents found (no decisions at all), show default system agents
-            if (agents.length === 0) {
-                agents.push(
-                    {
-                        id: "status-management",
-                        name: "Status Management Agent",
-                        scope: "Monitors and updates invoice status based on payment events",
-                        state: "Idle",
-                        lastAction: new Date(Date.now() - 3600000),
-                        confidence: 85,
-                    },
-                    {
-                        id: "auto-financing",
-                        name: "Auto-Financing Agent",
-                        scope: "Automatically approves and draws financing for eligible invoices",
-                        state: "Idle",
-                        lastAction: new Date(Date.now() - 3600000),
-                        confidence: 90,
-                    },
-                    {
-                        id: "safety-guard",
-                        name: "Safety Guard Agent",
-                        scope: "Blocks financing when safety limits are exceeded",
-                        state: "Idle",
-                        lastAction: new Date(Date.now() - 3600000),
-                        confidence: 95,
-                    },
-                    {
-                        id: "pool-protection",
-                        name: "Pool Protection Agent",
-                        scope: "Protects pool from over-utilization and exposure risks",
-                        state: "Idle",
-                        lastAction: new Date(Date.now() - 3600000),
-                        confidence: 92,
-                    }
-                );
-            }
+            // Agents are now always built from coreAgents list above
 
             // Calculate active agents count
             const activeAgents = agents.filter(a => a.state === "Active").length;
@@ -302,16 +426,118 @@ export async function registerAgentRoutes(app: FastifyInstance) {
                 };
             });
 
-            // Decision traces (structured view of decisions)
+            // Decision traces (structured view of decisions with AI reasoning pipeline)
             const decisionTraces = recentDecisions.slice(0, 10).map((decision) => {
                 const relatedSignals = signals.filter(s => 
                     s.context.invoiceId === decision.invoiceId || 
                     s.context.invoiceExternalId === decision.invoiceExternalId
                 ).slice(0, 3);
 
+                // Build reasoning pipeline
+                const reasoningSteps = [];
+                
+                // Step 1: Inputs
+                reasoningSteps.push({
+                    step: "inputs",
+                    label: "Input Analysis",
+                    content: {
+                        invoiceId: decision.invoiceExternalId || decision.invoiceId,
+                        invoiceOnChainId: decision.invoiceOnChainId,
+                        previousStatus: decision.previousStatus,
+                        riskScore: decision.riskScore,
+                    },
+                });
+
+                // Step 2: Signals detected
+                if (relatedSignals.length > 0) {
+                    reasoningSteps.push({
+                        step: "signals",
+                        label: "Signals Detected",
+                        content: relatedSignals.map(s => ({
+                            source: s.sourceAgent,
+                            severity: s.severity,
+                            message: s.message,
+                        })),
+                    });
+                }
+
+                // Step 3: Risk evaluation
+                if (decision.riskScore !== null && decision.riskScore !== undefined) {
+                    reasoningSteps.push({
+                        step: "evaluation",
+                        label: "Risk Evaluation",
+                        content: {
+                            riskScore: decision.riskScore,
+                            threshold: agentConfig.riskThreshold,
+                            passed: decision.riskScore < agentConfig.riskThreshold,
+                        },
+                    });
+                }
+
+                // Step 4: Safety checks (if blocked)
+                if (decision.actionType.includes("BLOCKED") || decision.actionType.includes("SAFETY")) {
+                    reasoningSteps.push({
+                        step: "safety",
+                        label: "Safety Checks",
+                        content: {
+                            checks: decision.message?.includes("UTILIZATION") ? ["Utilization limit"] : 
+                                   decision.message?.includes("EXPOSURE") ? ["Issuer exposure limit"] :
+                                   decision.message?.includes("LIQUIDITY") ? ["Insufficient liquidity"] :
+                                   ["Pool protection active"],
+                            result: "BLOCKED",
+                            reason: decision.message,
+                        },
+                    });
+                }
+
+                // Step 5: Decision
+                reasoningSteps.push({
+                    step: "decision",
+                    label: "Final Decision",
+                    content: {
+                        actionType: decision.actionType,
+                        nextStatus: decision.nextStatus,
+                        reasoning: decision.message || `Evaluated ${decision.actionType} based on risk profile`,
+                    },
+                });
+
+                // Step 6: Execution result
+                if (decision.txHash) {
+                    reasoningSteps.push({
+                        step: "execution",
+                        label: "Execution Result",
+                        content: {
+                            status: "SUCCESS",
+                            txHash: decision.txHash,
+                            onChain: true,
+                        },
+                    });
+                } else if (decision.actionType.includes("FAILED")) {
+                    reasoningSteps.push({
+                        step: "execution",
+                        label: "Execution Result",
+                        content: {
+                            status: "FAILED",
+                            reason: decision.message,
+                            onChain: false,
+                        },
+                    });
+                } else if (decision.actionType.includes("BLOCKED")) {
+                    reasoningSteps.push({
+                        step: "execution",
+                        label: "Execution Result",
+                        content: {
+                            status: "BLOCKED",
+                            reason: decision.message,
+                            onChain: false,
+                        },
+                    });
+                }
+
                 return {
                     id: decision.id,
                     timestamp: decision.createdAt,
+                    reasoningPipeline: reasoningSteps,
                     inputs: {
                         invoiceId: decision.invoiceExternalId || decision.invoiceId,
                         invoiceOnChainId: decision.invoiceOnChainId,
@@ -524,6 +750,176 @@ export async function registerAgentRoutes(app: FastifyInstance) {
         } catch (error: any) {
             return reply.code(500).send({
                 error: "Failed to update agent config",
+                details: error.message,
+            });
+        }
+    });
+
+    // GET /agent/risk-breakdown/:invoiceId - Get explainable risk scoring breakdown
+    app.get("/risk-breakdown/:invoiceId", async (req, reply) => {
+        try {
+            const { invoiceId } = req.params as { invoiceId: string };
+            
+            // Fetch invoice from database
+            const invoice = await prisma.invoice.findUnique({
+                where: { id: invoiceId },
+            });
+
+            if (!invoice) {
+                return reply.code(404).send({ error: "Invoice not found" });
+            }
+
+            // Get pool utilization if available
+            let poolUtilization: number | undefined;
+            try {
+                const FinancingPool = loadContract("FinancingPool");
+                const utilization = await FinancingPool.utilization();
+                poolUtilization = Number(utilization.toString()) / 100;
+            } catch (e) {
+                // Ignore if can't fetch
+            }
+
+            const breakdown = computeRiskBreakdown(invoice, poolUtilization);
+
+            return {
+                invoiceId: invoice.id,
+                invoiceExternalId: invoice.externalId,
+                factors: breakdown.factors,
+                finalScore: breakdown.finalScore,
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error: any) {
+            return reply.code(500).send({
+                error: "Failed to compute risk breakdown",
+                details: error.message,
+            });
+        }
+    });
+
+    // GET /agent/system-parameters - Get active policy parameters
+    app.get("/system-parameters", async (req, reply) => {
+        try {
+            const agentConfig = getAgentConfig();
+            
+            // Get pool parameters
+            let poolParams: any = {};
+            try {
+                const FinancingPool = loadContract("FinancingPool");
+                const [maxUtilization, maxLoanBps, maxIssuerExposureBps] = await Promise.all([
+                    FinancingPool.maxUtilizationBps().catch(() => null),
+                    FinancingPool.maxLoanBpsOfTVL().catch(() => null),
+                    FinancingPool.maxIssuerExposureBps().catch(() => null),
+                ]);
+
+                poolParams = {
+                    maxUtilizationBps: maxUtilization ? Number(maxUtilization.toString()) : null,
+                    maxLoanBpsOfTVL: maxLoanBps ? Number(maxLoanBps.toString()) : null,
+                    maxIssuerExposureBps: maxIssuerExposureBps ? Number(maxIssuerExposureBps.toString()) : null,
+                };
+            } catch (e) {
+                // Ignore if can't fetch
+            }
+
+            return {
+                riskThreshold: agentConfig.riskThreshold,
+                ltvBps: 6000, // 60% LTV - hardcoded in agent
+                utilizationThresholdBps: 7500, // 75% - from poolGuard
+                maxUtilizationBps: poolParams.maxUtilizationBps || 8000, // 80% default
+                maxLoanBpsOfTVL: poolParams.maxLoanBpsOfTVL || null,
+                maxIssuerExposureBps: poolParams.maxIssuerExposureBps || null,
+                lastUpdated: agentConfig.lastUpdated,
+            };
+        } catch (error: any) {
+            return reply.code(500).send({
+                error: "Failed to get system parameters",
+                details: error.message,
+            });
+        }
+    });
+
+    // GET /agent/predictions - Get rule-based predictive intelligence
+    app.get("/predictions", async (req, reply) => {
+        try {
+            const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const next24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+            // Get active invoices
+            const activeInvoices = await prisma.invoice.findMany({
+                where: {
+                    status: { in: ["TOKENIZED", "FINANCED", "ISSUED"] },
+                },
+                take: 100,
+            });
+
+            // Get pool state
+            let poolUtilization = 0;
+            let availableLiquidity = 0n;
+            try {
+                const FinancingPool = loadContract("FinancingPool");
+                const utilization = await FinancingPool.utilization();
+                const available = await FinancingPool.availableLiquidity();
+                poolUtilization = Number(utilization.toString()) / 100;
+                availableLiquidity = BigInt(available.toString());
+            } catch (e) {
+                // Ignore if can't fetch
+            }
+
+            // Predict invoices that will breach risk threshold
+            const invoicesAtRisk: Array<{ invoiceId: string; externalId: string; currentRisk: number; projectedRisk: number; reason: string }> = [];
+            activeInvoices.forEach((inv) => {
+                const breakdown = computeRiskBreakdown(inv, poolUtilization);
+                if (breakdown.finalScore >= 50) {
+                    invoicesAtRisk.push({
+                        invoiceId: inv.id,
+                        externalId: inv.externalId,
+                        currentRisk: breakdown.finalScore,
+                        projectedRisk: breakdown.finalScore,
+                        reason: breakdown.factors.map(f => f.name).join(", "),
+                    });
+                }
+            });
+
+            // Project pool utilization (rule-based)
+            const agentConfig = getAgentConfig();
+            const eligibleInvoices = activeInvoices.filter(inv => 
+                inv.status === "TOKENIZED" && 
+                !inv.isFinanced &&
+                computeRiskBreakdown(inv, poolUtilization).finalScore < agentConfig.riskThreshold
+            );
+
+            let projectedUtilization = poolUtilization;
+            let expectedFinancingBlocks = 0;
+            let expectedFinancings = 0;
+
+            eligibleInvoices.forEach((inv) => {
+                const invoiceAmount = BigInt(inv.amount || "0");
+                const financeAmount = (invoiceAmount * BigInt(6000)) / BigInt(10000); // 60% LTV
+                
+                if (availableLiquidity >= financeAmount) {
+                    expectedFinancings++;
+                    // Simple projection: assume utilization increases proportionally
+                    // This is a rough estimate
+                } else {
+                    expectedFinancingBlocks++;
+                }
+            });
+
+            return {
+                horizon: "24h",
+                invoicesAtRisk: invoicesAtRisk.length,
+                invoicesAtRiskDetails: invoicesAtRisk.slice(0, 10),
+                poolUtilizationProjection: {
+                    current: poolUtilization,
+                    projected: Math.min(100, projectedUtilization + (expectedFinancings * 2)), // Rough estimate
+                },
+                expectedFinancings,
+                expectedFinancingBlocks,
+                safetyWarnings: poolUtilization > 70 ? [`Pool utilization at ${poolUtilization.toFixed(1)}% - approaching threshold`] : [],
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error: any) {
+            return reply.code(500).send({
+                error: "Failed to generate predictions",
                 details: error.message,
             });
         }
