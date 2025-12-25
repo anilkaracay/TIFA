@@ -6,7 +6,8 @@ import useSWR from "swr";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
-import { fetchInvoiceDetail, fetchInvoiceTruth, InvoiceTruth, recordPayment, payRecourse, declareDefault, requestFinancing } from "../../../lib/backendClient";
+import { useTransactionManager } from "../../../lib/transactionManager";
+import { fetchInvoiceDetail, fetchInvoiceTruth, InvoiceTruth, recordPayment, payRecourse, declareDefault, requestFinancing, notifyRepayment } from "../../../lib/backendClient";
 import { fetchCompanies, Company } from "../../../lib/companyClient";
 import { formatAmount, formatDate, statusColor } from "../../../lib/format";
 import Deployments from "../../../lib/deployments.json";
@@ -749,6 +750,7 @@ export default function InvoiceDetailPage() {
     const publicClient = usePublicClient();
     const { writeContractAsync } = useWriteContract();
     const { showToast } = useToast();
+    const { trackTransaction } = useTransactionManager();
     
     const { data: inv, error, isLoading, mutate: mutateInvoice } = useSWR(
         id ? ["invoice-detail", id] : null,
@@ -782,6 +784,8 @@ export default function InvoiceDetailPage() {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showRecourseModal, setShowRecourseModal] = useState(false);
     const [showDefaultModal, setShowDefaultModal] = useState(false);
+    const [showRepayModal, setShowRepayModal] = useState(false);
+    const [showFinanceModal, setShowFinanceModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
         amount: "",
         currency: "TRY",
@@ -795,8 +799,16 @@ export default function InvoiceDetailPage() {
     const [defaultForm, setDefaultForm] = useState({
         reason: "",
     });
+    const [repayAmount, setRepayAmount] = useState("");
+    const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null);
+    const [currentDebt, setCurrentDebt] = useState<bigint>(0n);
+    const [financeAmount, setFinanceAmount] = useState("");
+    const [selectedFinancePercentage, setSelectedFinancePercentage] = useState<number | null>(null);
+    const [availableCredit, setAvailableCredit] = useState<bigint>(0n);
+    const [poolAvailableLiquidity, setPoolAvailableLiquidity] = useState<bigint>(0n);
     const [loading, setLoading] = useState(false);
     const [positionData, setPositionData] = useState<any>(null);
+    const [repayments, setRepayments] = useState<Array<{ txHash: string; amount: string; timestamp: string }>>([]);
 
     // Subscribe to WebSocket events
     React.useEffect(() => {
@@ -974,8 +986,33 @@ export default function InvoiceDetailPage() {
             showToast('error', 'Invoice must be tokenized first');
             return;
         }
+        if (!financeAmount || parseFloat(financeAmount) <= 0) {
+            showToast('error', 'Please enter a valid amount');
+            return;
+        }
+        
+        // Convert amount to BigInt (amount is in human-readable format, multiply by 100)
+        let amountToDraw = BigInt(Math.floor(parseFloat(financeAmount) * 100));
+        
+        // Validate amount
+        if (amountToDraw > availableCredit) {
+            showToast('error', `Amount exceeds available credit. Max: ${formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}`);
+            return;
+        }
+        
+        if (amountToDraw > poolAvailableLiquidity) {
+            showToast('error', `Amount exceeds pool liquidity. Max: ${formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}`);
+            return;
+        }
+        
+        if (amountToDraw <= 0n) {
+            showToast('error', 'Amount must be greater than zero');
+            return;
+        }
+        
         try {
             setLoading(true);
+            setShowFinanceModal(false);
             showToast('info', 'Starting finance process...');
 
             const pool = Deployments.FinancingPool;
@@ -1048,13 +1085,7 @@ export default function InvoiceDetailPage() {
             if (owner.toLowerCase() === poolAddress.toLowerCase()) {
                 showToast('info', 'Step 3/4: Drawing credit...');
                 
-                // Check pool liquidity first
-                const poolAvailableLiquidity = await publicClient.readContract({
-                    address: poolAddress,
-                    abi: pool.abi,
-                    functionName: "availableLiquidity",
-                }) as bigint;
-                
+                // Re-check position after lock (if it was just locked)
                 const position = await publicClient.readContract({
                     address: poolAddress,
                     abi: pool.abi,
@@ -1064,34 +1095,24 @@ export default function InvoiceDetailPage() {
 
                 const maxCreditLine = position.maxCreditLine as bigint;
                 const currentUsedCredit = position.usedCredit as bigint;
-                const availableCredit = maxCreditLine - currentUsedCredit;
+                const availableCreditAfterLock = maxCreditLine - currentUsedCredit;
                 
-                // Check if pool has enough liquidity
-                if (poolAvailableLiquidity <= 0n) {
-                    showToast('error', `Pool has no available liquidity. Please add liquidity via LP Dashboard.`);
+                // Validate amountToDraw against current position
+                if (amountToDraw > availableCreditAfterLock) {
+                    showToast('error', `Amount exceeds available credit line. Max: ${formatAmount((Number(availableCreditAfterLock) / 100).toString(), inv.currency || "TRY")}`);
                     setLoading(false);
                     return;
                 }
                 
-                // Check if invoice has available credit line
-                if (availableCredit <= 0n) {
-                    // Safely convert BigInt to number, then divide by 100
-                    const maxCreditNum = Number(maxCreditLine) / 100;
-                    const usedCreditNum = Number(currentUsedCredit) / 100;
-                    showToast('error', `No available credit line for this invoice. Max credit: ${formatAmount(maxCreditNum, inv.currency || "TRY")}, Used: ${formatAmount(usedCreditNum, inv.currency || "TRY")}`);
-                    setLoading(false);
-                    return;
-                }
+                // Re-check pool liquidity
+                const currentPoolLiquidity = await publicClient.readContract({
+                    address: poolAddress,
+                    abi: pool.abi,
+                    functionName: "availableLiquidity",
+                }) as bigint;
                 
-                // Use the minimum of available credit and pool liquidity
-                const creditToDraw = availableCredit > poolAvailableLiquidity 
-                    ? poolAvailableLiquidity 
-                    : availableCredit;
-                
-                if (creditToDraw <= 0n) {
-                    // Safely convert BigInt to number, then divide by 100
-                    const poolLiquidityNum = Number(poolAvailableLiquidity) / 100;
-                    showToast('error', `Cannot draw credit: Pool liquidity (${formatAmount(poolLiquidityNum, inv.currency || "TRY")}) is insufficient.`);
+                if (amountToDraw > currentPoolLiquidity) {
+                    showToast('error', `Amount exceeds pool liquidity. Available: ${formatAmount((Number(currentPoolLiquidity) / 100).toString(), inv.currency || "TRY")}`);
                     setLoading(false);
                     return;
                 }
@@ -1114,7 +1135,7 @@ export default function InvoiceDetailPage() {
                     address: poolAddress,
                     abi: POOL_ABI_DRAW,
                     functionName: "drawCredit",
-                    args: [inv.invoiceIdOnChain as `0x${string}`, creditToDraw, address]
+                    args: [inv.invoiceIdOnChain as `0x${string}`, amountToDraw, address]
                 });
 
                 const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
@@ -1126,21 +1147,22 @@ export default function InvoiceDetailPage() {
                         inv.id, 
                         address, 
                         receipt.transactionHash,
-                        creditToDraw.toString()
+                        amountToDraw.toString()
                     );
                     
                     // Check if backend successfully processed the notification
                     if (backendResponse && (backendResponse.approved || backendResponse.invoiceId)) {
-                        // Convert BigInt to number safely, then divide by 100
-                        const creditDrawnNumber = Number(creditToDraw) / 100;
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        setFinanceAmount("");
+                        setSelectedFinancePercentage(null);
                         await mutateInvoice();
                         await mutateTruth();
                     } else {
                         // Backend returned unexpected response, but transaction was successful
                         console.warn('[Finance] Backend returned unexpected response:', backendResponse);
-                        const creditDrawnNumber = Number(creditToDraw) / 100;
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        setFinanceAmount("");
+                        setSelectedFinancePercentage(null);
                         // Still refresh to get latest state
                         await mutateInvoice();
                         await mutateTruth();
@@ -1151,15 +1173,17 @@ export default function InvoiceDetailPage() {
                     // Check if error is "Already financed" - this means backend already has the state
                     if (backendError.message && backendError.message.includes('Already financed')) {
                         console.log('[Finance] Invoice already financed in backend, refreshing state...');
-                        const creditDrawnNumber = Number(creditToDraw) / 100;
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(creditDrawnNumber, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        setFinanceAmount("");
+                        setSelectedFinancePercentage(null);
                         await mutateInvoice();
                         await mutateTruth();
                     } else {
                         // Real error - show warning but don't block user
                         console.warn('[Finance] Backend sync may have failed, but on-chain transaction was successful');
-                        const creditDrawnNumber = Number(creditToDraw) / 100;
-                        showToast('warning', `Credit drawn on-chain (${formatAmount(creditDrawnNumber, inv.currency || "TRY")}). Backend sync may be delayed.`);
+                        showToast('warning', `Credit drawn on-chain (${formatAmount(financeAmount, inv.currency || "TRY")}). Backend sync may be delayed.`);
+                        setFinanceAmount("");
+                        setSelectedFinancePercentage(null);
                         // Still refresh to get latest state
                         await mutateInvoice();
                         await mutateTruth();
@@ -1189,6 +1213,211 @@ export default function InvoiceDetailPage() {
             await mutateInvoice();
         } catch (e: any) {
             showToast('error', e.message || 'Failed to declare default');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Open Finance Modal
+    const openFinanceModal = async () => {
+        if (!address || !publicClient || !inv) {
+            showToast('error', 'Please connect your wallet first');
+            return;
+        }
+        if (!inv.tokenId || !inv.invoiceIdOnChain) {
+            showToast('error', 'Invoice must be tokenized first');
+            return;
+        }
+        try {
+            setLoading(true);
+            const pool = Deployments.FinancingPool;
+            const poolAddress = pool.address as `0x${string}`;
+            
+            // Check pool liquidity
+            const liquidity = await publicClient.readContract({
+                address: poolAddress,
+                abi: pool.abi,
+                functionName: "availableLiquidity",
+            }) as bigint;
+            setPoolAvailableLiquidity(liquidity);
+            
+            // Get position (may not exist yet if not locked)
+            let position: any = null;
+            try {
+                position = await publicClient.readContract({
+                    address: poolAddress,
+                    abi: pool.abi,
+                    functionName: "getPosition",
+                    args: [inv.invoiceIdOnChain]
+                }) as any;
+            } catch (e) {
+                // Position may not exist yet, that's okay
+            }
+            
+            let creditLine = 0n;
+            let usedCredit = 0n;
+            
+            if (position && position.exists) {
+                creditLine = position.maxCreditLine as bigint;
+                usedCredit = position.usedCredit as bigint;
+            } else {
+                // If position doesn't exist yet, we'll need to estimate
+                // For now, use invoice amount * 0.6 as estimate (will be set after lock)
+                const invoiceAmount = BigInt(Math.floor(parseFloat(inv.amount || "0") * 100));
+                creditLine = (invoiceAmount * 60n) / 100n; // 60% LTV estimate
+            }
+            
+            const available = creditLine - usedCredit;
+            const maxAvailable = available > liquidity ? liquidity : available;
+            setAvailableCredit(maxAvailable > 0n ? maxAvailable : 0n);
+            
+            setFinanceAmount("");
+            setSelectedFinancePercentage(null);
+            setShowFinanceModal(true);
+            setLoading(false);
+        } catch (e: any) {
+            console.error('[Finance] Error fetching credit info:', e);
+            showToast('error', 'Error fetching credit information: ' + e.message);
+            setLoading(false);
+        }
+    };
+
+    // Open Repay Modal
+    const openRepayModal = async () => {
+        if (!address || !publicClient || !inv) {
+            showToast('error', 'Please connect your wallet first');
+            return;
+        }
+        if (!inv.invoiceIdOnChain || !inv.isFinanced) {
+            showToast('error', 'Invoice must be financed to repay');
+            return;
+        }
+        try {
+            setLoading(true);
+            const pool = Deployments.FinancingPool;
+            const position = await publicClient.readContract({
+                address: pool.address as `0x${string}`,
+                abi: pool.abi,
+                functionName: "getPosition",
+                args: [inv.invoiceIdOnChain]
+            }) as any;
+
+            const debt = position.usedCredit as bigint;
+            setCurrentDebt(debt);
+            setRepayAmount("");
+            setSelectedPercentage(null);
+            setShowRepayModal(true);
+            setLoading(false);
+        } catch (e: any) {
+            console.error('[Repay] Error fetching debt:', e);
+            showToast('error', 'Error fetching debt: ' + e.message);
+            setLoading(false);
+        }
+    };
+
+    // Execute Repayment
+    const executeRepayment = async () => {
+        if (!inv || !repayAmount || !publicClient || !address) {
+            showToast('error', 'Please enter a valid amount');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const pool = Deployments.FinancingPool;
+            const token = Deployments.TestToken;
+
+            let amountToRepay = BigInt(Math.floor(parseFloat(repayAmount) * 100));
+
+            if (amountToRepay > currentDebt) {
+                amountToRepay = currentDebt;
+                setRepayAmount((Number(currentDebt) / 100).toString());
+                setSelectedPercentage(100);
+                setLoading(false);
+                return;
+            }
+
+            if (amountToRepay <= 0n) {
+                setLoading(false);
+                return;
+            }
+
+            setShowRepayModal(false);
+            showToast('info', 'Step 1/2: Approving Payment Token...');
+
+            // Check allowance
+            const allowance = await publicClient.readContract({
+                address: token.address as `0x${string}`,
+                abi: token.abi,
+                functionName: "allowance",
+                args: [address, pool.address]
+            }) as bigint;
+
+            if (allowance < amountToRepay) {
+                const approveTx = await writeContractAsync({
+                    address: token.address as `0x${string}`,
+                    abi: token.abi,
+                    functionName: "approve",
+                    args: [pool.address, amountToRepay]
+                });
+                trackTransaction(approveTx);
+                await publicClient.waitForTransactionReceipt({ hash: approveTx });
+            }
+
+            // Repay
+            showToast('info', 'Step 2/2: Repaying Credit...');
+            const repayTx = await writeContractAsync({
+                address: pool.address as `0x${string}`,
+                abi: pool.abi,
+                functionName: "repayCredit",
+                args: [inv.invoiceIdOnChain, amountToRepay]
+            });
+
+            trackTransaction(repayTx);
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: repayTx });
+
+            // Add repayment to state for Audit Trail
+            setRepayments(prev => [...prev, {
+                txHash: repayTx,
+                amount: repayAmount,
+                timestamp: new Date().toISOString(),
+            }]);
+
+            // Notify backend about repayment
+            try {
+                await notifyRepayment(id, {
+                    txHash: repayTx,
+                    amount: repayAmount,
+                }, address);
+            } catch (e: any) {
+                console.error('[Repay] Backend notification failed:', e);
+                // Don't show error to user, on-chain transaction succeeded
+            }
+
+            showToast('success', `Repayment successful! Amount: ${formatAmount(repayAmount, inv.currency || "TRY")}`);
+            setRepayAmount("");
+            setSelectedPercentage(null);
+            
+            // Refresh data
+            await Promise.all([
+                mutateInvoice(),
+                mutateTruth(),
+            ]);
+            
+            // Refresh position data
+            if (inv.invoiceIdOnChain) {
+                const pool = Deployments.FinancingPool;
+                const position = await publicClient.readContract({
+                    address: pool.address as `0x${string}`,
+                    abi: pool.abi,
+                    functionName: "getPosition",
+                    args: [inv.invoiceIdOnChain]
+                }) as any;
+                setPositionData(position);
+            }
+        } catch (e: any) {
+            console.error('[Repay] Error:', e);
+            showToast('error', e?.message ?? "Repayment failed");
         } finally {
             setLoading(false);
         }
@@ -1414,6 +1643,17 @@ export default function InvoiceDetailPage() {
             });
         }
         
+        // 6. On-chain Credit Repayments (repayCredit transactions)
+        repayments.forEach((repayment) => {
+            trail.push({
+                event: "Credit Repayment",
+                description: `Credit repayment of ${formatAmount(repayment.amount, inv.currency || "TRY")} processed on-chain.`,
+                timestamp: repayment.timestamp,
+                order: 6,
+                link: `https://sepolia.basescan.org/tx/${repayment.txHash}`,
+            });
+        });
+        
         // Sort by order first (logical sequence), then by timestamp (oldest first)
         // Then reverse to show newest first (top to bottom)
         return trail.sort((a, b) => {
@@ -1422,7 +1662,7 @@ export default function InvoiceDetailPage() {
             }
             return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
         }).reverse();
-    }, [inv, repaymentProgress]);
+    }, [inv, repaymentProgress, repayments]);
 
     if (isLoading) {
         return (
@@ -1551,15 +1791,48 @@ export default function InvoiceDetailPage() {
                         <button style={styles.buttonSecondary}>
                             <span>Download PDF</span>
                         </button>
-                        {(inv.status as string) === "TOKENIZED" && !inv.isFinanced && (
-                            <button 
-                                style={styles.buttonPrimary}
-                                onClick={handleFinance}
-                                disabled={loading || !address}
-                            >
-                                <span>✓</span>
-                                <span>{loading ? "Processing..." : "Approve Financing"}</span>
-                            </button>
+                        {((inv.status as string) === "TOKENIZED" || (inv.status as string) === "FINANCED" || inv.isFinanced) && (
+                            (() => {
+                                // Check if there's available credit to draw
+                                let hasAvailableCredit = false;
+                                
+                                if (inv.isFinanced || (inv.status as string) === "FINANCED") {
+                                    // If already financed, check if there's remaining available credit
+                                    if (creditLineInfo) {
+                                        hasAvailableCredit = creditLineInfo.availableCredit > 0;
+                                    } else {
+                                        // Fallback: use invoice data if creditLineInfo not loaded yet
+                                        // Both are strings in cents format
+                                        const usedCreditStr = inv.usedCredit ? String(inv.usedCredit) : "0";
+                                        const maxCreditLineStr = inv.maxCreditLine ? String(inv.maxCreditLine) : "0";
+                                        
+                                        const usedCreditNum = Number(usedCreditStr);
+                                        const maxCreditLineNum = Number(maxCreditLineStr);
+                                        
+                                        if (!isNaN(usedCreditNum) && !isNaN(maxCreditLineNum)) {
+                                            hasAvailableCredit = (maxCreditLineNum - usedCreditNum) > 0;
+                                        } else {
+                                            // If we can't parse the values, assume there might be credit available
+                                            // This prevents the button from disappearing while data loads
+                                            hasAvailableCredit = true;
+                                        }
+                                    }
+                                } else {
+                                    // If not financed yet, can always finance (will be limited by position after lock)
+                                    hasAvailableCredit = true;
+                                }
+                                
+                                return hasAvailableCredit ? (
+                                    <button 
+                                        style={styles.buttonPrimary}
+                                        onClick={openFinanceModal}
+                                        disabled={loading || !address}
+                                    >
+                                        <span>✓</span>
+                                        <span>{inv.isFinanced || (inv.status as string) === "FINANCED" ? "Draw More Credit" : "Approve Financing"}</span>
+                                    </button>
+                                ) : null;
+                            })()
                         )}
                     </div>
                 </div>
@@ -1890,6 +2163,15 @@ export default function InvoiceDetailPage() {
                                 >
                                     Record Payment
                                 </button>
+                                {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0 && (
+                                    <button
+                                        style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                        onClick={openRepayModal}
+                                        disabled={loading || !address}
+                                    >
+                                        Repay Credit
+                                    </button>
+                                )}
                                 {userRole?.isAdmin && (
                                     <button
                                         style={{
@@ -2122,6 +2404,233 @@ export default function InvoiceDetailPage() {
                                 disabled={loading}
                             >
                                 {loading ? "Declaring..." : "Declare Default"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Finance Modal */}
+            {showFinanceModal && inv && (
+                <div style={styles.modalOverlay} onClick={() => !loading && setShowFinanceModal(false)}>
+                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Approve Financing</h2>
+                            <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
+                                Invoice: <strong>{inv.externalId}</strong>
+                            </p>
+                        </div>
+                        <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+                            <div style={{ marginBottom: "12px" }}>
+                                <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Available Credit</div>
+                                <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
+                                    {formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}
+                                </div>
+                            </div>
+                            {poolAvailableLiquidity > 0n && (
+                                <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
+                                    Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.formLabel}>Quick Select</label>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                {[10, 25, 50, 75, 100].map((percent) => {
+                                    const amount = (Number(availableCredit) / 100) * (percent / 100);
+                                    const isSelected = selectedFinancePercentage === percent;
+                                    return (
+                                        <button
+                                            key={percent}
+                                            onClick={() => {
+                                                setSelectedFinancePercentage(percent);
+                                                setFinanceAmount(amount.toFixed(2));
+                                            }}
+                                            style={{
+                                                flex: "1 1 auto",
+                                                minWidth: "60px",
+                                                padding: "10px",
+                                                fontSize: "13px",
+                                                fontWeight: isSelected ? 600 : 500,
+                                                border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
+                                                borderRadius: "4px",
+                                                background: isSelected ? "#2563eb" : "#ffffff",
+                                                color: isSelected ? "#ffffff" : "#1a1a1a",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            {percent}%
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.formLabel}>Or Enter Custom Amount</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max={Number(availableCredit) / 100}
+                                value={financeAmount}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    setFinanceAmount(value);
+                                    if (selectedFinancePercentage !== null) {
+                                        const expectedAmount = (Number(availableCredit) / 100) * (selectedFinancePercentage / 100);
+                                        if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
+                                            setSelectedFinancePercentage(null);
+                                        }
+                                    }
+                                    const numValue = parseFloat(value);
+                                    if (!isNaN(numValue) && numValue > Number(availableCredit) / 100) {
+                                        setFinanceAmount((Number(availableCredit) / 100).toString());
+                                    }
+                                }}
+                                style={styles.formInput}
+                                placeholder="0.00"
+                            />
+                            {financeAmount && parseFloat(financeAmount) > 0 && (
+                                <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
+                                    Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), inv.currency || "TRY")}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={styles.modalActions}>
+                            <button
+                                style={styles.buttonSecondary}
+                                onClick={() => {
+                                    setShowFinanceModal(false);
+                                    setFinanceAmount("");
+                                    setSelectedFinancePercentage(null);
+                                }}
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                style={{
+                                    ...styles.buttonPrimary,
+                                    ...((!financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                                }}
+                                onClick={handleFinance}
+                                disabled={loading || !financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100}
+                            >
+                                {loading ? "Processing..." : "Confirm Financing"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Repay Credit Modal */}
+            {showRepayModal && inv && (
+                <div style={styles.modalOverlay} onClick={() => !loading && setShowRepayModal(false)}>
+                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Repay Credit</h2>
+                            <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
+                                Invoice: <strong>{inv.externalId}</strong>
+                            </p>
+                        </div>
+                        <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+                            <div style={{ marginBottom: "12px" }}>
+                                <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Outstanding Debt</div>
+                                <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
+                                    {formatAmount((Number(currentDebt) / 100).toString(), inv.currency || "TRY")}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.formLabel}>Quick Select</label>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                {[10, 25, 50, 75, 100].map((percent) => {
+                                    const amount = (Number(currentDebt) / 100) * (percent / 100);
+                                    const isSelected = selectedPercentage === percent;
+                                    return (
+                                        <button
+                                            key={percent}
+                                            onClick={() => {
+                                                setSelectedPercentage(percent);
+                                                setRepayAmount(amount.toFixed(2));
+                                            }}
+                                            style={{
+                                                flex: "1 1 auto",
+                                                minWidth: "60px",
+                                                padding: "10px",
+                                                fontSize: "13px",
+                                                fontWeight: isSelected ? 600 : 500,
+                                                border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
+                                                borderRadius: "4px",
+                                                background: isSelected ? "#2563eb" : "#ffffff",
+                                                color: isSelected ? "#ffffff" : "#1a1a1a",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            {percent}%
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.formLabel}>Or Enter Custom Amount</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max={Number(currentDebt) / 100}
+                                value={repayAmount}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    setRepayAmount(value);
+                                    if (selectedPercentage !== null) {
+                                        const expectedAmount = (Number(currentDebt) / 100) * (selectedPercentage / 100);
+                                        if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
+                                            setSelectedPercentage(null);
+                                        }
+                                    }
+                                    const numValue = parseFloat(value);
+                                    if (!isNaN(numValue) && numValue > Number(currentDebt) / 100) {
+                                        setRepayAmount((Number(currentDebt) / 100).toString());
+                                    }
+                                }}
+                                style={styles.formInput}
+                                placeholder="0.00"
+                            />
+                            {repayAmount && parseFloat(repayAmount) > 0 && (
+                                <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
+                                    Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), inv.currency || "TRY")}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={styles.modalActions}>
+                            <button
+                                style={styles.buttonSecondary}
+                                onClick={() => {
+                                    setShowRepayModal(false);
+                                    setRepayAmount("");
+                                    setSelectedPercentage(null);
+                                }}
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                style={{
+                                    ...styles.buttonPrimary,
+                                    ...((!repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                                }}
+                                onClick={executeRepayment}
+                                disabled={loading || !repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100}
+                            >
+                                {loading ? "Processing..." : "Confirm Repayment"}
                             </button>
                         </div>
                     </div>

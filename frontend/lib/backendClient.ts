@@ -133,6 +133,23 @@ export async function declareDefault(id: string, payload: { reason?: string; los
     return res.json();
 }
 
+export async function notifyRepayment(id: string, payload: { txHash: string; amount?: string }, walletAddress?: string) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    const res = await fetch(`${BACKEND_URL}/invoices/${id}/repay-notification`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.message || "Failed to notify repayment");
+    }
+    return res.json();
+}
+
 export async function fetchInvoices(params?: { status?: string; companyId?: string }) {
     // Use URL constructor for safer query param handling
     const url = new URL("/invoices", BACKEND_URL);
@@ -375,6 +392,91 @@ export interface TruthMismatch {
     onchain: string | number;
     indexed: string | number;
     diff: string | number;
+}
+
+// Risk Exposure Types
+export interface RiskSnapshot {
+    asOf: string;
+    overall: {
+        score: number;
+        label: "Low" | "Medium" | "Elevated";
+        trend: "up" | "down" | "stable";
+        confidence: number;
+    };
+    sectors: Array<{
+        name: string;
+        allocationPct: number;
+        riskMultiplier: number;
+        drivers: string[];
+        delta7d?: {
+            allocationPct: number;
+            riskMultiplier: number;
+        };
+    }>;
+    structure: {
+        recoursePct: number;
+        nonRecoursePct: number;
+        aiPreference?: "recourse" | "non-recourse" | null;
+        delta7d?: {
+            recoursePct: number;
+            nonRecoursePct: number;
+        };
+    };
+    stress: {
+        defaultBuffer: {
+            value: number;
+            status: "safe" | "watch" | "critical";
+            thresholds: { watch: number; critical: number };
+            series: number[];
+        };
+        avgTenorDays: {
+            value: number;
+            status: "safe" | "watch" | "critical";
+            thresholds: { watch: number; critical: number };
+            series: number[];
+        };
+        top5Concentration: {
+            value: number;
+            status: "safe" | "watch" | "critical";
+            thresholds: { watch: number; critical: number };
+            series: number[];
+        };
+        overdueRate: {
+            value: number;
+            status: "safe" | "watch" | "critical";
+            thresholds: { watch: number; critical: number };
+            series: number[];
+        };
+    };
+    observations: Array<{
+        id: string;
+        severity: "info" | "watch" | "alert";
+        text: string;
+        ts: string;
+    }>;
+    driversTop: string[];
+}
+
+export interface RiskHistory {
+    points: Array<{
+        ts: string;
+        overallScore: number;
+        sectorAllocations: Record<string, number>;
+    }>;
+    sectorChanges: Array<{
+        name: string;
+        allocationDelta: number;
+        multiplierDelta: number;
+    }>;
+}
+
+export interface RiskProjection {
+    projectedPoints: Array<{
+        ts: string;
+        score: number;
+    }>;
+    assumptions: string[];
+    explainability: string[];
 }
 
 export interface ReconciledPoolTruth {
@@ -720,4 +822,58 @@ export async function fetchAgentConsole(): Promise<AgentConsoleData> {
         throw new Error(`${errorMessage}${errorDetails}`);
     }
     return res.json();
+}
+
+// Risk Exposure API functions
+export async function fetchRiskSnapshot(poolId?: string): Promise<RiskSnapshot> {
+    try {
+        const url = new URL(`${BACKEND_URL}/lp/risk/snapshot`);
+        if (poolId) {
+            url.searchParams.set("poolId", poolId);
+        }
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Failed to fetch risk snapshot: ${res.statusText}`);
+        }
+        return res.json();
+    } catch (e: any) {
+        throw new Error(`Failed to fetch risk snapshot: ${e.message}`);
+    }
+}
+
+export async function fetchRiskHistory(poolId?: string, range: string = "7d"): Promise<RiskHistory> {
+    try {
+        const url = new URL(`${BACKEND_URL}/lp/risk/history`);
+        if (poolId) {
+            url.searchParams.set("poolId", poolId);
+        }
+        url.searchParams.set("range", range);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Failed to fetch risk history: ${res.statusText}`);
+        }
+        return res.json();
+    } catch (e: any) {
+        throw new Error(`Failed to fetch risk history: ${e.message}`);
+    }
+}
+
+export async function fetchRiskProjection(poolId?: string, horizon: string = "7d"): Promise<RiskProjection> {
+    try {
+        const url = new URL(`${BACKEND_URL}/lp/risk/projection`);
+        if (poolId) {
+            url.searchParams.set("poolId", poolId);
+        }
+        url.searchParams.set("horizon", horizon);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Failed to fetch risk projection: ${res.statusText}`);
+        }
+        return res.json();
+    } catch (e: any) {
+        throw new Error(`Failed to fetch risk projection: ${e.message}`);
+    }
 }

@@ -19,3 +19,4 @@ export default func;
 func.tags = ["LPShareToken"];
 
 
+

@@ -7,7 +7,8 @@ import {
     PaymentNotificationSchema,
     FinancingRequestSchema,
     RecoursePaymentSchema,
-    DefaultDeclarationSchema
+    DefaultDeclarationSchema,
+    RepayNotificationSchema
 } from '../schemas/invoices';
 import { ethers } from 'ethers';
 import { provider, signer, loadContract } from '../onchain/provider';
@@ -74,7 +75,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         const query = z.object({
             companyId: z.string().optional(),
             status: z.string().optional(),
-            limit: z.coerce.number().optional().default(50)
+            limit: z.coerce.number().optional().default(100) // Increased default limit
         }).parse(req.query);
 
         // Build where clause
@@ -93,28 +94,48 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             include: { payments: true }
         });
 
-        // Fetch debt information from contract for financed invoices
+        // Fetch debt information: Use DB first, then on-chain as fallback
         const FinancingPool = loadContract("FinancingPool");
         const invoicesWithDebt = await Promise.all(
             invoices.map(async (inv) => {
+                // Use DB value if exists, otherwise read from on-chain
                 if (inv.invoiceIdOnChain && inv.isFinanced) {
-                    try {
-                        const position = await FinancingPool.getPosition(inv.invoiceIdOnChain);
-                        if (position.exists) {
-                            return {
-                                ...inv,
-                                usedCredit: position.usedCredit.toString(), // Debt amount in cents
-                                maxCreditLine: position.maxCreditLine.toString()
-                            };
+                    let usedCredit = inv.usedCredit || "0";
+                    let maxCreditLine = inv.maxCreditLine || "0";
+                    
+                    // If DB doesn't have values, read from on-chain and sync
+                    if (!inv.usedCredit || inv.usedCredit === "0" || !inv.maxCreditLine || inv.maxCreditLine === "0") {
+                        try {
+                            const position = await FinancingPool.getPosition(inv.invoiceIdOnChain);
+                            if (position.exists) {
+                                usedCredit = position.usedCredit.toString();
+                                maxCreditLine = position.maxCreditLine.toString();
+                                
+                                // Sync to DB
+                                await prisma.invoice.update({
+                                    where: { id: inv.id },
+                                    data: {
+                                        usedCredit: usedCredit,
+                                        maxCreditLine: maxCreditLine,
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            console.error(`Error fetching debt for invoice ${inv.id}:`, e);
                         }
-                    } catch (e) {
-                        console.error(`Error fetching debt for invoice ${inv.id}:`, e);
                     }
+                    
+                    return {
+                        ...inv,
+                        usedCredit: usedCredit,
+                        maxCreditLine: maxCreditLine
+                    };
                 }
+                
                 return {
                     ...inv,
-                    usedCredit: "0",
-                    maxCreditLine: "0"
+                    usedCredit: inv.usedCredit || "0",
+                    maxCreditLine: inv.maxCreditLine || "0"
                 };
             })
         );
@@ -133,6 +154,31 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice) {
             return reply.code(404).send({ error: 'Invoice not found' });
         }
+        
+        // If financed, ensure usedCredit is populated
+        if (invoice.isFinanced && invoice.invoiceIdOnChain) {
+            if (!invoice.usedCredit || invoice.usedCredit === "0" || !invoice.maxCreditLine || invoice.maxCreditLine === "0") {
+                try {
+                    const FinancingPool = loadContract("FinancingPool");
+                    const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
+                    if (position.exists) {
+                        // Sync to DB
+                        await prisma.invoice.update({
+                            where: { id },
+                            data: {
+                                usedCredit: position.usedCredit.toString(),
+                                maxCreditLine: position.maxCreditLine.toString(),
+                            }
+                        });
+                        invoice.usedCredit = position.usedCredit.toString();
+                        invoice.maxCreditLine = position.maxCreditLine.toString();
+                    }
+                } catch (e) {
+                    console.error(`Error fetching debt for invoice ${id}:`, e);
+                }
+            }
+        }
+        
         return invoice;
     });
 
@@ -313,12 +359,17 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             if (body.txHash) {
                 console.log(`[Finance] On-chain transaction already completed for ${invoice.externalId}, txHash: ${body.txHash}`);
                 
-                // Verify the transaction on-chain
+                // Verify the transaction on-chain and get position data
+                let usedCredit = requestedAmount.toString();
+                let maxCreditLine = requestedAmount.toString();
                 try {
                     const FinancingPool = loadContract("FinancingPool");
                     const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
                     
-                    if (!position.exists) {
+                    if (position.exists) {
+                        usedCredit = position.usedCredit.toString();
+                        maxCreditLine = position.maxCreditLine.toString();
+                    } else {
                         console.warn(`[Finance] Position not found for invoice ${invoice.externalId} after on-chain transaction`);
                         // Still update DB as transaction was successful
                     }
@@ -330,7 +381,12 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 // Update database to reflect financing
                 const updated = await prisma.invoice.update({
                     where: { id },
-                    data: { isFinanced: true, status: 'FINANCED' }
+                    data: { 
+                        isFinanced: true, 
+                        status: 'FINANCED',
+                        usedCredit: usedCredit,
+                        maxCreditLine: maxCreditLine,
+                    }
                 });
 
                 // Emit WebSocket events
@@ -367,7 +423,12 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
                 const updated = await prisma.invoice.update({
                     where: { id },
-                    data: { isFinanced: true, status: 'FINANCED' }
+                    data: { 
+                        isFinanced: true, 
+                        status: 'FINANCED',
+                        usedCredit: requestedAmount.toString(),
+                        maxCreditLine: requestedAmount.toString(),
+                    }
                 });
 
                 // Emit WebSocket event
@@ -459,9 +520,16 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const receipt = await txDraw.wait();
             console.log(`Credit drawn. Tx: ${receipt.transactionHash}`);
 
+            // Read position after credit draw to get actual usedCredit and maxCreditLine
+            const finalPosition = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
             const updated = await prisma.invoice.update({
                 where: { id },
-                data: { isFinanced: true, status: 'FINANCED' }
+                data: { 
+                    isFinanced: true, 
+                    status: 'FINANCED',
+                    usedCredit: finalPosition.usedCredit.toString(),
+                    maxCreditLine: finalPosition.maxCreditLine.toString(),
+                }
             });
 
             // Emit WebSocket events
@@ -749,6 +817,82 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         } catch (e: any) {
             console.error("Default declaration failed:", e);
             return reply.code(500).send({ error: e.message || "Default declaration failed" });
+        }
+    });
+
+    // POST /invoices/:id/repay-notification - Notification after on-chain repayCredit transaction
+    app.post('/:id/repay-notification', { preHandler: [requireWallet] }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const body = RepayNotificationSchema.parse(req.body);
+
+        const invoice = await prisma.invoice.findUnique({ where: { id } });
+        if (!invoice) return reply.code(404).send({ error: 'Invoice not found' });
+        if (!invoice.invoiceIdOnChain) return reply.code(400).send({ error: 'Invoice not on-chain' });
+        if (!invoice.isFinanced) return reply.code(400).send({ error: 'Invoice not financed' });
+
+        try {
+            const FinancingPool = loadContract("FinancingPool");
+            const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
+            
+            if (!position.exists) {
+                return reply.code(404).send({ error: 'Position not found on-chain' });
+            }
+
+            // Read current usedCredit from on-chain (after repayment)
+            const currentUsedCredit = position.usedCredit;
+            const interestAccrued = position.interestAccrued;
+            const totalDebt = currentUsedCredit.add(interestAccrued);
+
+            // Determine if invoice is fully paid
+            let newStatus = invoice.status;
+            if (currentUsedCredit.eq(0) && interestAccrued.eq(0)) {
+                newStatus = 'PAID';
+            } else if (currentUsedCredit.lt(BigInt(invoice.usedCredit || "0"))) {
+                // Partial repayment
+                if (newStatus !== 'PAID') {
+                    newStatus = 'PARTIALLY_PAID';
+                }
+            }
+
+            // Update invoice with new usedCredit
+            const updatedInvoice = await prisma.invoice.update({
+                where: { id },
+                data: {
+                    usedCredit: currentUsedCredit.toString(),
+                    status: newStatus,
+                }
+            });
+
+            // Emit WebSocket event
+            emitInvoiceEvent(id, {
+                type: 'invoice.repaid',
+                payload: {
+                    invoiceId: id,
+                    externalId: invoice.externalId,
+                    repaidAmount: body.amount || (BigInt(invoice.usedCredit || "0").sub(currentUsedCredit).toString()),
+                    remainingDebt: currentUsedCredit.toString(),
+                    totalDebt: totalDebt.toString(),
+                    status: newStatus,
+                    txHash: body.txHash,
+                },
+            });
+
+            // Emit pool utilization change event
+            emitPoolEvent({
+                type: 'pool.utilization_changed',
+                payload: {},
+            });
+
+            return {
+                success: true,
+                invoice: updatedInvoice,
+                remainingDebt: currentUsedCredit.toString(),
+                totalDebt: totalDebt.toString(),
+                status: newStatus,
+            };
+        } catch (e: any) {
+            console.error("Repay notification failed:", e);
+            return reply.code(500).send({ error: e.message || "Repay notification failed" });
         }
     });
 }

@@ -12,6 +12,7 @@ import { formatAmount, formatDate } from "../../lib/format";
 import { useWalletWebSocket } from "../../lib/websocketClient";
 import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
+import { RiskExposureCard } from "../../components/lp/RiskExposureCard";
 
 // Premium institutional fintech styling
 const styles = {
@@ -922,9 +923,9 @@ export default function LPDashboardPage() {
                 </div>
 
                 {/* Capital Management & Risk Exposure */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px", alignItems: "flex-start" }}>
                     {/* Capital Management */}
-                    <div style={styles.section}>
+                    <div style={{ ...styles.section, display: "flex", flexDirection: "column", maxHeight: "600px", overflow: "hidden", padding: "24px", borderRadius: "8px" }}>
                         <div style={styles.sectionHeader}>
                             <h2 style={styles.sectionTitle}>Capital Management</h2>
                         </div>
@@ -943,6 +944,7 @@ export default function LPDashboardPage() {
                             </button>
                         </div>
 
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
                         {activeTab === "deposit" ? (
                             <>
                                 {/* TestToken Mint Section */}
@@ -998,6 +1000,7 @@ export default function LPDashboardPage() {
                                 <button
                                     style={{
                                         ...styles.buttonPrimary,
+                                        marginTop: "auto",
                                         ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? styles.buttonDisabled : {}),
                                     }}
                                     onClick={handleDeposit}
@@ -1056,6 +1059,7 @@ export default function LPDashboardPage() {
                                 <button
                                     style={{
                                         ...styles.buttonPrimary,
+                                        marginTop: "auto",
                                         ...((loading && loadingType !== "withdraw") || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled ? styles.buttonDisabled : {}),
                                     }}
                                     onClick={handleWithdraw}
@@ -1065,85 +1069,11 @@ export default function LPDashboardPage() {
                                 </button>
                             </>
                         )}
+                        </div>
                     </div>
 
                     {/* Risk Exposure */}
-                    <div style={styles.section}>
-                        <div style={styles.sectionHeader}>
-                            <h2 style={styles.sectionTitle}>Risk Exposure</h2>
-                            <a href="#" style={styles.downloadLink}>Download Report</a>
-                        </div>
-                        <div style={styles.riskGrid}>
-                            <div>
-                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginBottom: "16px" }}>
-                                    Exposure by Sector
-                                </div>
-                                <ul style={styles.riskList}>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Technology</span>
-                                        <div style={{ flex: 1, marginLeft: "16px" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                                <span style={styles.riskValue}>40%</span>
-                                            </div>
-                                            <div style={styles.progressBar}>
-                                                <div style={{ ...styles.progressFill, width: "40%" }}></div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Logistics</span>
-                                        <div style={{ flex: 1, marginLeft: "16px" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                                <span style={styles.riskValue}>30%</span>
-                                            </div>
-                                            <div style={styles.progressBar}>
-                                                <div style={{ ...styles.progressFill, width: "30%" }}></div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Healthcare</span>
-                                        <div style={{ flex: 1, marginLeft: "16px" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                                <span style={styles.riskValue}>30%</span>
-                                            </div>
-                                            <div style={styles.progressBar}>
-                                                <div style={{ ...styles.progressFill, width: "30%" }}></div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div>
-                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginBottom: "16px" }}>
-                                    Structure
-                                </div>
-                                <ul style={styles.riskList}>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Recourse</span>
-                                        <span style={styles.riskValue}>●</span>
-                                    </li>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Non-Recourse</span>
-                                        <span style={{ ...styles.riskValue, color: "#999" }}>○</span>
-                                    </li>
-                                </ul>
-                                <div style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", marginTop: "24px", marginBottom: "16px" }}>
-                                    Stress Indicators
-                                </div>
-                                <ul style={styles.riskList}>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Default Buffer</span>
-                                        <span style={styles.riskValue}>2.45x</span>
-                                    </li>
-                                    <li style={styles.riskItem}>
-                                        <span style={styles.riskLabel}>Avg. Tenor</span>
-                                        <span style={styles.riskValue}>42 Days</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
+                    <RiskExposureCard />
                 </div>
 
                 {/* Transaction Ledger */}

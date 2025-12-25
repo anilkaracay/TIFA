@@ -240,3 +240,4 @@ export function useWalletWebSocket(wallet: string | null) {
     return useWebSocket(wallet ? `wallet:${wallet.toLowerCase()}` : 'global', !!wallet);
 }
 
+

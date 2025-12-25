@@ -125,3 +125,4 @@ curl http://localhost:4000/truth/pool/yield?windowDays=7 | jq '.apr, .apy'
 The truth service is fully implemented and operational. Backend enforces single source of truth, reconciliation runs automatically, and UI shows warnings when needed. Existing functionality is preserved.
 
 
+

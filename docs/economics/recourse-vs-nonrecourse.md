@@ -340,3 +340,4 @@ The recourse vs non-recourse choice provides flexibility for different risk prof
 Both models are production-ready and provide clear risk/return trade-offs for all participants.
 
 
+

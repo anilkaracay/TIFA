@@ -2,6 +2,7 @@
 import { ethers } from "ethers";
 import { provider, loadContract } from "./provider";
 import { prisma } from "../db";
+import { emitInvoiceEvent, emitPoolEvent } from "../websocket/server";
 
 export function startEventListeners() {
     console.log("Starting on-chain event listeners...");
@@ -36,7 +37,7 @@ export function startEventListeners() {
 
             // So `cleanInvoiceId` should be the UUID.
 
-            await prisma.invoice.update({
+            const updated = await prisma.invoice.update({
                 where: { id: cleanInvoiceId },
                 data: {
                     status: 'TOKENIZED',
@@ -46,6 +47,18 @@ export function startEventListeners() {
                 }
             });
             console.log(`DB updated for ${cleanInvoiceId}`);
+            
+            // Emit WebSocket event
+            emitInvoiceEvent(cleanInvoiceId, {
+                type: 'invoice.tokenized',
+                payload: {
+                    invoiceId: cleanInvoiceId,
+                    externalId: updated.externalId,
+                    tokenId: tokenId.toString(),
+                    invoiceIdOnChain: invoiceId,
+                    txHash: event.transactionHash,
+                },
+            });
         } catch (e) {
             console.error("Error handling InvoiceMinted:", e);
         }
@@ -63,14 +76,43 @@ export function startEventListeners() {
         console.log(`[Event] CreditDrawn: ${invoiceId}`);
         try {
             const cleanInvoiceId = ethers.utils.parseBytes32String(invoiceId);
-            await prisma.invoice.update({
+            
+            // Read position to get usedCredit and maxCreditLine
+            const position = await FinancingPool.getPosition(invoiceId);
+            
+            let usedCredit = amount.toString();
+            let maxCreditLine = amount.toString();
+            
+            if (position.exists) {
+                usedCredit = position.usedCredit.toString();
+                maxCreditLine = position.maxCreditLine.toString();
+            }
+            
+            const updated = await prisma.invoice.update({
                 where: { id: cleanInvoiceId },
                 data: {
                     status: 'FINANCED',
-                    isFinanced: true
+                    isFinanced: true,
+                    usedCredit: usedCredit,
+                    maxCreditLine: maxCreditLine,
                 }
             });
             console.log(`DB updated (FINANCED) for ${cleanInvoiceId}`);
+            
+            // Emit WebSocket events
+            emitInvoiceEvent(cleanInvoiceId, {
+                type: 'invoice.financed',
+                payload: {
+                    invoiceId: cleanInvoiceId,
+                    externalId: updated.externalId,
+                    approvedAmount: amount.toString(),
+                    txHash: event.transactionHash,
+                },
+            });
+            emitPoolEvent({
+                type: 'pool.utilization_changed',
+                payload: {},
+            });
         } catch (e) {
             console.error("Error handling CreditDrawn:", e);
         }
@@ -85,22 +127,45 @@ export function startEventListeners() {
             const inv = await prisma.invoice.findUnique({ where: { id: cleanInvoiceId } });
             if (!inv) return;
 
+            // Read position to get current usedCredit
+            const position = await FinancingPool.getPosition(invoiceId);
+            const currentUsedCredit = position.exists ? position.usedCredit.toString() : remainingDebt.toString();
+
             // Treat repayment as "payment towards invoice"
             const currentPaid = BigInt(inv.cumulativePaid || "0");
             const newPaid = currentPaid + BigInt(amount.toString());
 
             const newStatus = BigInt(remainingDebt.toString()) === 0n ? 'PAID' : 'PARTIALLY_PAID';
 
-            await prisma.invoice.update({
+            const updated = await prisma.invoice.update({
                 where: { id: cleanInvoiceId },
                 data: {
                     status: newStatus,
                     cumulativePaid: newPaid.toString(),
+                    usedCredit: currentUsedCredit,
                     // If fully repaid, we might consider isFinanced = false? 
                     // Or keep it true but status PAID? Let's keep isFinanced true as history.
                 }
             });
-            console.log(`DB updated (${newStatus}) for ${cleanInvoiceId}. Paid: ${newPaid}`);
+            console.log(`DB updated (${newStatus}) for ${cleanInvoiceId}. Paid: ${newPaid}, Remaining: ${remainingDebt}`);
+            
+            // Emit WebSocket events
+            emitInvoiceEvent(cleanInvoiceId, {
+                type: 'invoice.repaid',
+                payload: {
+                    invoiceId: cleanInvoiceId,
+                    externalId: updated.externalId,
+                    repaidAmount: amount.toString(),
+                    remainingDebt: currentUsedCredit,
+                    totalDebt: currentUsedCredit,
+                    status: newStatus,
+                    txHash: event.transactionHash,
+                },
+            });
+            emitPoolEvent({
+                type: 'pool.utilization_changed',
+                payload: {},
+            });
         } catch (e) {
             console.error("Error handling CreditRepaid:", e);
         }

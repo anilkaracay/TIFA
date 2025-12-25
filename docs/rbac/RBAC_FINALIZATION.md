@@ -229,3 +229,4 @@ ADMIN_WALLETS=0x123...,0x456...  # Comma-separated admin wallet addresses
 RBAC is fully implemented and operational. Backend enforces role-based access, UI shows/hides features based on role, and all existing functionality is preserved.
 
 
+

@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export type Company = {
     id: string;
@@ -9,9 +9,19 @@ export type Company = {
 };
 
 export async function fetchCompanies(): Promise<Company[]> {
-    const res = await fetch(`${BACKEND_URL}/companies`, { cache: "no-store" });
-    if (!res.ok) throw new Error("Failed to fetch companies");
-    return res.json();
+    try {
+        const res = await fetch(`${BACKEND_URL}/companies`, { cache: "no-store" });
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error('[CompanyClient] Failed to fetch companies:', res.status, errorText);
+            throw new Error(`Failed to fetch companies: ${res.status} ${res.statusText}`);
+        }
+        const data = await res.json();
+        return data;
+    } catch (error: any) {
+        console.error('[CompanyClient] Error fetching companies:', error);
+        throw error;
+    }
 }
 
 export type CashflowBucket = {

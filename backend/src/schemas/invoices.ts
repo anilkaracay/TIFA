@@ -43,9 +43,15 @@ export const DefaultDeclarationSchema = z.object({
     lossAmount: z.string().optional(), // Calculated if not provided
 });
 
+export const RepayNotificationSchema = z.object({
+    txHash: z.string(),
+    amount: z.string().optional(), // Optional, will be read from on-chain if not provided
+});
+
 export type InvoiceCreate = z.infer<typeof InvoiceCreateSchema>;
 export type InvoiceUpdate = z.infer<typeof InvoiceUpdateSchema>;
 export type PaymentNotification = z.infer<typeof PaymentNotificationSchema>;
 export type FinancingRequest = z.infer<typeof FinancingRequestSchema>;
 export type RecoursePayment = z.infer<typeof RecoursePaymentSchema>;
 export type DefaultDeclaration = z.infer<typeof DefaultDeclarationSchema>;
+export type RepayNotification = z.infer<typeof RepayNotificationSchema>;

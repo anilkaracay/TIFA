@@ -39,6 +39,8 @@ model Invoice {
   dueDate        DateTime
   status         String      // DRAFT, ISSUED, TOKENIZED, FINANCED, PARTIALLY_PAID, PAID, DEFAULTED
   cumulativePaid String      @default("0")
+  usedCredit     String?     // Amount of credit drawn (in cents, as string for precision)
+  maxCreditLine  String?     // Maximum credit line approved (in cents, as string for precision)
   isFinanced     Boolean     @default(false)
 
   createdAt      DateTime    @default(now())

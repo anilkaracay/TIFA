@@ -25,25 +25,33 @@ export async function registerCompanyRoutes(app: FastifyInstance) {
 
     // GET /companies
     app.get('/', async (req, reply) => {
-        const query = z.object({
-            q: z.string().optional(),
-            limit: z.coerce.number().optional().default(20)
-        }).parse(req.query);
+        try {
+            const query = z.object({
+                q: z.string().optional(),
+                limit: z.coerce.number().optional().default(100) // Increased default limit
+            }).parse(req.query);
 
-        const where = query.q ? {
-            OR: [
-                { name: { contains: query.q } }, // SQLite/Prisma typically insensitive by default or needs mode: 'insensitive'
-                { id: { contains: query.q } }
-            ]
-        } : {};
+            const where = query.q ? {
+                OR: [
+                    { name: { contains: query.q } }, // SQLite/Prisma typically insensitive by default or needs mode: 'insensitive'
+                    { id: { contains: query.q } }
+                ]
+            } : {};
 
-        const companies = await prisma.company.findMany({
-            where,
-            take: query.limit,
-            orderBy: { createdAt: 'desc' } // or whatever order
-        });
+            const companies = await prisma.company.findMany({
+                where,
+                take: query.limit,
+                orderBy: { createdAt: 'desc' } // or whatever order
+            });
 
-        return companies;
+            return companies;
+        } catch (error: any) {
+            console.error('[Companies] Error fetching companies:', error);
+            return reply.code(500).send({ 
+                error: 'Failed to fetch companies', 
+                message: error.message 
+            });
+        }
     });
 
     // GET /companies/:id/cashflow

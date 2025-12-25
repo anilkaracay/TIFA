@@ -475,10 +475,18 @@ export default function InvoicesPage() {
     const { showToast } = useToast();
 
     // Fetch all invoices
-    const { data: invoices, isLoading, mutate } = useSWR<Invoice[]>(
+    const { data: invoices, isLoading, error: invoicesError, mutate } = useSWR<Invoice[]>(
         "all-invoices",
         () => fetchInvoices(),
-        { refreshInterval: 10000 } // Reduced polling, WebSocket will handle updates
+        { 
+            refreshInterval: 10000, // Reduced polling, WebSocket will handle updates
+            onError: (error) => {
+                console.error('[Invoices] Failed to fetch invoices:', error);
+            },
+            onSuccess: (data) => {
+                console.log('[Invoices] Invoices loaded successfully:', data.length);
+            }
+        }
     );
 
     // Fetch companies for counterparty info
@@ -1210,6 +1218,16 @@ export default function InvoicesPage() {
                                         Loading invoices...
                                     </td>
                                 </tr>
+                            ) : invoicesError ? (
+                                <tr>
+                                    <td colSpan={6} style={{ ...styles.tableCell, textAlign: "center", padding: "60px", color: "#dc2626" }}>
+                                        Error loading invoices. Please refresh the page.
+                                        <br />
+                                        <small style={{ fontSize: "11px", color: "#666", marginTop: "8px", display: "block" }}>
+                                            {invoicesError.message || "Check backend connection"}
+                                        </small>
+                                    </td>
+                                </tr>
                             ) : paginatedInvoices.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} style={{ ...styles.tableCell, textAlign: "center", padding: "60px", color: "#666" }}>
@@ -1434,7 +1452,11 @@ export default function InvoicesPage() {
                                     style={styles.formInput}
                                 >
                                     <option value="">Select issuer company...</option>
-                                    {companies && companies.length > 0 ? (
+                                    {companiesError ? (
+                                        <option value="" disabled style={{ color: "#dc2626" }}>
+                                            Error loading companies. Please refresh.
+                                        </option>
+                                    ) : companies && companies.length > 0 ? (
                                         companies.map(c => (
                                             <option key={c.id} value={c.id}>
                                                 {c.name || c.externalId || c.id}
@@ -1444,9 +1466,14 @@ export default function InvoicesPage() {
                                         <option value="" disabled>Loading companies...</option>
                                     )}
                                 </select>
-                                {companies && companies.length === 0 && (
+                                {companiesError && (
                                     <div style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>
-                                        No companies found. Please check backend connection.
+                                        Failed to load companies. Check backend connection.
+                                    </div>
+                                )}
+                                {!companiesError && companies && companies.length === 0 && (
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                        No companies found. Create companies first.
                                     </div>
                                 )}
                             </div>
