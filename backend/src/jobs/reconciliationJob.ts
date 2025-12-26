@@ -1,4 +1,5 @@
 import { getReconciledSnapshot } from '../services/truthService';
+import { expireSessions } from '../x402/sessionStore';
 
 const RECONCILIATION_INTERVAL_MS = 60000; // 60 seconds
 const MISMATCH_THRESHOLD = 1; // Any mismatch is logged
@@ -38,6 +39,16 @@ export function startReconciliationJob() {
                     subgraphLagBlocks: reconciled.freshness.subgraphLagBlocks,
                 });
             }
+
+            // Expire x402 payment sessions
+            try {
+                const expiredCount = await expireSessions();
+                if (expiredCount > 0) {
+                    console.log(`[ReconciliationJob] Expired ${expiredCount} x402 payment session(s)`);
+                }
+            } catch (e: any) {
+                console.error('[ReconciliationJob] Error expiring x402 sessions:', e.message);
+            }
         } catch (e: any) {
             console.error('[ReconciliationJob] Error:', e.message);
         }
@@ -51,6 +62,7 @@ export function stopReconciliationJob() {
         console.log('[ReconciliationJob] Stopped');
     }
 }
+
 
 
 

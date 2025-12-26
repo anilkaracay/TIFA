@@ -895,4 +895,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             return reply.code(500).send({ error: e.message || "Repay notification failed" });
         }
     });
+
+    // Register x402 payment routes
+    const { registerX402Routes } = await import('../x402/routes');
+    await registerX402Routes(app);
 }

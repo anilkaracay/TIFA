@@ -103,3 +103,4 @@ const SlideDecisionVelocity = React.memo(({ metrics }: SlideDecisionVelocityProp
 SlideDecisionVelocity.displayName = "SlideDecisionVelocity";
 
 export default SlideDecisionVelocity;
+

@@ -18,11 +18,21 @@ async function tick() {
         const invoices = await fetchActiveInvoices();
 
         if (invoices.length === 0) {
-            // console.log("No active invoices found."); 
+            // Log heartbeat even when no invoices
+            await logAgentDecision({
+                actionType: "HEARTBEAT",
+                message: "Agent tick: No active invoices found",
+            });
             return;
         }
 
         console.log(`[Agent] Analyzed ${invoices.length} active invoices.`);
+        
+        // Log heartbeat for monitoring
+        await logAgentDecision({
+            actionType: "HEARTBEAT",
+            message: `Agent tick: Analyzed ${invoices.length} active invoices`,
+        });
 
         // Check pool state once per tick
         const poolState = await getPoolState();
@@ -79,6 +89,16 @@ async function tick() {
                 console.log(`[Agent] Invoice ${inv.externalId}: Risk=${risk}/100 -> ${actions.join(', ')}`);
             } else {
                 console.log(`[Agent] Invoice ${inv.externalId}: Risk=${risk}/100 -> No Action (Status: ${inv.status}, Financed: ${inv.isFinanced})`);
+                // Log "No Action" decisions for visibility in console
+                await logAgentDecision({
+                    invoiceId: inv.id,
+                    invoiceExternalId: inv.externalId,
+                    invoiceOnChainId: inv.invoiceIdOnChain,
+                    actionType: "NO_ACTION",
+                    previousStatus: inv.status,
+                    riskScore: risk,
+                    message: `No action required. Status: ${inv.status}, Financed: ${inv.isFinanced}`,
+                });
             }
 
             if (nextStatus) {

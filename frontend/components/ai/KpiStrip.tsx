@@ -230,3 +230,4 @@ export default function KpiStrip({ items }: KpiStripProps) {
     </div>
   );
 }
+

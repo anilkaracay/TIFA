@@ -13,7 +13,7 @@ export default function ConditionalLayout({ children }: { children: React.ReactN
     }, []);
     
     // Pages that have their own full-screen layout with navbar
-    const fullScreenPages = ["/overview", "/invoices", "/", "/lp", "/analytics", "/agent"];
+    const fullScreenPages = ["/overview", "/invoices", "/", "/lp", "/analytics", "/agent", "/x402"];
     const isFullScreenPage = pathname && (fullScreenPages.includes(pathname) || pathname.startsWith("/invoices/"));
     
     // During SSR, always render children directly (Providers is already in root layout)

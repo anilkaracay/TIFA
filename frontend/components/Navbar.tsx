@@ -72,6 +72,11 @@ export default function Navbar() {
                         <Link href="/agent" className={`nav-link-modern ${pathname === "/agent" ? "active" : ""}`}>
                             Agent Console
                         </Link>
+                        {process.env.NEXT_PUBLIC_X402_ENABLED === 'true' && (
+                            <Link href="/x402" className={`nav-link-modern ${pathname === "/x402" ? "active" : ""}`}>
+                                x402 Payments
+                            </Link>
+                        )}
                     </div>
                 </div>
                 <div style={styles.navRight}>

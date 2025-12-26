@@ -8,103 +8,196 @@ generator client {
 }
 
 model Company {
-  id          String    @id @default(cuid())
-  externalId  String?   @unique
-  name        String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String   @id @default(cuid())
+  externalId String?  @unique
+  name       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Invoices issued by this company (vendor)
-  issuedInvoices  Invoice[] @relation("CompanyIssuedInvoices")
+  issuedInvoices Invoice[] @relation("CompanyIssuedInvoices")
 
   // Invoices where this company is the debtor (buyer)
-  debtorInvoices  Invoice[] @relation("CompanyDebtorInvoices")
+  debtorInvoices Invoice[] @relation("CompanyDebtorInvoices")
+
+  // Payment authorizations for this company
+  paymentAuthorizations PaymentAuthorization[] @relation("PaymentAuthorizations")
 }
 
 model Invoice {
-  id             String    @id @default(cuid())
-  externalId     String    // ERP invoice id
-  companyId      String
-  debtorId       String
-  company        Company   @relation("CompanyIssuedInvoices", fields: [companyId], references: [id])
-  debtor         Company   @relation("CompanyDebtorInvoices", fields: [debtorId], references: [id])
+  id         String  @id @default(cuid())
+  externalId String // ERP invoice id
+  companyId  String
+  debtorId   String
+  company    Company @relation("CompanyIssuedInvoices", fields: [companyId], references: [id])
+  debtor     Company @relation("CompanyDebtorInvoices", fields: [debtorId], references: [id])
 
   // On-chain mapping
-  invoiceIdOnChain String?   // bytes32 hex string
-  tokenId          String?   // tokenId as string (bigint)
-  tokenAddress     String?   // contract address
+  invoiceIdOnChain String? // bytes32 hex string
+  tokenId          String? // tokenId as string (bigint)
+  tokenAddress     String? // contract address
 
   currency       String
   amount         String
   dueDate        DateTime
-  status         String      // DRAFT, ISSUED, TOKENIZED, FINANCED, PARTIALLY_PAID, PAID, DEFAULTED
-  cumulativePaid String      @default("0")
-  usedCredit     String?     // Amount of credit drawn (in cents, as string for precision)
-  maxCreditLine  String?     // Maximum credit line approved (in cents, as string for precision)
-  isFinanced     Boolean     @default(false)
+  status         String // DRAFT, ISSUED, TOKENIZED, FINANCED, PARTIALLY_PAID, PAID, DEFAULTED
+  cumulativePaid String   @default("0")
+  usedCredit     String? // Amount of credit drawn (in cents, as string for precision)
+  maxCreditLine  String? // Maximum credit line approved (in cents, as string for precision)
+  isFinanced     Boolean  @default(false)
 
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  payments       InvoicePayment[]
+  payments        InvoicePayment[]
+  x402Sessions    X402PaymentSession[]
+  agentExecutions AgentPaymentExecution[] @relation("AgentExecutions")
 }
 
 model InvoicePayment {
-  id         String   @id @default(cuid())
-  invoiceId  String
-  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
-  amount     String
-  currency   String
-  paidAt     DateTime
-  psp        String?
-  txHash     String?
-  createdAt  DateTime @default(now())
-
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  amount    String
+  currency  String
+  paidAt    DateTime
+  psp       String?
+  txHash    String?
+  createdAt DateTime @default(now())
 }
 
 model AgentDecision {
-    id                String   @id @default(cuid())
-    invoiceId         String?  // internal DB invoice id (optional)
-    invoiceExternalId String?  // ERP invoice id (optional)
-    invoiceOnChainId  String?  // bytes32 hex string
-    actionType        String   // STATUS_UPDATE, FINANCE, LIQUIDATE, etc.
-    previousStatus    String?  // optional
-    nextStatus        String?  // optional
-    riskScore         Int?     // 0-100
-    txHash            String?  // on-chain tx hash if any
-    message           String?  // free-form description
-    createdAt         DateTime @default(now())
+  id                String   @id @default(cuid())
+  invoiceId         String? // internal DB invoice id (optional)
+  invoiceExternalId String? // ERP invoice id (optional)
+  invoiceOnChainId  String? // bytes32 hex string
+  actionType        String // STATUS_UPDATE, FINANCE, LIQUIDATE, etc.
+  previousStatus    String? // optional
+  nextStatus        String? // optional
+  riskScore         Int? // 0-100
+  txHash            String? // on-chain tx hash if any
+  message           String? // free-form description
+  createdAt         DateTime @default(now())
 }
 
 model LPPosition {
-    id          String   @id @default(cuid())
-    wallet      String   // LP wallet address
-    shares      String   // LP shares amount (as string for precision)
-    updatedAt   DateTime @updatedAt
-    createdAt   DateTime @default(now())
-    
-    transactions LPTransaction[]
-    
-    @@unique([wallet])
-    @@index([wallet])
+  id        String   @id @default(cuid())
+  wallet    String // LP wallet address
+  shares    String // LP shares amount (as string for precision)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  transactions LPTransaction[]
+
+  @@unique([wallet])
+  @@index([wallet])
 }
 
 model LPTransaction {
-    id              String   @id @default(cuid())
-    wallet          String   // LP wallet address
-    type            String   // "Deposit" | "Withdrawal"
-    amount          String   // Amount in liquidityToken (18 decimals, formatted)
-    lpShares        String   // LP shares minted/burned (18 decimals, formatted)
-    sharePrice      String   // Share price at time of transaction (18 decimals, formatted)
-    balanceImpact   String   // Impact on balance (+amount or -amount)
-    txHash          String   // Blockchain transaction hash
-    blockNumber     String?  // Block number
-    status          String   @default("Settled") // "Settled" | "Pending"
-    createdAt       DateTime @default(now())
-    
-    lpPosition      LPPosition? @relation(fields: [wallet], references: [wallet])
-    
-    @@index([wallet])
-    @@index([txHash])
-    @@index([createdAt])
+  id            String   @id @default(cuid())
+  wallet        String // LP wallet address
+  type          String // "Deposit" | "Withdrawal"
+  amount        String // Amount in liquidityToken (18 decimals, formatted)
+  lpShares      String // LP shares minted/burned (18 decimals, formatted)
+  sharePrice    String // Share price at time of transaction (18 decimals, formatted)
+  balanceImpact String // Impact on balance (+amount or -amount)
+  txHash        String // Blockchain transaction hash
+  blockNumber   String? // Block number
+  status        String   @default("Settled") // "Settled" | "Pending"
+  createdAt     DateTime @default(now())
+
+  lpPosition LPPosition? @relation(fields: [wallet], references: [wallet])
+
+  @@index([wallet])
+  @@index([txHash])
+  @@index([createdAt])
+}
+
+model X402PaymentSession {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+  sessionId       String   @unique // UUID for external reference
+  amountRequested String
+  currency        String
+  chain           String
+  recipient       String
+  status          String // PENDING, CONFIRMED, EXPIRED
+  txHash          String?  @unique
+  expiresAt       DateTime
+  metadata        String? // JSON string
+  executionMode   String? // USER_INITIATED | AGENT_AUTHORIZED
+  authorizationId String? // Reference to PaymentAuthorization if agent-executed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([sessionId])
+  @@index([txHash])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([executionMode])
+  @@index([authorizationId])
+}
+
+model PaymentAuthorization {
+  id                           String    @id @default(cuid())
+  companyId                    String
+  company                      Company   @relation("PaymentAuthorizations", fields: [companyId], references: [id])
+  mode                         String    @default("USER_INITIATED") // USER_INITIATED | AGENT_AUTHORIZED
+  maxAmountPerInvoice          String // Maximum amount per invoice (in cents)
+  dailyLimit                   String // Daily spending limit (in cents)
+  monthlyLimit                 String // Monthly spending limit (in cents)
+  allowedCurrencies            String // JSON array of allowed currencies
+  allowedChains                String // JSON array of allowed chains
+  allowedInvoiceStatuses       String // JSON array of allowed invoice statuses
+  autoApproveFinancedInvoices  Boolean   @default(false)
+  autoApproveTokenizedInvoices Boolean   @default(false)
+  active                       Boolean   @default(true)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  revokedAt                    DateTime?
+
+  executions AgentPaymentExecution[]
+  auditLogs  AuthorizationAuditLog[]
+
+  @@index([companyId])
+  @@index([active])
+  @@index([mode])
+}
+
+model AgentPaymentExecution {
+  id              String               @id @default(cuid())
+  authorizationId String
+  authorization   PaymentAuthorization @relation(fields: [authorizationId], references: [id])
+  invoiceId       String
+  invoice         Invoice              @relation("AgentExecutions", fields: [invoiceId], references: [id])
+  sessionId       String? // x402 session ID
+  amount          String
+  currency        String
+  chain           String
+  txHash          String?
+  executionStatus String // EXECUTED | FAILED | BLOCKED
+  reason          String? // Reason for failure or blocking
+  createdAt       DateTime             @default(now())
+
+  @@index([authorizationId])
+  @@index([invoiceId])
+  @@index([executionStatus])
+  @@index([createdAt])
+  @@index([txHash])
+}
+
+model AuthorizationAuditLog {
+  id              String               @id @default(cuid())
+  authorizationId String
+  authorization   PaymentAuthorization @relation(fields: [authorizationId], references: [id])
+  action          String // CREATED | UPDATED | REVOKED | EXECUTED | BLOCKED
+  actor           String // USER | AGENT | SYSTEM
+  metadata        String? // JSON string
+  timestamp       DateTime             @default(now())
+
+  @@index([authorizationId])
+  @@index([action])
+  @@index([timestamp])
 }

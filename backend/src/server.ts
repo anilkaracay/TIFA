@@ -49,6 +49,14 @@ async function main() {
         console.warn("Reconciliation job setup failed:", e);
     }
 
+    // Start Auto Payment Agent
+    try {
+        const { AutoPaymentAgent } = require('./jobs/autoPaymentAgent');
+        AutoPaymentAgent.start();
+    } catch (e) {
+        console.warn("Auto payment agent setup failed:", e);
+    }
+
     try {
         const address = await app.listen({ port: env.PORT, host: '0.0.0.0' });
         console.log(`TIFA backend running at ${address}`);

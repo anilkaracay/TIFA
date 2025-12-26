@@ -9,4 +9,10 @@ export const env = {
     SUBGRAPH_URL: process.env.SUBGRAPH_URL ?? '',
     ADMIN_WALLETS: process.env.ADMIN_WALLETS ?? '',
     RBAC_ENABLED: process.env.RBAC_ENABLED !== 'false', // Default: enabled, set RBAC_ENABLED=false to disable
+    // x402 payment configuration
+    X402_ENABLED: process.env.X402_ENABLED === 'true',
+    X402_CHAIN: process.env.X402_CHAIN ?? 'base',
+    X402_CURRENCY: process.env.X402_CURRENCY ?? 'USDC',
+    X402_RECIPIENT: process.env.X402_RECIPIENT ?? '',
+    X402_TTL_SECONDS: Number(process.env.X402_TTL_SECONDS ?? '300'),
 };

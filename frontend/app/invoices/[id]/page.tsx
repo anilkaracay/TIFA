@@ -15,6 +15,7 @@ import { InvoiceRiskPanel } from "../../../components/invoice/InvoiceRiskPanel";
 import { useInvoiceWebSocket } from "../../../lib/websocketClient";
 import { useToast } from "../../../components/Toast";
 import { fetchUserRole } from "../../../lib/backendClient";
+import { X402PaymentButton } from "../../../components/invoice/X402PaymentButton";
 
 // Premium institutional fintech styling
 const styles = {
@@ -2155,6 +2156,16 @@ export default function InvoiceDetailPage() {
                                 >
                                     Record Payment
                                 </button>
+                                {process.env.NEXT_PUBLIC_X402_ENABLED === 'true' && (
+                                    <X402PaymentButton
+                                        invoiceId={id}
+                                        invoiceStatus={inv.status}
+                                        onPaymentConfirmed={() => {
+                                            mutateInvoice();
+                                            mutateTruth();
+                                        }}
+                                    />
+                                )}
                                 {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0 && (
                                     <button
                                         style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
