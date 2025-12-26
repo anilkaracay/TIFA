@@ -394,34 +394,95 @@ function getPerformanceBadgeStyle(performance: string): any {
 
 export default function PortfolioAnalyticsPage() {
     const pathname = usePathname();
-    
+
+    // Nuclear scroll position preservation
+    const scrollPositionRef = React.useRef({ x: 0, y: 0 });
+    const isScrollLockedRef = React.useRef(false);
+    const scrollLockTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
     // WebSocket connection for real-time updates
     const { subscribe: subscribeWS } = useWebSocket('global');
 
     const { data, error, isLoading, mutate } = useSWR<PortfolioAnalytics>(
         "portfolio-analytics",
         () => fetchPortfolioAnalytics(),
-        { refreshInterval: 60000 } // Reduced polling, WebSocket will handle updates
+        { refreshInterval: 60000 }
     );
 
     const [dateRange, setDateRange] = useState("Jan 1, 2023 - Sep 30, 2023");
 
-    // Subscribe to WebSocket events
+    // Aggressive scroll lock
+    const lockScroll = React.useCallback(() => {
+        isScrollLockedRef.current = true;
+        scrollPositionRef.current = {
+            x: window.scrollX || window.pageXOffset,
+            y: window.scrollY || window.pageYOffset,
+        };
+
+        if (scrollLockTimeoutRef.current) {
+            clearTimeout(scrollLockTimeoutRef.current);
+        }
+        scrollLockTimeoutRef.current = setTimeout(() => {
+            isScrollLockedRef.current = false;
+        }, 200);
+    }, []);
+
+    // Force scroll restore
+    const forceScrollRestore = React.useCallback(() => {
+        const { x, y } = scrollPositionRef.current;
+        window.scrollTo({ left: x, top: y, behavior: 'auto' });
+        requestAnimationFrame(() => {
+            window.scrollTo({ left: x, top: y, behavior: 'auto' });
+        });
+        setTimeout(() => {
+            window.scrollTo({ left: x, top: y, behavior: 'auto' });
+        }, 10);
+        setTimeout(() => {
+            window.scrollTo({ left: x, top: y, behavior: 'auto' });
+        }, 50);
+    }, []);
+
+    // Global scroll event override
+    React.useEffect(() => {
+        const handleScroll = () => {
+            if (isScrollLockedRef.current) {
+                forceScrollRestore();
+            } else {
+                scrollPositionRef.current = {
+                    x: window.scrollX || window.pageXOffset,
+                    y: window.scrollY || window.pageYOffset,
+                };
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+        return () => window.removeEventListener('scroll', handleScroll, { capture: true });
+    }, [forceScrollRestore]);
+
+    // Preserve and mutate with lock
+    const preserveAndMutate = React.useCallback(() => {
+        lockScroll();
+        mutate();
+        setTimeout(() => forceScrollRestore(), 0);
+        setTimeout(() => forceScrollRestore(), 50);
+    }, [mutate, lockScroll, forceScrollRestore]);
+
+    // Subscribe to WebSocket events with scroll preservation
     React.useEffect(() => {
         const unsubscribePoolUtilization = subscribeWS('pool.utilization_changed', () => {
-            mutate();
+            preserveAndMutate();
         });
 
         const unsubscribePoolLiquidity = subscribeWS('pool.liquidity_changed', () => {
-            mutate();
+            preserveAndMutate();
         });
 
         const unsubscribeInvoiceFinanced = subscribeWS('invoice.financed', () => {
-            mutate();
+            preserveAndMutate();
         });
 
         const unsubscribeInvoicePayment = subscribeWS('invoice.payment_recorded', () => {
-            mutate();
+            preserveAndMutate();
         });
 
         return () => {
@@ -430,7 +491,7 @@ export default function PortfolioAnalyticsPage() {
             unsubscribeInvoiceFinanced();
             unsubscribeInvoicePayment();
         };
-    }, [subscribeWS, mutate]);
+    }, [subscribeWS, preserveAndMutate]);
 
     if (isLoading) {
         return (
@@ -594,7 +655,7 @@ export default function PortfolioAnalyticsPage() {
     return (
         <div style={styles.page}>
             <Navbar />
-            
+
             <div style={styles.container}>
                 {/* Header */}
                 <div style={styles.header}>
@@ -664,9 +725,9 @@ export default function PortfolioAnalyticsPage() {
                         </div>
                         <div style={styles.kpiReference}>Historical avg: {data.kpis.avgInvoiceDuration.historical} days</div>
                     </div>
-            </div>
+                </div>
 
-            {/* Charts */}
+                {/* Charts */}
                 <div style={styles.chartSection}>
                     <div style={styles.chartCard}>
                         <div style={styles.chartTitle}>Capital Utilization Trend (12 Months)</div>
@@ -680,7 +741,7 @@ export default function PortfolioAnalyticsPage() {
                             <Bar data={durationChartData} options={durationChartOptions} />
                         </div>
                     </div>
-            </div>
+                </div>
 
                 {/* Yield Composition */}
                 <div style={styles.yieldSection}>
@@ -701,14 +762,14 @@ export default function PortfolioAnalyticsPage() {
                         <div style={styles.yieldLabel}>Net Yield</div>
                         <div style={styles.yieldBarContainer}>
                             <div
-                        style={{
+                                style={{
                                     ...styles.yieldBarFill,
                                     width: `${(data.yieldComposition.netYield / maxYield) * 100}%`,
                                 }}
                             />
                         </div>
                         <div style={styles.yieldValue}>{data.yieldComposition.netYield.toFixed(1)}%</div>
-                            </div>
+                    </div>
                     <div style={styles.yieldBar}>
                         <div style={styles.yieldLabel}>Benchmark</div>
                         <div style={styles.yieldBarContainer}>

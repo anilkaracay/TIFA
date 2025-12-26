@@ -8,6 +8,8 @@ import Navbar from "../../components/Navbar";
 import { fetchInvoices, fetchPoolOverview, fetchPoolLimits, PoolOverview, PoolLimits, Invoice } from "../../lib/backendClient";
 import { formatAmount, formatDate } from "../../lib/format";
 import { useWebSocket } from "../../lib/websocketClient";
+import AILifecycleSlider from "../../components/ai/AILifecycleSlider";
+import LiveBadge from "../../components/ai/LiveBadge";
 
 // Premium light fintech styling
 const styles = {
@@ -311,31 +313,31 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
 
     const statusOrder = ["ISSUED", "TOKENIZED", "FINANCED", "REPAID", "DEFAULTED"];
     const total = totalInvoices || 1;
-    
+
     // Calculate lifecycle segments with flow connections
     // Segments are positioned at fixed positions (evenly spaced around circle)
     // Segment thickness reflects invoice count, not angle span
     const angleSpan = 360 / statusOrder.length; // 72 degrees each
     let currentAngle = -90; // Start at top (-90 degrees)
-    
+
     const lifecycleSegments = statusOrder.map((status) => {
         const count = statusDistribution[status] || 0;
         const percentage = (count / total) * 100;
-        
+
         // Calculate angles so segments connect seamlessly
         const startAngle = currentAngle;
         const endAngle = currentAngle + angleSpan;
         const baseAngle = currentAngle + angleSpan / 2; // Center of segment
-        
+
         // Move to next segment start
         currentAngle = endAngle;
-        
+
         // Calculate AI confidence (mock calculation based on status and count)
         let aiConfidence = 95;
         if (status === "DEFAULTED") aiConfidence = 88;
         else if (status === "FINANCED" && count > 0) aiConfidence = 94;
         else if (status === "REPAID") aiConfidence = 97;
-        
+
         return {
             status,
             count,
@@ -358,7 +360,7 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
         const outerRadius = radius + thickness / 2;
         const centerX = 110; // SVG center for 220x220 viewBox
         const centerY = 110;
-        
+
         const x1 = centerX + innerRadius * Math.cos(start);
         const y1 = centerY + innerRadius * Math.sin(start);
         const x2 = centerX + outerRadius * Math.cos(start);
@@ -367,9 +369,9 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
         const y3 = centerY + outerRadius * Math.sin(end);
         const x4 = centerX + innerRadius * Math.cos(end);
         const y4 = centerY + innerRadius * Math.sin(end);
-        
+
         const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-        
+
         return `M ${x1} ${y1} L ${x2} ${y2} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x1} ${y1} Z`;
     };
 
@@ -406,19 +408,19 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
     const outerRingRadius = 92;
 
     return (
-        <div style={{ 
-            display: "flex", 
-            flexDirection: "column", 
-            alignItems: "center", 
+        <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             justifyContent: "center",
             marginBottom: "24px",
             padding: "24px 0",
             width: "100%"
         }}>
             {/* AI Intelligence Label */}
-            <div style={{ 
-                fontSize: "12px", 
-                color: "#1a1a1a", 
+            <div style={{
+                fontSize: "12px",
+                color: "#1a1a1a",
                 marginBottom: "8px",
                 fontWeight: 600,
                 display: "flex",
@@ -429,16 +431,16 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
             }}>
                 <span>AI Lifecycle Intelligence</span>
                 <svg width="12" height="12" viewBox="0 0 12 12" style={{ opacity: 0.6 }}>
-                    <circle cx="6" cy="3" r="1.5" fill="none" stroke="#666" strokeWidth="1"/>
-                    <circle cx="3" cy="8" r="1.5" fill="none" stroke="#666" strokeWidth="1"/>
-                    <circle cx="9" cy="8" r="1.5" fill="none" stroke="#666" strokeWidth="1"/>
-                    <line x1="6" y1="4.5" x2="4" y2="6.5" stroke="#666" strokeWidth="0.8"/>
-                    <line x1="6" y1="4.5" x2="8" y2="6.5" stroke="#666" strokeWidth="0.8"/>
+                    <circle cx="6" cy="3" r="1.5" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="3" cy="8" r="1.5" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="9" cy="8" r="1.5" fill="none" stroke="#666" strokeWidth="1" />
+                    <line x1="6" y1="4.5" x2="4" y2="6.5" stroke="#666" strokeWidth="0.8" />
+                    <line x1="6" y1="4.5" x2="8" y2="6.5" stroke="#666" strokeWidth="0.8" />
                 </svg>
             </div>
-            <div style={{ 
-                fontSize: "9px", 
-                color: "#999", 
+            <div style={{
+                fontSize: "9px",
+                color: "#999",
                 marginBottom: "20px",
                 fontStyle: "italic",
                 textAlign: "center",
@@ -448,18 +450,18 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
             </div>
 
             {/* Concentric AI Processing Graph */}
-            <div style={{ 
-                position: "relative", 
-                width: "220px", 
+            <div style={{
+                position: "relative",
+                width: "220px",
                 height: "220px",
                 maxWidth: "100%",
                 margin: "0 auto"
             }}>
-                <svg 
-                    width="220" 
-                    height="220" 
+                <svg
+                    width="220"
+                    height="220"
                     viewBox="0 0 220 220"
-                    style={{ 
+                    style={{
                         filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.04))",
                         display: "block"
                     }}
@@ -470,7 +472,7 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                             <stop offset="0%" stopColor="rgba(37, 99, 235, 0.08)" />
                             <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
                         </radialGradient>
-                        
+
                         {/* AI signal pulse gradient */}
                         <radialGradient id="aiSignalPulse" cx="50%" cy="50%">
                             <stop offset="0%" stopColor="rgba(37, 99, 235, 0.3)" />
@@ -488,7 +490,7 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                         strokeWidth="1"
                         opacity="0.4"
                     />
-                    
+
                     {/* AI signal dots/dashes */}
                     {Array.from({ length: 48 }).map((_, i) => {
                         const angle = (i / 48) * 360 - 90; // Start at top
@@ -499,7 +501,7 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                         const centerY = 110;
                         const x = centerX + outerRingRadius * Math.cos((angle * Math.PI) / 180);
                         const y = centerY + outerRingRadius * Math.sin((angle * Math.PI) / 180);
-                        
+
                         return (
                             <g key={i}>
                                 {isDash ? (
@@ -545,11 +547,11 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                         // Thickness reflects invoice count (not angle span)
                         const baseThickness = 8;
                         const maxThickness = 16;
-                        const thickness = segment.count === 0 
-                            ? 3 
+                        const thickness = segment.count === 0
+                            ? 3
                             : Math.min(maxThickness, baseThickness + (segment.count / total) * 8);
                         const nextSegment = lifecycleSegments[(index + 1) % lifecycleSegments.length];
-                        
+
                         return (
                             <g key={segment.status}>
                                 {/* Flow connection line (directional arrow hint) */}
@@ -573,7 +575,7 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                                         />
                                     </g>
                                 )}
-                                
+
                                 {/* Lifecycle arc */}
                                 <path
                                     d={createLifecycleArc(segment.startAngle, segment.endAngle, middleRingRadius, thickness)}
@@ -655,16 +657,16 @@ function AILifecycleRing({ totalInvoices, statusDistribution }: { totalInvoices:
                 {hoveredSegment && (() => {
                     const segment = lifecycleSegments.find(s => s.status === hoveredSegment);
                     if (!segment || segment.count === 0) return null;
-                    
+
                     const angle = (segment.startAngle + segment.endAngle) / 2;
                     const tooltipRadius = middleRingRadius + 25;
                     const tooltipX = 110 + tooltipRadius * Math.cos((angle * Math.PI) / 180);
                     const tooltipY = 110 + tooltipRadius * Math.sin((angle * Math.PI) / 180);
-                    
+
                     // Adjust tooltip position to stay within bounds
                     const tooltipLeft = Math.max(10, Math.min(210, tooltipX));
                     const tooltipTop = Math.max(10, Math.min(210, tooltipY));
-                    
+
                     return (
                         <div style={{
                             position: "absolute",
@@ -703,30 +705,35 @@ export default function OverviewPage() {
     const pathname = usePathname();
 
     // WebSocket connection for real-time updates
-    const { subscribe: subscribeWS } = useWebSocket('global');
+    const { subscribe: subscribeWS, isConnected } = useWebSocket('global');
 
     // Fetch all invoices
     const { data: invoices, isLoading: invoicesLoading, mutate: mutateInvoices } = useSWR<Invoice[]>(
         "all-invoices",
         () => fetchInvoices(),
-        { refreshInterval: 15000 } // Reduced polling, WebSocket will handle updates
+        { refreshInterval: 0 } // Disabled polling, WebSocket will handle updates
     );
 
     // Fetch pool overview
     const { data: poolOverview, isLoading: poolLoading, mutate: mutatePoolOverview } = useSWR<PoolOverview>(
         "pool-overview",
         () => fetchPoolOverview(),
-        { refreshInterval: 15000 }
+        { refreshInterval: 0 }
     );
 
     // Fetch pool limits
     const { data: poolLimits, isLoading: limitsLoading, mutate: mutatePoolLimits } = useSWR<PoolLimits>(
         "pool-limits",
         () => fetchPoolLimits(),
-        { refreshInterval: 15000 }
+        { refreshInterval: 0 }
     );
 
     // Subscribe to WebSocket events
+    React.useEffect(() => {
+        console.log('[OverviewPage] MOUNTED');
+        return () => console.log('[OverviewPage] UNMOUNTED');
+    }, []);
+
     React.useEffect(() => {
         const unsubscribeInvoiceCreated = subscribeWS('invoice.created', () => {
             mutateInvoices();
@@ -776,9 +783,9 @@ export default function OverviewPage() {
 
         const activeInvoices = invoices.filter(inv => {
             const status = (inv.status || "").toUpperCase();
-            return status === "ISSUED" || status === "TOKENIZED" || status === "FINANCED" || 
-                   status === "PARTIALLY_PAID" || status === "PENDING" || status === "APPROVED" ||
-                   inv.isFinanced === true;
+            return status === "ISSUED" || status === "TOKENIZED" || status === "FINANCED" ||
+                status === "PARTIALLY_PAID" || status === "PENDING" || status === "APPROVED" ||
+                inv.isFinanced === true;
         }).length;
 
         const totalFinanced = invoices
@@ -805,8 +812,8 @@ export default function OverviewPage() {
             }).length,
             FINANCED: invoices.filter(inv => {
                 const status = (inv.status || "").toUpperCase();
-                return (status === "FINANCED" || inv.isFinanced === true) && 
-                       inv.usedCredit && inv.usedCredit !== "0";
+                return (status === "FINANCED" || inv.isFinanced === true) &&
+                    inv.usedCredit && inv.usedCredit !== "0";
             }).length,
             REPAID: invoices.filter(inv => {
                 const status = (inv.status || "").toUpperCase();
@@ -832,7 +839,7 @@ export default function OverviewPage() {
                 daysUntilDue: Math.ceil((new Date(inv.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
             }))
             .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-        
+
         const upcomingMaturities = upcomingMaturitiesList.length;
 
         // Debug logging
@@ -857,19 +864,19 @@ export default function OverviewPage() {
             statusDistribution,
         });
 
-        const utilization = poolOverview.utilizationPercent 
-            ? parseFloat(poolOverview.utilizationPercent) 
+        const utilization = poolOverview.utilizationPercent
+            ? parseFloat(poolOverview.utilizationPercent)
             : (poolOverview.utilization ? parseFloat(poolOverview.utilization) : 0);
-        
-        const maxUtilization = poolOverview.maxUtilizationPercent 
-            ? parseFloat(poolOverview.maxUtilizationPercent) 
+
+        const maxUtilization = poolOverview.maxUtilizationPercent
+            ? parseFloat(poolOverview.maxUtilizationPercent)
             : 80.0; // Default 80%
-        
+
         return {
             activeInvoices,
             totalFinanced,
-            liquidityAvailable: poolOverview.availableLiquidityFormatted 
-                ? parseFloat(poolOverview.availableLiquidityFormatted) 
+            liquidityAvailable: poolOverview.availableLiquidityFormatted
+                ? parseFloat(poolOverview.availableLiquidityFormatted)
                 : (poolOverview.availableLiquidity ? parseFloat(poolOverview.availableLiquidity) / 1e18 : 0),
             utilization,
             maxUtilization,
@@ -883,7 +890,7 @@ export default function OverviewPage() {
     // Recent events (from invoices)
     const recentEvents = useMemo(() => {
         if (!invoices) return [];
-        
+
         return invoices
             .slice()
             .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -911,276 +918,445 @@ export default function OverviewPage() {
 
             {/* Main Content */}
             <div style={styles.container}>
-                {invoicesLoading || poolLoading || limitsLoading ? (
+                {(!invoices && invoicesLoading) || (!poolOverview && poolLoading) || (!poolLimits && limitsLoading) ? (
                     <div style={{ textAlign: "center", padding: "60px", color: "#666" }}>
                         Loading system overview...
                     </div>
                 ) : (
                     <>
-                {/* 1. Top System Status Bar */}
-                <div style={styles.statusBar}>
-                    <div style={styles.statusItem}>
-                        <span style={styles.statusDot}></span>
-                        <span><strong>Engine Status:</strong> Running-Nominal</span>
-                    </div>
-                    <div style={styles.statusItem}>
-                        <span><strong>Last Decision:</strong> {recentEvents[0] ? new Date(recentEvents[0].timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC" : "N/A"}</span>
-                    </div>
-                    <div style={styles.statusItem}>
-                        <span><strong>Active Rules:</strong> {poolLimits ? "Production" : "N/A"}</span>
-                    </div>
-                    <div style={styles.statusItem}>
-                        <span><strong>System Load:</strong> {metrics ? `${metrics.utilization.toFixed(1)}%` : "N/A"}</span>
-                    </div>
-                </div>
+                        {/* 1. Top System Status Bar */}
+                        <div style={styles.statusBar}>
+                            <div style={styles.statusItem}>
+                                <span style={styles.statusDot}></span>
+                                <span><strong>Engine Status:</strong> Running-Nominal</span>
+                            </div>
+                            <div style={styles.statusItem}>
+                                <span><strong>Last Decision:</strong> {recentEvents[0] ? new Date(recentEvents[0].timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC" : "N/A"}</span>
+                            </div>
+                            <div style={styles.statusItem}>
+                                <span><strong>Active Rules:</strong> {poolLimits ? "Production" : "N/A"}</span>
+                            </div>
+                            <div style={styles.statusItem}>
+                                <span><strong>System Load:</strong> {metrics ? `${metrics.utilization.toFixed(1)}%` : "N/A"}</span>
+                            </div>
+                        </div>
 
-                {/* 2. Key System Metrics */}
-                <div style={styles.kpiGrid}>
-                    <div style={styles.kpiCard}>
-                        <div style={styles.kpiTitle}>Total Active Invoices</div>
-                        <div style={styles.kpiValue}>{metrics?.activeInvoices || 0}</div>
-                        <div style={styles.kpiDelta}>Current period</div>
-                        <div style={styles.kpiIcon}>📄</div>
-                    </div>
-                    <div style={styles.kpiCard}>
-                        <div style={styles.kpiTitle}>Total Financed Amount</div>
-                        <div style={styles.kpiValue}>
-                            {metrics?.totalFinanced ? formatAmount(metrics.totalFinanced.toString(), "TRY") : "₺0"}
-                        </div>
-                        <div style={styles.kpiDelta}>Outstanding principal</div>
-                    </div>
-                    <div style={styles.kpiCard}>
-                        <div style={styles.kpiTitle}>Liquidity Available</div>
-                        <div style={styles.kpiValue}>
-                            {metrics?.liquidityAvailable ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : "₺0"}
-                        </div>
-                        <div style={styles.kpiDelta}>Pool capacity</div>
-                    </div>
-                    <div style={styles.kpiCard}>
-                        <div style={styles.kpiTitle}>Utilization Ratio</div>
-                        <div style={styles.kpiValue}>
-                            {metrics?.utilization.toFixed(1) || "0.0"}%
-                            {metrics && metrics.maxUtilization && (
-                                <span style={{ fontSize: "14px", color: "#666", fontWeight: 400, marginLeft: "8px" }}>
-                                    / {metrics.maxUtilization.toFixed(0)}% max
-                                </span>
-                            )}
-                        </div>
-                        <div style={styles.progressBar}>
-                            <div style={{ 
-                                ...styles.progressFill, 
-                                width: `${Math.min(metrics?.utilization || 0, 100)}%`,
-                                background: metrics?.utilization 
-                                    ? (metrics.utilization < 50 ? "#22c55e" : metrics.utilization < 75 ? "#f59e0b" : "#ef4444")
-                                    : "#2563eb"
-                            }}></div>
-                        </div>
-                        {metrics && metrics.utilization > 0 && (
-                            <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>
-                                Total Borrowed / Total Liquidity
+                        {/* 2. Key System Metrics */}
+                        <div style={styles.kpiGrid}>
+                            <div style={styles.kpiCard}>
+                                <div style={styles.kpiTitle}>Total Active Invoices</div>
+                                <div style={styles.kpiValue}>{metrics?.activeInvoices || 0}</div>
+                                <div style={styles.kpiDelta}>Current period</div>
+                                <div style={styles.kpiIcon}>📄</div>
                             </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 3. System Distribution & Alerts */}
-                <div style={styles.sectionGrid}>
-                    {/* Left: Invoice Status Distribution */}
-                    <div style={styles.sectionCard}>
-                        <div style={styles.sectionTitle}>Invoice Status Distribution</div>
-                        <div style={styles.sectionSubtitle}>Current financial period breakdown</div>
-                        
-                        {/* AI-Driven Radial Visualization */}
-                        {metrics && (
-                            <AILifecycleRing 
-                                totalInvoices={invoices?.length || 0}
-                                statusDistribution={metrics.statusDistribution}
-                            />
-                        )}
-                        
-                        <div style={styles.distributionGrid}>
-                            <div style={styles.distributionItem}>
-                                <div style={styles.distributionLabel}>Issued</div>
-                                <div style={styles.distributionValue}>{metrics?.statusDistribution.ISSUED || 0}</div>
-                            </div>
-                            <div style={styles.distributionItem}>
-                                <div style={styles.distributionLabel}>Tokenized</div>
-                                <div style={styles.distributionValue}>{metrics?.statusDistribution.TOKENIZED || 0}</div>
-                            </div>
-                            <div style={styles.distributionItem}>
-                                <div style={styles.distributionLabel}>Financed</div>
-                                <div style={styles.distributionValue}>{metrics?.statusDistribution.FINANCED || 0}</div>
-                            </div>
-                            <div style={styles.distributionItem}>
-                                <div style={styles.distributionLabel}>Repaid</div>
-                                <div style={styles.distributionValue}>{metrics?.statusDistribution.REPAID || 0}</div>
-                            </div>
-                            <div style={styles.distributionItem}>
-                                <div style={styles.distributionLabel}>Defaulted</div>
-                                <div style={styles.distributionValue}>{metrics?.statusDistribution.DEFAULTED || 0}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: System Alerts & Allocation */}
-                    <div>
-                        {/* Upcoming Maturities */}
-                        <div style={styles.sectionCard}>
-                            <div style={styles.sectionTitle}>Upcoming Maturity</div>
-                            <div style={styles.sectionSubtitle}>
-                                {metrics?.upcomingMaturities || 0} invoices maturing within 7 days
-                            </div>
-                            {metrics && metrics.upcomingMaturitiesList && metrics.upcomingMaturitiesList.length > 0 ? (
-                                <div style={{ marginTop: "16px" }}>
-                                    {metrics.upcomingMaturitiesList.slice(0, 5).map((inv) => (
-                                        <Link 
-                                            key={inv.id} 
-                                            href={`/invoices/${inv.id}`}
-                                            style={{ 
-                                                display: "block", 
-                                                padding: "8px 12px", 
-                                                marginBottom: "8px",
-                                                background: "#f8f9fa",
-                                                borderRadius: "4px",
-                                                textDecoration: "none",
-                                                color: "#1a1a1a",
-                                                fontSize: "12px",
-                                                border: "1px solid #e0e0e0",
-                                                transition: "all 0.2s"
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.background = "#f0f0f0";
-                                                e.currentTarget.style.borderColor = "#2563eb";
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.background = "#f8f9fa";
-                                                e.currentTarget.style.borderColor = "#e0e0e0";
-                                            }}
-                                        >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <div>
-                                                    <div style={{ fontWeight: 600, marginBottom: "2px" }}>{inv.externalId}</div>
-                                                    <div style={{ fontSize: "11px", color: "#666" }}>
-                                                        {formatAmount(inv.amount, inv.currency)} • {inv.status}
-                                                    </div>
-                                                </div>
-                                                <div style={{ textAlign: "right" }}>
-                                                    <div style={{ fontWeight: 600, color: inv.daysUntilDue <= 3 ? "#ef4444" : "#666" }}>
-                                                        {inv.daysUntilDue === 0 ? "Today" : inv.daysUntilDue === 1 ? "1 day" : `${inv.daysUntilDue} days`}
-                                                    </div>
-                                                    <div style={{ fontSize: "11px", color: "#666" }}>
-                                                        {formatDate(inv.dueDate)}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ))}
-                                    {metrics.upcomingMaturitiesList.length > 5 && (
-                                        <div style={{ fontSize: "11px", color: "#666", textAlign: "center", marginTop: "8px" }}>
-                                            +{metrics.upcomingMaturitiesList.length - 5} more invoices
-                                        </div>
-                                    )}
+                            <div style={styles.kpiCard}>
+                                <div style={styles.kpiTitle}>Total Financed Amount</div>
+                                <div style={styles.kpiValue}>
+                                    {metrics?.totalFinanced ? formatAmount(metrics.totalFinanced.toString(), "TRY") : "₺0"}
                                 </div>
-                            ) : (
-                                <div style={{ marginTop: "16px", fontSize: "12px", color: "#666", fontStyle: "italic" }}>
-                                    No invoices maturing in the next 7 days
+                                <div style={styles.kpiDelta}>Outstanding principal</div>
+                            </div>
+                            <div style={styles.kpiCard}>
+                                <div style={styles.kpiTitle}>Liquidity Available</div>
+                                <div style={styles.kpiValue}>
+                                    {metrics?.liquidityAvailable ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : "₺0"}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Pool Utilization Snapshot */}
-                        <div style={{ ...styles.sectionCard, marginTop: "20px" }}>
-                            <div style={styles.sectionTitle}>Pool Utilization Snapshot</div>
-                            <div style={styles.sectionSubtitle}>Current allocation status</div>
-                            <div style={{ marginTop: "20px" }}>
-                                <div style={{ marginBottom: "16px" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                                        <span style={{ fontSize: "13px", color: "#1a1a1a" }}>Main Pool</span>
-                                        <span style={{ fontSize: "13px", color: "#1a1a1a", fontWeight: 600 }}>
-                                            {metrics?.utilization.toFixed(1) || "0.0"}% / {metrics?.maxUtilization?.toFixed(0) || "80"}% max
+                                <div style={styles.kpiDelta}>Pool capacity</div>
+                            </div>
+                            <div style={styles.kpiCard}>
+                                <div style={styles.kpiTitle}>Utilization Ratio</div>
+                                <div style={styles.kpiValue}>
+                                    {metrics?.utilization.toFixed(1) || "0.0"}%
+                                    {metrics && metrics.maxUtilization && (
+                                        <span style={{ fontSize: "14px", color: "#666", fontWeight: 400, marginLeft: "8px" }}>
+                                            / {metrics.maxUtilization.toFixed(0)}% max
                                         </span>
+                                    )}
+                                </div>
+                                <div style={styles.progressBar}>
+                                    <div style={{
+                                        ...styles.progressFill,
+                                        width: `${Math.min(metrics?.utilization || 0, 100)}%`,
+                                        background: metrics?.utilization
+                                            ? (metrics.utilization < 50 ? "#22c55e" : metrics.utilization < 75 ? "#f59e0b" : "#ef4444")
+                                            : "#2563eb"
+                                    }}></div>
+                                </div>
+                                {metrics && metrics.utilization > 0 && (
+                                    <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>
+                                        Total Borrowed / Total Liquidity
                                     </div>
-                                    <div style={styles.progressBar}>
-                                        <div style={{ 
-                                            ...styles.progressFill, 
-                                            width: `${Math.min(metrics?.utilization || 0, 100)}%`,
-                                            background: metrics?.utilization 
-                                                ? (metrics.utilization < 50 ? "#22c55e" : metrics.utilization < 75 ? "#f59e0b" : "#ef4444")
-                                                : "#2563eb"
-                                        }}></div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 3. System Distribution & Alerts */}
+                        <div style={styles.sectionGrid}>
+                            {/* Left: AI Lifecycle Intelligence Slider */}
+                            <div style={{ ...styles.sectionCard, position: "relative", overflow: "hidden" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", position: "relative", zIndex: 2 }}>
+                                    <div>
+                                        <div style={styles.sectionTitle}>AI Lifecycle Intelligence</div>
+                                        <div style={styles.sectionSubtitle}>Autonomous monitoring and decision analytics</div>
                                     </div>
-                                    {metrics && metrics.availableCapacity !== undefined && (
-                                        <div style={{ 
-                                            display: "flex", 
-                                            justifyContent: "space-between", 
-                                            marginTop: "8px",
-                                            fontSize: "11px",
-                                            color: "#666"
+                                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+
+                                        <LiveBadge isLive={isConnected} lastUpdated={new Date()} />
+                                    </div>
+                                </div>
+
+                                {/* AI Lifecycle Slider */}
+                                <AILifecycleSlider activeAgents={0} />
+                            </div>
+
+                            {/* Right: System Alerts & Allocation */}
+                            <div>
+                                {/* Upcoming Maturities */}
+                                <div style={styles.sectionCard}>
+                                    <div style={{ marginBottom: "20px" }}>
+                                        <div style={{
+                                            fontSize: "18px",
+                                            fontWeight: 600,
+                                            color: "#0f172a",
+                                            marginBottom: "4px",
+                                            letterSpacing: "-0.01em"
                                         }}>
-                                            <span>Available Capacity:</span>
-                                            <span style={{ fontWeight: 600, color: metrics.availableCapacity > 20 ? "#22c55e" : metrics.availableCapacity > 10 ? "#f59e0b" : "#ef4444" }}>
-                                                {metrics.availableCapacity.toFixed(1)}%
-                                            </span>
+                                            Upcoming Maturity
+                                        </div>
+                                        <div style={{
+                                            fontSize: "13px",
+                                            color: "#64748b"
+                                        }}>
+                                            {metrics?.upcomingMaturities || 0} invoices maturing within 7 days
+                                        </div>
+                                    </div>
+                                    {metrics && metrics.upcomingMaturitiesList && metrics.upcomingMaturitiesList.length > 0 ? (
+                                        <div style={{ marginTop: "16px" }}>
+                                            {metrics.upcomingMaturitiesList.slice(0, 5).map((inv, idx) => {
+                                                const isUrgent = inv.daysUntilDue <= 3;
+                                                const statusColors: Record<string, string> = {
+                                                    FINANCED: "#16a34a",
+                                                    TOKENIZED: "#2563eb",
+                                                    ISSUED: "#64748b",
+                                                    REPAID: "#22c55e",
+                                                    DEFAULTED: "#ef4444"
+                                                };
+                                                const statusBgColors: Record<string, string> = {
+                                                    FINANCED: "rgba(22, 163, 74, 0.1)",
+                                                    TOKENIZED: "rgba(37, 99, 235, 0.1)",
+                                                    ISSUED: "rgba(100, 116, 139, 0.1)",
+                                                    REPAID: "rgba(34, 197, 94, 0.1)",
+                                                    DEFAULTED: "rgba(239, 68, 68, 0.1)"
+                                                };
+                                                const statusColor = statusColors[inv.status] || "#64748b";
+                                                const statusBgColor = statusBgColors[inv.status] || "rgba(100, 116, 139, 0.1)";
+
+                                                return (
+                                                    <Link
+                                                        key={inv.id}
+                                                        href={`/invoices/${inv.id}`}
+                                                        style={{
+                                                            display: "block",
+                                                            padding: "12px 0",
+                                                            borderBottom: idx < 4 ? "1px solid #f0f0f0" : "none",
+                                                            textDecoration: "none",
+                                                            color: "#1a1a1a",
+                                                            transition: "background 0.2s ease"
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background = "#f8f9fa";
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = "transparent";
+                                                        }}
+                                                    >
+                                                        <div style={{
+                                                            display: "flex",
+                                                            justifyContent: "space-between",
+                                                            alignItems: "center"
+                                                        }}>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{
+                                                                    fontWeight: 600,
+                                                                    fontSize: "13px",
+                                                                    color: "#1a1a1a",
+                                                                    marginBottom: "4px"
+                                                                }}>
+                                                                    {inv.externalId}
+                                                                </div>
+                                                                <div style={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: "8px",
+                                                                    flexWrap: "wrap" as const
+                                                                }}>
+                                                                    <span style={{
+                                                                        fontSize: "12px",
+                                                                        color: "#666"
+                                                                    }}>
+                                                                        {formatAmount(inv.amount, inv.currency)}
+                                                                    </span>
+                                                                    <span style={{
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        padding: "2px 6px",
+                                                                        borderRadius: "3px",
+                                                                        fontSize: "10px",
+                                                                        fontWeight: 600,
+                                                                        color: statusColor,
+                                                                        background: statusBgColor,
+                                                                        textTransform: "uppercase" as const
+                                                                    }}>
+                                                                        {inv.status}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{
+                                                                textAlign: "right",
+                                                                marginLeft: "16px",
+                                                                flexShrink: 0
+                                                            }}>
+                                                                <div style={{
+                                                                    fontWeight: 600,
+                                                                    fontSize: "12px",
+                                                                    color: isUrgent ? "#ef4444" : "#666",
+                                                                    marginBottom: "2px"
+                                                                }}>
+                                                                    {inv.daysUntilDue === 0 ? "Today" : inv.daysUntilDue === 1 ? "1 day" : `${inv.daysUntilDue} days`}
+                                                                </div>
+                                                                <div style={{
+                                                                    fontSize: "11px",
+                                                                    color: "#999"
+                                                                }}>
+                                                                    {formatDate(inv.dueDate)}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </Link>
+                                                );
+                                            })}
+                                            {metrics.upcomingMaturitiesList.length > 5 && (
+                                                <div style={{
+                                                    fontSize: "12px",
+                                                    color: "#666",
+                                                    textAlign: "center",
+                                                    marginTop: "12px",
+                                                    paddingTop: "12px"
+                                                }}>
+                                                    +{metrics.upcomingMaturitiesList.length - 5} more invoices
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            marginTop: "16px",
+                                            padding: "32px",
+                                            textAlign: "center",
+                                            fontSize: "13px",
+                                            color: "#94a3b8",
+                                            fontStyle: "italic",
+                                            background: "#f8fafc",
+                                            borderRadius: "8px",
+                                            border: "1px dashed #e2e8f0"
+                                        }}>
+                                            No invoices maturing in the next 7 days
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Pool Utilization Snapshot */}
+                                <div style={{ ...styles.sectionCard, marginTop: "20px" }}>
+                                    <div style={{ marginBottom: "20px" }}>
+                                        <div style={{
+                                            fontSize: "18px",
+                                            fontWeight: 600,
+                                            color: "#0f172a",
+                                            marginBottom: "4px",
+                                            letterSpacing: "-0.01em"
+                                        }}>
+                                            Pool Utilization Snapshot
+                                        </div>
+                                        <div style={{
+                                            fontSize: "13px",
+                                            color: "#64748b"
+                                        }}>
+                                            Current allocation status
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginTop: "24px" }}>
+                                        {/* Pool Label and Value */}
+                                        <div style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            marginBottom: "12px"
+                                        }}>
+                                            <span style={{
+                                                fontSize: "14px",
+                                                fontWeight: 500,
+                                                color: "#1e293b"
+                                            }}>
+                                                Main Pool
+                                            </span>
+                                            <div style={{
+                                                display: "flex",
+                                                alignItems: "baseline",
+                                                gap: "4px"
+                                            }}>
+                                                <span style={{
+                                                    fontSize: "15px",
+                                                    fontWeight: 600,
+                                                    color: "#0f172a"
+                                                }}>
+                                                    {metrics?.utilization.toFixed(1) || "0.0"}%
+                                                </span>
+                                                <span style={{
+                                                    fontSize: "12px",
+                                                    color: "#94a3b8",
+                                                    fontWeight: 400
+                                                }}>
+                                                    / {metrics?.maxUtilization?.toFixed(0) || "80"}% max
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Progress Bar */}
+                                        <div style={{
+                                            position: "relative",
+                                            width: "100%",
+                                            height: "10px",
+                                            background: "#f1f5f9",
+                                            borderRadius: "6px",
+                                            overflow: "hidden",
+                                            marginBottom: "16px"
+                                        }}>
+                                            <div style={{
+                                                position: "absolute",
+                                                left: 0,
+                                                top: 0,
+                                                height: "100%",
+                                                width: `${Math.min(metrics?.utilization || 0, 100)}%`,
+                                                background: metrics?.utilization
+                                                    ? (metrics.utilization < 50
+                                                        ? "linear-gradient(90deg, #22c55e 0%, #16a34a 100%)"
+                                                        : metrics.utilization < 75
+                                                            ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
+                                                            : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)")
+                                                    : "linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)",
+                                                borderRadius: "6px",
+                                                transition: "width 0.3s ease, background 0.3s ease",
+                                                boxShadow: metrics?.utilization && metrics.utilization > 0
+                                                    ? "0 2px 4px rgba(0, 0, 0, 0.1)"
+                                                    : "none"
+                                            }}></div>
+
+                                            {/* Threshold markers */}
+                                            {metrics?.maxUtilization && (
+                                                <>
+                                                    <div style={{
+                                                        position: "absolute",
+                                                        left: `${(metrics.maxUtilization * 0.75)}%`,
+                                                        top: 0,
+                                                        bottom: 0,
+                                                        width: "2px",
+                                                        background: "#f59e0b",
+                                                        opacity: 0.3
+                                                    }} />
+                                                    <div style={{
+                                                        position: "absolute",
+                                                        left: `${metrics.maxUtilization}%`,
+                                                        top: 0,
+                                                        bottom: 0,
+                                                        width: "2px",
+                                                        background: "#ef4444",
+                                                        opacity: 0.3
+                                                    }} />
+                                                </>
+                                            )}
+                                        </div>
+
+                                        {/* Available Capacity */}
+                                        {metrics && metrics.availableCapacity !== undefined && (
+                                            <div style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                paddingTop: "12px",
+                                                borderTop: "1px solid #f0f0f0"
+                                            }}>
+                                                <span style={{
+                                                    fontSize: "12px",
+                                                    color: "#666"
+                                                }}>
+                                                    Available Capacity
+                                                </span>
+                                                <span style={{
+                                                    fontSize: "13px",
+                                                    fontWeight: 600,
+                                                    color: "#1a1a1a"
+                                                }}>
+                                                    {metrics.availableCapacity.toFixed(1)}%
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* 4. Recent System Activity */}
-                <div style={styles.eventTable}>
-                    <div style={styles.tableHeader}>
-                        <div style={styles.tableTitle}>Recent System Activity</div>
-                        <a style={styles.tableLink} href="/analytics">View All Logs</a>
-                    </div>
-                    <table style={styles.table}>
-                        <thead>
-                            <tr style={styles.tableRow}>
-                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Timestamp</th>
-                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Event Type</th>
-                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Description</th>
-                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Reference ID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recentEvents.length > 0 ? (
-                                recentEvents.map((event, idx) => {
-                                    const badgeStyle = 
-                                        event.eventType === "Issuance" ? styles.badgeIssuance :
-                                        event.eventType === "Tokenization" ? styles.badgeTokenization :
-                                        event.eventType === "Financing" ? styles.badgeFinancing :
-                                        event.eventType === "Repayment" ? styles.badgeRepayment :
-                                        styles.badgeDefault;
+                        {/* 4. Recent System Activity */}
+                        <div style={styles.eventTable}>
+                            <div style={styles.tableHeader}>
+                                <div style={styles.tableTitle}>Recent System Activity</div>
+                                <a style={styles.tableLink} href="/analytics">View All Logs</a>
+                            </div>
+                            <table style={styles.table}>
+                                <thead>
+                                    <tr style={styles.tableRow}>
+                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Timestamp</th>
+                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Event Type</th>
+                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Description</th>
+                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Reference ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {recentEvents.length > 0 ? (
+                                        recentEvents.map((event, idx) => {
+                                            const badgeStyle =
+                                                event.eventType === "Issuance" ? styles.badgeIssuance :
+                                                    event.eventType === "Tokenization" ? styles.badgeTokenization :
+                                                        event.eventType === "Financing" ? styles.badgeFinancing :
+                                                            event.eventType === "Repayment" ? styles.badgeRepayment :
+                                                                styles.badgeDefault;
 
-                                    return (
-                                        <tr key={idx} style={styles.tableRow}>
-                                            <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
-                                                {new Date(event.timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <span style={{ ...styles.badge, ...badgeStyle }}>
-                                                    {event.eventType}
-                                                </span>
-                                            </td>
-                                            <td style={styles.tableCell}>{event.description}</td>
-                                            <td style={{ ...styles.tableCell, ...styles.tableCellMuted, fontFamily: "monospace", fontSize: "11px" }}>
-                                                {event.referenceId.slice(0, 8)}...
+                                            return (
+                                                <tr key={idx} style={styles.tableRow}>
+                                                    <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
+                                                        {new Date(event.timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                                    </td>
+                                                    <td style={styles.tableCell}>
+                                                        <span style={{ ...styles.badge, ...badgeStyle }}>
+                                                            {event.eventType}
+                                                        </span>
+                                                    </td>
+                                                    <td style={styles.tableCell}>{event.description}</td>
+                                                    <td style={{ ...styles.tableCell, ...styles.tableCellMuted, fontFamily: "monospace", fontSize: "11px" }}>
+                                                        {event.referenceId.slice(0, 8)}...
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={4} style={{ ...styles.tableCell, textAlign: "center", color: "#666", padding: "40px" }}>
+                                                No recent activity
                                             </td>
                                         </tr>
-                                    );
-                                })
-                            ) : (
-                                <tr>
-                                    <td colSpan={4} style={{ ...styles.tableCell, textAlign: "center", color: "#666", padding: "40px" }}>
-                                        No recent activity
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </>
                 )}
             </div>

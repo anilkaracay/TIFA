@@ -13,18 +13,35 @@
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
+html {
+  overflow-anchor: none;
+  /* Disable scroll anchoring */
+  scroll-behavior: auto;
+  /* Disable smooth scroll */
+  overscroll-behavior: none;
+  /* Prevent overscroll */
+}
+
 body {
   margin: 0;
   padding: 0;
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont;
+  overflow-anchor: none;
+  overscroll-behavior-y: none;
+}
+
+/* Prevent layout shifts */
+* {
+  overflow-anchor: none;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -35,6 +52,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -45,6 +63,7 @@ body {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -94,4 +113,16 @@ body {
   height: 2px;
   border-radius: 1px;
   background: linear-gradient(90deg, #2563eb 0%, #6366f1 100%);
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
