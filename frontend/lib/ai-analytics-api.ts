@@ -1,6 +1,6 @@
 // Data fetching functions for AI Lifecycle Intelligence
 
-import { Invoice, AgentDecision, PoolState, UtilizationPoint } from "./ai-analytics-types";
+import { Invoice, AgentDecision, PoolState } from "./ai-analytics-types";
 import { Invoice as BackendInvoice } from "./backendClient";
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
@@ -17,16 +17,35 @@ export async function fetchActiveInvoices(): Promise<Invoice[]> {
     const data: BackendInvoice[] = await res.json();
 
     return data.map((inv): Invoice => {
-      // Normalize status
-      const status = inv.status?.toUpperCase() || "ISSUED";
-      const normalizedStatus = status === "PENDING" || status === "APPROVED"
-        ? "ISSUED"
-        : status;
-
       // Parse amounts (assuming they're in cents/wei, convert to number)
       const principal = parseFloat(inv.amount || "0");
       const financedAmount = inv.usedCredit ? parseFloat(inv.usedCredit) : undefined;
       const repaidAmount = inv.cumulativePaid ? parseFloat(inv.cumulativePaid) : undefined;
+
+      // Normalize status
+      let status = inv.status?.toUpperCase() || "ISSUED";
+
+      // Map backend 'PAID' to frontend 'REPAID'
+      if (status === "PAID") {
+        status = "REPAID";
+      }
+
+      // Map 'PARTIALLY_PAID' to 'FINANCED'
+      if (status === "PARTIALLY_PAID") {
+        status = "FINANCED";
+      }
+
+      // Map pending/approved to ISSUED
+      if (status === "PENDING" || status === "APPROVED") {
+        status = "ISSUED";
+      }
+
+      // Auto-detect REPAID status if fully repaid (math override)
+      if (repaidAmount !== undefined && principal > 0) {
+        if (repaidAmount >= principal - 0.01) {
+          status = "REPAID";
+        }
+      }
 
       // Parse timestamps
       const createdAt = inv.createdAt ? new Date(inv.createdAt).getTime() / 1000 : Date.now() / 1000;
@@ -37,7 +56,7 @@ export async function fetchActiveInvoices(): Promise<Invoice[]> {
         id: inv.id,
         invoiceId: inv.externalId || inv.id,
         issuer: inv.companyId || "",
-        status: normalizedStatus as any,
+        status: status as any,
         principal,
         financedAmount,
         repaidAmount,
