@@ -39,6 +39,34 @@ export async function fetchUserRole(walletAddress: string): Promise<UserRoleResp
 
 export type InvoiceStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID" | "PARTIALLY_PAID" | "FINANCED" | "TOKENIZED" | "DEFAULTED" | "ISSUED";
 
+// Compliance types
+export interface KycProfile {
+    id: string;
+    status: 'NOT_STARTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+    legalName?: string;
+    rejectionReason?: string;
+}
+
+export interface YieldSummary {
+    accruedYield: string;
+    claimedYield: string;
+    heldYield: string;
+}
+
+// Compliance types
+export interface KycProfile {
+    id: string;
+    status: 'NOT_STARTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+    legalName?: string;
+    rejectionReason?: string;
+}
+
+export interface YieldSummary {
+    accruedYield: string;
+    claimedYield: string;
+    heldYield: string;
+}
+
 export interface Invoice {
     id: string;
     externalId: string;
@@ -1051,4 +1079,98 @@ export async function fetchRiskProjection(poolId?: string, horizon: string = "7d
     } catch (e: any) {
         throw new Error(`Failed to fetch risk projection: ${e.message}`);
     }
+}
+
+// Compliance API
+export async function fetchKycProfile(subjectType: 'LP' | 'ISSUER' = 'LP'): Promise<KycProfile | null> {
+    try {
+        const res = await fetch(`${BACKEND_URL}/compliance/kyc/me?subjectType=${subjectType}`, {
+            headers: getAuthHeaders()
+        } as any);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.profile;
+    } catch { return null; }
+}
+
+function getHeadersWithWallet(wallet?: string) {
+    return { headers: getAuthHeaders(wallet) };
+}
+
+export async function submitKycProfile(data: any, wallet?: string): Promise<KycProfile> {
+    const headers = getAuthHeaders(wallet);
+    const res = await fetch(`${BACKEND_URL}/compliance/kyc/submit`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    return json.profile;
+}
+
+export async function fetchPendingKycProfiles(wallet?: string): Promise<any[]> {
+    const res = await fetch(`${BACKEND_URL}/compliance/admin/kyc`, getHeadersWithWallet(wallet));
+    if (!res.ok) throw new Error("Failed to fetch profiles");
+    return (await res.json()).profiles;
+}
+
+export async function approveKycProfile(id: string, wallet?: string): Promise<void> {
+    const res = await fetch(`${BACKEND_URL}/compliance/admin/kyc/${id}/approve`, {
+        method: 'POST',
+        ...getHeadersWithWallet(wallet)
+    });
+    if (!res.ok) throw new Error("Failed to approve");
+}
+
+export async function rejectKycProfile(id: string, reason: string, wallet?: string): Promise<void> {
+    const res = await fetch(`${BACKEND_URL}/compliance/admin/kyc/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders(wallet) },
+        body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) throw new Error("Failed to reject");
+}
+
+// Yield API
+export async function fetchYieldSummary(wallet?: string): Promise<YieldSummary> {
+    const res = await fetch(`${BACKEND_URL}/yield/summary`, getHeadersWithWallet(wallet));
+    if (!res.ok) return { accruedYield: "0", claimedYield: "0", heldYield: "0" };
+    return await res.json();
+}
+
+export async function claimYield(wallet?: string): Promise<{ success: boolean; claimedAmount: string; error?: string }> {
+    const res = await fetch(`${BACKEND_URL}/yield/claim`, {
+        method: 'POST',
+        ...getHeadersWithWallet(wallet)
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, claimedAmount: "0", error: data.error || data.message || "Failed" };
+    return data;
+}
+
+// Custody API
+export interface CustodyVault {
+    vaultAddress: string;
+    totalSharesCustodied: string;
+    poolId: string;
+}
+
+export interface CustodyLedger {
+    poolId: string;
+    wallet: string;
+    shareBalance: string;
+    status: string;
+}
+
+export async function fetchCustodyVault(): Promise<CustodyVault> {
+    const res = await fetch(`${BACKEND_URL}/custody/vault`, { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed to fetch vault info");
+    return res.json();
+}
+
+export async function fetchCustodyLedger(wallet?: string): Promise<CustodyLedger | null> {
+    const res = await fetch(`${BACKEND_URL}/custody/ledger`, getHeadersWithWallet(wallet));
+    if (!res.ok) return null;
+    return res.json();
 }

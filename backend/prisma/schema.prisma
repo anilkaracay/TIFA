@@ -22,6 +22,73 @@ model Company {
 
   // Payment authorizations for this company
   paymentAuthorizations PaymentAuthorization[] @relation("PaymentAuthorizations")
+
+  // KYC Profile
+  kycProfile KycProfile?
+}
+
+model KycProfile {
+  id                 String    @id @default(cuid())
+  subjectType        String // ISSUER | LP
+  companyId          String?   @unique
+  company            Company?  @relation(fields: [companyId], references: [id])
+  wallet             String?   @unique // For LPs
+  
+  status             String    @default("NOT_STARTED") // NOT_STARTED | PENDING | APPROVED | REJECTED | PENDING_REVIEW
+  legalName          String?
+  registrationNumber String?
+  country            String?
+  contactName        String?
+  contactEmail       String?
+  
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  reviewerId         String?
+  rejectionReason    String?
+  metadata           String? // JSON string
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model ComplianceAuditLog {
+  id        String   @id @default(cuid())
+  action    String // KYC_SUBMITTED | KYC_APPROVED | KYC_REJECTED | YIELD_HELD | YIELD_CLAIMED | DEPOSIT_BLOCKED | TOKENIZE_BLOCKED
+  actorType String // USER | ADMIN | SYSTEM
+  actorId   String
+  targetId  String? // Subject of the action
+  metadata  String? // JSON string
+  createdAt DateTime @default(now())
+  
+  @@index([action])
+  @@index([actorId])
+  @@index([targetId])
+}
+
+model OmnibusLedger {
+  id              String   @id @default(cuid())
+  wallet          String
+  poolId          String
+  depositedAmount String   @default("0")
+  withdrawnAmount String   @default("0")
+  shareBalance    String   @default("0")
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([wallet, poolId])
+  @@index([wallet])
+}
+
+model YieldAccount {
+  id           String   @id @default(cuid())
+  wallet       String
+  poolId       String
+  accruedYield String   @default("0")
+  claimedYield String   @default("0")
+  heldYield    String   @default("0")
+  updatedAt    DateTime @updatedAt
+  
+  @@unique([wallet, poolId])
+  @@index([wallet])
 }
 
 model Invoice {

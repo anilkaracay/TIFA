@@ -15,4 +15,11 @@ export const env = {
     X402_CURRENCY: process.env.X402_CURRENCY ?? 'USDC',
     X402_RECIPIENT: process.env.X402_RECIPIENT ?? '',
     X402_TTL_SECONDS: Number(process.env.X402_TTL_SECONDS ?? '300'),
+    // Compliance Flags
+    COMPLIANCE_ENABLED: process.env.COMPLIANCE_ENABLED === 'true',
+    KYC_REQUIRED_FOR_LP: process.env.KYC_REQUIRED_FOR_LP !== 'false', // Default true if compliance enabled
+    KYC_REQUIRED_FOR_ISSUER: process.env.KYC_REQUIRED_FOR_ISSUER === 'true',
+
+    // Custody
+    OMNIBUS_VAULT_ADDRESS: process.env.OMNIBUS_VAULT_ADDRESS ?? '0x0000000000000000000000000000000000000000',
 };

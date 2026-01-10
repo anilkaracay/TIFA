@@ -153,13 +153,16 @@ export default function Navbar() {
                         Invoices
                     </Link>
                     <Link href="/lp" className={`nav-link-modern ${pathname === "/lp" ? "active" : ""}`}>
-                        LP Dashboard
+                        LP
                     </Link>
                     <Link href="/analytics" className={`nav-link-modern ${pathname === "/analytics" ? "active" : ""}`}>
                         Analytics
                     </Link>
                     <Link href="/agent" className={`nav-link-modern ${pathname === "/agent" ? "active" : ""}`}>
                         Agent Console
+                    </Link>
+                    <Link href="/compliance" className={`nav-link-modern ${pathname === "/compliance" || pathname === "/kyc" || pathname === "/custody" || pathname === "/yield" ? "active" : ""}`}>
+                        Compliance
                     </Link>
                     {process.env.NEXT_PUBLIC_X402_ENABLED === 'true' && (
                         <Link href="/x402" className={`nav-link-modern ${pathname === "/x402" ? "active" : ""}`}>

@@ -5,7 +5,8 @@ import useSWR from "swr";
 import { useAccount, useWriteContract, usePublicClient, useChainId } from "wagmi";
 import Navbar from "../../components/Navbar";
 import Deployments from "../../lib/deployments.json";
-import { fetchPoolOverview, fetchLPPosition, fetchPoolMetrics, fetchLPTransactions, PoolOverview, LPPosition, PoolMetrics, LPTransaction } from "../../lib/backendClient";
+import Link from "next/link";
+import { fetchPoolOverview, fetchLPPosition, fetchPoolMetrics, fetchLPTransactions, PoolOverview, LPPosition, PoolMetrics, LPTransaction, fetchKycProfile, fetchYieldSummary, claimYield, KycProfile, YieldSummary } from "../../lib/backendClient";
 import { formatAmount, formatDate } from "../../lib/format";
 import { useWalletWebSocket } from "../../lib/websocketClient";
 import { useTransactionManager } from "../../lib/transactionManager";
@@ -475,6 +476,38 @@ export default function LPDashboardPage() {
         { refreshInterval: 10000 }
     );
 
+    // Compliance & Yield Data
+    const { data: kycProfile } = useSWR<KycProfile | null>(
+        address ? "kyc-profile" : null,
+        () => fetchKycProfile('LP')
+    );
+    const { data: yieldSummary, mutate: mutateYield } = useSWR<YieldSummary>(
+        address ? "yield-summary" : null,
+        () => fetchYieldSummary(),
+        { refreshInterval: 10000 }
+    );
+
+    async function handleClaimYield() {
+        if (!yieldSummary || parseFloat(yieldSummary.accruedYield) <= 0) return;
+        setLoading(true);
+        try {
+            const res = await claimYield();
+            if (res.success) {
+                showToast('success', `Claimed ${formatAmount(res.claimedAmount)} yield`);
+                mutateYield();
+            } else {
+                showToast('error', res.error || "Claim failed");
+                if (res.error === 'COMPLIANCE_RESTRICTED') {
+                    mutateYield(); // Update to show HELD amount
+                }
+            }
+        } catch (e: any) {
+            showToast('error', e.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     // Subscribe to WebSocket events
     React.useEffect(() => {
         if (!address) return;
@@ -859,6 +892,10 @@ export default function LPDashboardPage() {
     const isWithdrawDisabled = poolOverview && parseFloat(poolOverview.utilizationPercent) >= parseFloat(poolOverview.maxUtilizationPercent);
     const netYieldTTM = poolMetrics?.apr ? parseFloat(poolMetrics.apr) : 0;
 
+    // Compliance Logic
+    const isKycApproved = kycProfile?.status === 'APPROVED';
+    const isDepositDisabled = loading || !address || !depositAmount || parseFloat(depositAmount) <= 0 || !isKycApproved;
+
     return (
         <div style={styles.page}>
             <Navbar />
@@ -872,6 +909,25 @@ export default function LPDashboardPage() {
                         Manage capital allocation and monitor risk exposure
                     </p>
                 </div>
+
+                {/* KYC Banner */}
+                {!isKycApproved && address && (
+                    <div style={{
+                        padding: '16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', marginBottom: '24px', color: '#c2410c', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                    }}>
+                        <div>
+                            <strong>Compliance Check Required</strong>
+                            <div style={{ fontSize: '13px', marginTop: '4px' }}>
+                                You must complete KYC verification to deposit liquidity and claim yields. Current Status: <strong>{kycProfile?.status || 'NOT_STARTED'}</strong>
+                            </div>
+                        </div>
+                        <Link href="/kyc" style={{
+                            background: '#ea580c', color: 'white', padding: '8px 16px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600
+                        }}>
+                            Verify Identity →
+                        </Link>
+                    </div>
+                )}
 
                 {/* Message Display */}
                 {message && (
@@ -932,6 +988,30 @@ export default function LPDashboardPage() {
                             {poolOverview && parseFloat(poolOverview.utilizationPercent) >= parseFloat(poolOverview.maxUtilizationPercent) - 5
                                 ? "Near limit"
                                 : "Within limits"}
+                        </div>
+                    </div>
+                    {/* Yield Card */}
+                    <div style={styles.overviewCard}>
+                        <div style={styles.cardLabel}>
+                            <span>💰</span>
+                            <span>Unclaimed Yield</span>
+                        </div>
+                        <div style={styles.cardValue}>
+                            {yieldSummary ? formatAmount(yieldSummary.accruedYield, "TRY") : "0.00"}
+                        </div>
+                        <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
+                            <button
+                                onClick={handleClaimYield}
+                                disabled={!yieldSummary || parseFloat(yieldSummary.accruedYield) <= 0 || loading}
+                                style={{
+                                    width: '100%', padding: '8px', fontSize: '13px', fontWeight: 600,
+                                    background: (!yieldSummary || parseFloat(yieldSummary.accruedYield) <= 0) ? '#f3f4f6' : '#2563eb',
+                                    color: (!yieldSummary || parseFloat(yieldSummary.accruedYield) <= 0) ? '#9ca3af' : 'white',
+                                    border: 'none', borderRadius: '4px', cursor: (!yieldSummary || parseFloat(yieldSummary.accruedYield) <= 0) ? 'default' : 'pointer'
+                                }}
+                            >
+                                Claim Yield
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1015,10 +1095,10 @@ export default function LPDashboardPage() {
                                         style={{
                                             ...styles.buttonPrimary,
                                             marginTop: "auto",
-                                            ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? styles.buttonDisabled : {}),
+                                            ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 || !isKycApproved ? styles.buttonDisabled : {}),
                                         }}
                                         onClick={handleDeposit}
-                                        disabled={loading || !address || !depositAmount || parseFloat(depositAmount) <= 0}
+                                        disabled={isDepositDisabled}
                                     >
                                         {loading && loadingType === "deposit" ? "Processing..." : "Initiate Transfer"}
                                     </button>

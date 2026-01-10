@@ -57,6 +57,14 @@ async function main() {
         console.warn("Auto payment agent setup failed:", e);
     }
 
+    // Start Yield Accrual Job
+    try {
+        const { startYieldAccrualJob } = require('./jobs/yieldAccrual');
+        startYieldAccrualJob();
+    } catch (e) {
+        console.warn("Yield accrual job setup failed:", e);
+    }
+
     try {
         const address = await app.listen({ port: env.PORT, host: '0.0.0.0' });
         console.log(`TIFA backend running at ${address}`);

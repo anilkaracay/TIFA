@@ -9,6 +9,9 @@ import { registerTruthRoutes } from './truth';
 import { registerAdminRoutes } from './admin';
 import { registerX402DashboardRoutes } from './x402';
 import { registerPaymentAuthorizationRoutes } from './payment-authorization';
+import { registerComplianceRoutes } from './compliance';
+import { registerCustodyRoutes } from './custody';
+import { registerYieldRoutes } from './yield';
 
 export async function registerRoutes(app: FastifyInstance) {
     await app.register(registerInvoiceRoutes, { prefix: '/invoices' });
@@ -22,5 +25,8 @@ export async function registerRoutes(app: FastifyInstance) {
     await app.register(registerAdminRoutes, { prefix: '/admin' }); // Admin endpoints
     await app.register(registerX402DashboardRoutes, { prefix: '/x402' }); // x402 dashboard endpoints
     await app.register(registerPaymentAuthorizationRoutes, { prefix: '/payment-authorization' }); // Payment authorization endpoints
+    await app.register(registerComplianceRoutes, { prefix: '/compliance' }); // Compliance endpoints
+    await app.register(registerCustodyRoutes, { prefix: '/custody' }); // Custody/Vault endpoints
+    await app.register(registerYieldRoutes, { prefix: '/yield' }); // Yield endpoints
 }
 
