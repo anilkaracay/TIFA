@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import useSWR from "swr";
-import { fetchX402Stats, X402Stats } from "../../lib/x402Client";
+import { fetchX402Stats } from "../../lib/x402Client";
 import { formatAmount } from "../../lib/format";
 
 const styles = {

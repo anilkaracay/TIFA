@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db';
-import { provider, signer, loadContract } from '../onchain/provider';
+import { getProvider, getSigner, loadContract } from '../onchain/provider';
+import { getChainIdFromRequest } from '../utils/chain';
 import { ethers } from 'ethers';
 import { roleResolutionMiddleware, requireRole, requireWallet } from '../middleware/roleAuth';
 import { Role } from '../auth/roles';
@@ -10,7 +11,7 @@ import { emitLPEvent, emitPoolEvent } from '../websocket/server';
 export async function registerLPRoutes(app: FastifyInstance) {
     // Apply role resolution to all routes
     app.addHook('onRequest', roleResolutionMiddleware);
-    
+
     // POST /lp/deposit - LP only
     app.post('/deposit', { preHandler: [requireWallet, requireRole(Role.LP, Role.ADMIN)] }, async (req, reply) => {
         const body = z.object({
@@ -18,31 +19,31 @@ export async function registerLPRoutes(app: FastifyInstance) {
         }).parse(req.body);
 
         // Get wallet address from request (set by roleResolutionMiddleware)
-        const userWallet = req.wallet || signer.address;
+        const userWallet = req.wallet || getSigner(getChainIdFromRequest(req)).address;
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
-            const TestToken = loadContract("TestToken");
-            
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+            const TestToken = loadContract("TestToken", getChainIdFromRequest(req));
+
             // TestToken uses 18 decimals (standard ERC20)
             const amount = ethers.utils.parseUnits(body.amount, 18);
-            
+
             // 1. Approve if needed (using user's wallet, not signer)
-            const userSigner = provider.getSigner(userWallet);
+            const userSigner = getProvider(getChainIdFromRequest(req)).getSigner(userWallet);
             const allowance = await TestToken.allowance(userWallet, FinancingPool.address);
             if (allowance.lt(amount)) {
                 const approveTx = await TestToken.connect(userSigner).approve(FinancingPool.address, amount);
                 await approveTx.wait();
             }
-            
+
             // 2. Deposit (using user's wallet)
             const tx = await FinancingPool.connect(userSigner).deposit(amount);
             const receipt = await tx.wait();
-            
+
             // 3. Sync LP position (for user's wallet) - MUST be done first for foreign key
             const lpPosition = await FinancingPool.getLPPosition(userWallet);
             const sharePrice = await FinancingPool.sharePriceWad();
-            
+
             await prisma.lPPosition.upsert({
                 where: { wallet: userWallet },
                 update: {
@@ -104,35 +105,35 @@ export async function registerLPRoutes(app: FastifyInstance) {
         }).parse(req.body);
 
         // Get wallet address from request (set by roleResolutionMiddleware)
-        const userWallet = req.wallet || signer.address;
+        const userWallet = req.wallet || getSigner(getChainIdFromRequest(req)).address;
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
-            
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+
             const lpShares = ethers.BigNumber.from(body.lpShares);
-            
+
             // Check utilization
             const utilization = await FinancingPool.utilization();
             const maxUtilization = await FinancingPool.maxUtilizationBps();
-            
+
             if (utilization.gte(maxUtilization)) {
-                return reply.code(400).send({ 
+                return reply.code(400).send({
                     error: "Utilization too high. Withdrawals disabled.",
                     utilization: utilization.toString(),
                     maxUtilization: maxUtilization.toString(),
                 });
             }
-            
+
             // Withdraw (using user's wallet)
-            const userSigner = provider.getSigner(userWallet);
+            const userSigner = getProvider(getChainIdFromRequest(req)).getSigner(userWallet);
             const tx = await FinancingPool.connect(userSigner).withdraw(lpShares);
             const receipt = await tx.wait();
-            
+
             // Sync LP position (for user's wallet) - MUST be done first for foreign key
             const lpPosition = await FinancingPool.getLPPosition(userWallet);
             const sharePrice = await FinancingPool.sharePriceWad();
             const withdrawalAmount = await FinancingPool.calculateWithdrawalAmount(lpShares);
-            
+
             await prisma.lPPosition.upsert({
                 where: { wallet: userWallet },
                 update: {
@@ -193,12 +194,12 @@ export async function registerLPRoutes(app: FastifyInstance) {
             wallet: z.string().optional(),
         }).parse(req.query);
 
-        const wallet = query.wallet || signer.address;
+        const wallet = query.wallet || getSigner(getChainIdFromRequest(req)).address;
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
             const position = await FinancingPool.getLPPosition(wallet);
-            
+
             // Also get from DB if exists
             const dbPosition = await prisma.lPPosition.findUnique({
                 where: { wallet },
@@ -225,9 +226,9 @@ export async function registerLPRoutes(app: FastifyInstance) {
     // GET /overview (when registered with /lp prefix)
     app.get('/overview', async (req, reply) => {
         try {
-            const FinancingPool = loadContract("FinancingPool");
-            const LPShareToken = loadContract("LPShareToken");
-            
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+            const LPShareToken = loadContract("LPShareToken", getChainIdFromRequest(req));
+
             const totalLiquidity = await FinancingPool.totalLiquidity();
             const totalBorrowed = await FinancingPool.totalBorrowed();
             // totalPrincipalOutstanding is an alias for totalBorrowed in the contract
@@ -252,7 +253,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
             const poolAgeSeconds = now - Number(poolStartTime.toString());
             let apr = "0";
             let apy = "0";
-            
+
             if (poolAgeSeconds > 0 && totalInterestAccrued.gt(0)) {
                 // APR = (totalInterestPaidToLP / avgNAV) * (secondsPerYear / poolAgeSeconds)
                 // Simplified: use current NAV as avgNAV
@@ -262,7 +263,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
                     const interestPaidToLP = Number(ethers.utils.formatUnits(totalInterestAccrued.mul(10000 - protocolFeeBpsNum).div(10000), 18));
                     const secondsPerYear = 365 * 24 * 3600;
                     apr = ((interestPaidToLP / navValue) * (secondsPerYear / poolAgeSeconds) * 100).toFixed(2);
-                    
+
                     // APY (daily compounding)
                     const aprDecimal = parseFloat(apr) / 100;
                     apy = ((Math.pow(1 + aprDecimal / 365, 365) - 1) * 100).toFixed(2);
@@ -311,9 +312,9 @@ export async function registerLPRoutes(app: FastifyInstance) {
     // GET /pool/metrics - Detailed metrics for analytics
     app.get('/metrics', async (req, reply) => {
         try {
-            const FinancingPool = loadContract("FinancingPool");
-            const LPShareToken = loadContract("LPShareToken");
-            
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+            const LPShareToken = loadContract("LPShareToken", getChainIdFromRequest(req));
+
             const nav = await FinancingPool.getNAV();
             const sharePriceWad = await FinancingPool.getLPSharePrice();
             const totalBorrowed = await FinancingPool.totalBorrowed();
@@ -333,7 +334,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
             const poolAgeSeconds = now - Number(poolStartTime.toString());
             let apr = "0";
             let apy = "0";
-            
+
             if (poolAgeSeconds > 0 && totalInterestAccrued.gt(0)) {
                 const navValue = Number(ethers.utils.formatUnits(nav, 18));
                 if (navValue > 0) {
@@ -341,7 +342,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
                     const interestPaidToLP = Number(ethers.utils.formatUnits(totalInterestAccrued.mul(10000 - protocolFeeBpsNum).div(10000), 18));
                     const secondsPerYear = 365 * 24 * 3600;
                     apr = ((interestPaidToLP / navValue) * (secondsPerYear / poolAgeSeconds) * 100).toFixed(4);
-                    
+
                     const aprDecimal = parseFloat(apr) / 100;
                     apy = ((Math.pow(1 + aprDecimal / 365, 365) - 1) * 100).toFixed(4);
                 }
@@ -394,17 +395,17 @@ export async function registerLPRoutes(app: FastifyInstance) {
 
             // Get wallet from request (set by roleResolutionMiddleware or from header)
             const userWallet = req.wallet || req.headers['x-wallet-address'] as string || (req.body as any).wallet;
-            
+
             console.log('[LP Transaction] Extracted wallet:', userWallet);
-            
+
             if (!userWallet) {
                 console.error('[LP Transaction] No wallet address found in request');
                 return reply.code(400).send({ error: 'Wallet address is required' });
             }
 
             // Calculate balance impact
-            const balanceImpact = body.type === 'Deposit' 
-                ? `+${body.amount}` 
+            const balanceImpact = body.type === 'Deposit'
+                ? `+${body.amount}`
                 : `-${body.amount}`;
 
             // CRITICAL: First ensure LPPosition exists (required for foreign key)
@@ -473,7 +474,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
         }).parse(req.query);
 
         // Use wallet from query, request, or fallback to signer
-        const wallet = query.wallet || req.wallet || signer.address;
+        const wallet = query.wallet || req.wallet || getSigner(getChainIdFromRequest(req)).address;
 
         console.log('[LP Transactions] Fetching transactions for wallet:', wallet);
 
@@ -519,8 +520,8 @@ export async function registerLPRoutes(app: FastifyInstance) {
                 poolId: z.string().optional(),
             }).parse(req.query);
 
-            const FinancingPool = loadContract("FinancingPool");
-            
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+
             // Get all financed invoices
             const invoices = await prisma.invoice.findMany({
                 where: {
@@ -542,7 +543,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
 
             for (const inv of invoices) {
                 if (!inv.invoiceIdOnChain) continue;
-                
+
                 try {
                     const position = await FinancingPool.getPosition(inv.invoiceIdOnChain);
                     if (!position.exists) continue;
@@ -553,14 +554,14 @@ export async function registerLPRoutes(app: FastifyInstance) {
 
                     // Use company name as sector proxy (simplified)
                     const sector = inv.company.name || "Other";
-                    
+
                     if (!sectorMap[sector]) {
                         sectorMap[sector] = { allocation: 0, principal: 0n, recourse: 0n, nonRecourse: 0n };
                     }
-                    
+
                     sectorMap[sector].principal += principal;
                     totalPrincipal += principal;
-                    
+
                     if (isRecourse) {
                         sectorMap[sector].recourse += principal;
                         totalRecourse += principal;
@@ -579,7 +580,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
                 const allocationPct = totalPrincipalNum > 0 ? Number(data.principal) / totalPrincipalNum : 0;
                 // Simple risk multiplier based on concentration (higher concentration = higher risk)
                 const riskMultiplier = 1.0 + (allocationPct * 0.5); // Max 1.5x for 100% concentration
-                
+
                 return {
                     name,
                     allocationPct,
@@ -598,7 +599,7 @@ export async function registerLPRoutes(app: FastifyInstance) {
             const nonRecourseRisk = nonRecoursePct * 30; // Max 30 points
             const overdueRisk = 0; // TODO: Calculate from overdue invoices
             const overallScore = Math.min(100, Math.round(concentrationRisk + nonRecourseRisk + overdueRisk + 20));
-            
+
             let overallLabel: "Low" | "Medium" | "Elevated" = "Low";
             if (overallScore >= 70) overallLabel = "Elevated";
             else if (overallScore >= 35) overallLabel = "Medium";

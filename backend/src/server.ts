@@ -12,7 +12,7 @@ async function main() {
     await app.register(cors, {
         origin: '*',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'x-wallet-address']
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'x-wallet-address', 'x-chain-id', 'x-api-key']
     });
 
     await app.register(swagger, {

@@ -1,24 +1,26 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
-import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { useAccount, useWriteContract, usePublicClient, useChainId } from "wagmi";
 import { formatUnits } from "viem";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { RoleGate } from "../../components/auth/RoleGate";
-import { Role, resolveUserRole, getRoleDisplayName } from "../../lib/roles";
+import { Role } from "../../lib/roles";
 import { fetchUserRole } from "../../lib/backendClient";
 import Deployments from "../../lib/deployments.json";
 import { useWebSocket } from "../../lib/websocketClient";
-import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
 
 export default function AdminPanelPage() {
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
-    
+    const chainId = useChainId();
+    const deploymentKey = chainId === 84532 ? "baseSepolia" : chainId === 5003 ? "mantleSepolia" : "baseSepolia";
+
     const [message, setMessage] = useState<string | React.ReactNode>(null);
     const [loading, setLoading] = useState(false);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -34,7 +36,6 @@ export default function AdminPanelPage() {
 
     // WebSocket connection for real-time updates
     const { subscribe: subscribeWS } = useWebSocket('global');
-    const { trackTransaction } = useTransactionManager();
     const { showToast } = useToast();
 
     // Fetch pool status
@@ -94,7 +95,7 @@ export default function AdminPanelPage() {
             setLoadingAction('pause');
             setMessage(null);
 
-            const FinancingPool = Deployments.FinancingPool;
+            const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
             const tx = await writeContractAsync({
                 address: FinancingPool.address as `0x${string}`,
                 abi: FinancingPool.abi,
@@ -104,7 +105,7 @@ export default function AdminPanelPage() {
 
             setMessage("Pausing pool... Waiting for confirmation...");
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: tx });
-            
+
             if (receipt.status === 'success') {
                 setMessage("Pool paused successfully");
                 mutatePoolStatus();
@@ -130,7 +131,7 @@ export default function AdminPanelPage() {
             setLoadingAction('unpause');
             setMessage(null);
 
-            const FinancingPool = Deployments.FinancingPool;
+            const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
             const tx = await writeContractAsync({
                 address: FinancingPool.address as `0x${string}`,
                 abi: FinancingPool.abi,
@@ -140,7 +141,7 @@ export default function AdminPanelPage() {
 
             setMessage("Unpausing pool... Waiting for confirmation...");
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: tx });
-            
+
             if (receipt.status === 'success') {
                 setMessage("Pool unpaused successfully");
                 mutatePoolStatus();
@@ -197,9 +198,9 @@ export default function AdminPanelPage() {
             )}
 
             {address && !isLoadingRole && isReadOnly && (
-                <Card style={{ 
-                    marginBottom: "24px", 
-                    padding: "20px", 
+                <Card style={{
+                    marginBottom: "24px",
+                    padding: "20px",
                     background: "rgba(249, 115, 22, 0.1)",
                     border: "2px solid rgba(249, 115, 22, 0.3)",
                 }}>
@@ -220,14 +221,14 @@ export default function AdminPanelPage() {
 
             {/* Message */}
             {message && (
-                <Card style={{ 
-                    marginBottom: "24px", 
+                <Card style={{
+                    marginBottom: "24px",
                     padding: "16px",
                     background: typeof message === 'string' && (message.includes('successfully') || message.includes('success'))
-                        ? "rgba(34, 197, 94, 0.1)" 
+                        ? "rgba(34, 197, 94, 0.1)"
                         : typeof message === 'string' && (message.includes('failed') || message.includes('Error:'))
-                        ? "rgba(239, 68, 68, 0.1)"
-                        : "rgba(59, 130, 246, 0.1)",
+                            ? "rgba(239, 68, 68, 0.1)"
+                            : "rgba(59, 130, 246, 0.1)",
                 }}>
                     <p style={{ margin: 0, fontSize: "14px" }}>{message}</p>
                 </Card>

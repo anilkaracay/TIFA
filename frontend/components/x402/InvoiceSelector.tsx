@@ -157,18 +157,25 @@ interface InvoiceSelectorProps {
     onPaymentRequested: (request: X402PaymentRequest) => void;
 }
 
+import { useChainId } from "wagmi";
+
+// ... existing imports
+
 export default function InvoiceSelector({ onInvoiceSelect, onPaymentRequested }: InvoiceSelectorProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredInvoice, setHoveredInvoice] = useState<string | null>(null);
     const [loadingInvoice, setLoadingInvoice] = useState<string | null>(null);
     const { showToast } = useToast();
+    const chainId = useChainId();
 
     const { data: invoices, error, isLoading } = useSWR(
-        "payable-invoices",
+        ["payable-invoices", chainId],
         async () => {
+            // Include chainId in fetchInvoices call if supported, or rely on global headers if configured
             const allInvoices = await fetchInvoices({ status: "all" });
             return allInvoices.filter(
                 (inv: Invoice) =>
+                    // ... existing filter logic
                     ["TOKENIZED", "FINANCED", "PARTIALLY_PAID"].includes(inv.status) &&
                     BigInt(inv.amount) > BigInt(inv.cumulativePaid || "0")
             );

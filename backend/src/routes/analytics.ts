@@ -100,7 +100,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance) {
 
             // Calculate Default Rate (realized defaults only)
             const settledInvoices = invoices.filter(inv => 
-                inv.status === 'PAID' || inv.status === 'DEFAULTED'
+                inv.status === 'PAID' || inv.status === 'DEFAULTED' || inv.status === 'PARTIALLY_PAID'
             );
             const defaultedInvoices = invoices.filter(inv => inv.status === 'DEFAULTED');
             const defaultRate = settledInvoices.length > 0 
@@ -109,18 +109,35 @@ export async function registerAnalyticsRoutes(app: FastifyInstance) {
             const defaultTolerance = 1.5; // Tolerance band
 
             // Calculate Average Invoice Duration (weighted average)
-            const financedInvoices = invoices.filter(inv => inv.isFinanced);
+            const financedInvoices = invoices.filter(inv => inv.isFinanced && inv.dueDate);
             let totalDurationDays = 0;
             let totalAmount = 0;
             financedInvoices.forEach(inv => {
-                const amount = Number(inv.amount);
+                const amount = Number(inv.amount) || 0;
+                if (amount <= 0 || !inv.dueDate) return;
+                
                 const createdAt = new Date(inv.createdAt).getTime();
                 const dueDate = new Date(inv.dueDate).getTime();
+                if (isNaN(createdAt) || isNaN(dueDate)) return;
+                
                 const durationDays = Math.max(0, (dueDate - createdAt) / (1000 * 60 * 60 * 24));
+                if (isNaN(durationDays) || !isFinite(durationDays)) return;
+                
                 totalDurationDays += durationDays * amount;
                 totalAmount += amount;
             });
-            const avgInvoiceDuration = totalAmount > 0 ? totalDurationDays / totalAmount : 0;
+            const avgInvoiceDuration = totalAmount > 0 && totalDurationDays > 0 
+                ? totalDurationDays / totalAmount 
+                : financedInvoices.length > 0 
+                    ? financedInvoices.reduce((sum, inv) => {
+                        if (!inv.dueDate) return sum;
+                        const createdAt = new Date(inv.createdAt).getTime();
+                        const dueDate = new Date(inv.dueDate).getTime();
+                        if (isNaN(createdAt) || isNaN(dueDate)) return sum;
+                        const durationDays = Math.max(0, (dueDate - createdAt) / (1000 * 60 * 60 * 24));
+                        return sum + (isNaN(durationDays) ? 0 : durationDays);
+                      }, 0) / financedInvoices.length
+                    : 0;
             const historicalAvgDuration = 45; // Historical average reference
 
             // Capital Utilization Trend (12 months)
@@ -154,9 +171,13 @@ export async function registerAnalyticsRoutes(app: FastifyInstance) {
             ];
 
             financedInvoices.forEach(inv => {
+                if (!inv.dueDate) return;
                 const createdAt = new Date(inv.createdAt).getTime();
                 const dueDate = new Date(inv.dueDate).getTime();
+                if (isNaN(createdAt) || isNaN(dueDate)) return;
+                
                 const durationDays = Math.max(0, (dueDate - createdAt) / (1000 * 60 * 60 * 24));
+                if (isNaN(durationDays) || !isFinite(durationDays)) return;
                 
                 for (const bucket of durationBuckets) {
                     if (durationDays >= bucket.min && durationDays <= bucket.max) {
@@ -201,7 +222,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance) {
                     .reduce((sum, inv) => sum + Number(inv.amount), 0);
                 
                 const settled = vintageInvoices.filter(inv => 
-                    inv.status === 'PAID' || inv.status === 'DEFAULTED'
+                    inv.status === 'PAID' || inv.status === 'DEFAULTED' || inv.status === 'PARTIALLY_PAID'
                 );
                 const defaulted = vintageInvoices.filter(inv => inv.status === 'DEFAULTED');
                 const defaultRate = settled.length > 0 

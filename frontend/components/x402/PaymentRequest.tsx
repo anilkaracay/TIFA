@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { Invoice } from "../../lib/backendClient";
 import { X402PaymentRequest } from "../../lib/x402Client";
 import { formatAmount, formatDate } from "../../lib/format";
@@ -161,14 +160,6 @@ export default function PaymentRequest({ invoice, paymentRequest, onPaymentSent,
         navigator.clipboard.writeText(text);
         showToast("success", `${label} copied`);
     };
-
-    const qrData = JSON.stringify({
-        address: paymentRequest.payment.recipient,
-        amount: paymentRequest.payment.amount,
-        currency: paymentRequest.payment.currency,
-        chain: paymentRequest.payment.chain,
-        reference: paymentRequest.payment.reference,
-    });
 
     return (
         <div style={styles.container}>

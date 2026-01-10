@@ -1,28 +1,31 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { usePublicClient } from "wagmi";
+import { usePublicClient, useChainId } from "wagmi";
 import { Card } from "../ui/Card";
 import { formatAmount } from "../../lib/format";
 import { PoolOverview, PoolMetrics } from "../../lib/backendClient";
 import Deployments from "../../lib/deployments.json";
 
 interface RiskExposurePanelProps {
-    poolOverview: PoolOverview | null;
-    poolMetrics: PoolMetrics | null;
+    poolOverview: PoolOverview;
+    poolMetrics: PoolMetrics;
 }
 
 interface PositionSummary {
-    recoursePrincipal: bigint;
-    nonRecoursePrincipal: bigint;
+    totalRecourse: bigint;
+    totalNonRecourse: bigint;
+    defaultedPrincipal: bigint;
     totalPrincipal: bigint;
 }
 
-export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePanelProps) {
+export function RiskExposurePanel({ poolMetrics }: RiskExposurePanelProps) {
     const publicClient = usePublicClient();
+    const chainId = useChainId();
+    const deploymentKey = chainId === 31337 ? "31337" : (chainId?.toString() || "31337");
+
     const [exposureData, setExposureData] = useState<PositionSummary | null>(null);
     const [reserveBalance, setReserveBalance] = useState<bigint | null>(null);
-    const [reserveTargetBps, setReserveTargetBps] = useState<bigint | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -30,48 +33,29 @@ export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePan
     useEffect(() => {
         if (!publicClient) return;
 
-        async function fetchExposureData() {
+        async function fetchRiskData() {
             try {
                 setLoading(true);
-                const pool = Deployments.FinancingPool;
+                const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+                if (!pool) {
+                    console.warn(`No deployment found for chainId ${chainId}`);
+                    setLoading(false);
+                    return;
+                }
 
                 // Fetch reserve balance (public state variable)
                 let reserve: bigint = 0n;
                 try {
-                    reserve = await publicClient.readContract({
+                    reserve = await publicClient!.readContract({
                         address: pool.address as `0x${string}`,
                         abi: pool.abi,
                         functionName: "reserveBalance",
                     }) as bigint;
                 } catch (e) {
-                    console.warn("reserveBalance not found in ABI:", e);
-                }
-
-                // Try to read reserveTargetBps (public state variable)
-                // If not in ABI, use default 5% (500 bps)
-                let target: bigint = 500n; // Default 5% (500 bps)
-                
-                // Check if function exists in ABI before calling
-                const hasReserveTargetBps = pool.abi.some((item: any) => 
-                    item.type === "function" && item.name === "reserveTargetBps"
-                );
-                
-                if (hasReserveTargetBps) {
-                    try {
-                        target = await publicClient.readContract({
-                            address: pool.address as `0x${string}`,
-                            abi: pool.abi,
-                            functionName: "reserveTargetBps",
-                        }) as bigint;
-                    } catch (e: any) {
-                        console.warn("Error reading reserveTargetBps:", e);
-                    }
-                } else {
-                    console.warn("reserveTargetBps not found in ABI, using default 5% (500 bps)");
+                    console.warn("Error reading reserveBalance:", e);
                 }
 
                 setReserveBalance(reserve);
-                setReserveTargetBps(target);
 
                 // TODO: Fetch all positions and aggregate
                 // For now, we'll use a simplified approach
@@ -88,9 +72,10 @@ export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePan
                 const recoursePrincipal = totalPrincipal - nonRecoursePrincipal;
 
                 setExposureData({
-                    recoursePrincipal,
-                    nonRecoursePrincipal,
-                    totalPrincipal,
+                    totalRecourse: recoursePrincipal,
+                    totalNonRecourse: nonRecoursePrincipal,
+                    defaultedPrincipal: 0n,
+                    totalPrincipal: totalPrincipal,
                 });
             } catch (e: any) {
                 console.error("Error fetching exposure data:", e);
@@ -100,30 +85,30 @@ export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePan
             }
         }
 
-        fetchExposureData();
-    }, [publicClient, poolMetrics]);
+        fetchRiskData();
+    }, [publicClient, poolMetrics, deploymentKey]);
 
     // Calculate coverage ratio
     const coverageRatio = useMemo(() => {
-        if (!exposureData || !reserveBalance || exposureData.nonRecoursePrincipal === 0n) {
+        if (!exposureData || !reserveBalance || exposureData.totalNonRecourse === 0n) {
             return null;
         }
-        return Number(reserveBalance) / Number(exposureData.nonRecoursePrincipal);
+        return Number(reserveBalance) / Number(exposureData.totalNonRecourse);
     }, [exposureData, reserveBalance]);
 
     // Calculate stress impact
     const stressImpact = useMemo(() => {
         if (!exposureData || !reserveBalance || !poolMetrics) return null;
 
-                // NAV is already in formatted string (TRY), convert to wei for calculation
-                const navWei = BigInt(Math.floor(parseFloat(poolMetrics.navFormatted || "0") * 1e18));
-                if (navWei === 0n) return null;
+        // NAV is already in formatted string (TRY), convert to wei for calculation
+        const navWei = BigInt(Math.floor(parseFloat(poolMetrics.navFormatted || "0") * 1e18));
+        if (navWei === 0n) return null;
 
-                const nonRecourseLoss = exposureData.nonRecoursePrincipal > reserveBalance
-                    ? exposureData.nonRecoursePrincipal - reserveBalance
-                    : 0n;
+        const nonRecourseLoss = exposureData.totalNonRecourse > reserveBalance
+            ? exposureData.totalNonRecourse - reserveBalance
+            : 0n;
 
-                const impactPercent = (Number(nonRecourseLoss) / Number(navWei)) * 100;
+        const impactPercent = (Number(nonRecourseLoss) / Number(navWei)) * 100;
         return impactPercent;
     }, [exposureData, reserveBalance, poolMetrics]);
 
@@ -148,7 +133,7 @@ export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePan
     }
 
     const recoursePercent = exposureData.totalPrincipal > 0n
-        ? (Number(exposureData.recoursePrincipal) / Number(exposureData.totalPrincipal)) * 100
+        ? (Number(exposureData.totalRecourse) / Number(exposureData.totalPrincipal)) * 100
         : 0;
     const nonRecoursePercent = 100 - recoursePercent;
 
@@ -202,19 +187,13 @@ export function RiskExposurePanel({ poolOverview, poolMetrics }: RiskExposurePan
                 <h3 style={{ fontSize: "14px", fontWeight: 600, marginBottom: "12px", color: "var(--text)" }}>
                     Protection Layer
                 </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px", marginBottom: "12px" }}>
                     <div>
                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Reserve Balance</span>
                         <p style={{ margin: "4px 0 0 0", fontSize: "18px", fontWeight: 700, color: "#3b82f6" }}>
                             {reserveBalance !== null
                                 ? formatAmount((Number(reserveBalance) / 1e18).toFixed(2), "TRY")
                                 : "N/A"}
-                        </p>
-                    </div>
-                    <div>
-                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Reserve Target</span>
-                        <p style={{ margin: "4px 0 0 0", fontSize: "18px", fontWeight: 700 }}>
-                            {reserveTargetBps !== null ? `${Number(reserveTargetBps) / 100}%` : "N/A"}
                         </p>
                     </div>
                 </div>

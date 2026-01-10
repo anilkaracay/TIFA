@@ -1,6 +1,7 @@
-import { provider, loadContract } from '../onchain/provider';
+import { getProvider, loadContract } from '../onchain/provider';
 import { ethers } from 'ethers';
 import { env } from '../env';
+import { NETWORKS, DEFAULT_NETWORK } from "@tifa/config";
 
 // Types
 export type PoolTruthSnapshot = {
@@ -22,6 +23,7 @@ export type PoolIndexedSnapshot = PoolTruthSnapshot & {
     indexedBlockNumber: number;
     indexedAt: number;
     subgraphLagBlocks: number;
+    chainId: number;
 };
 
 export type Mismatch = {
@@ -41,6 +43,7 @@ export type ReconciledSnapshot = {
         lastIndexedAt?: number;
         lastOnchainBlock: number;
     };
+    chainId: number;
 };
 
 // Tolerances
@@ -52,11 +55,12 @@ const TOLERANCE_BPS = 1;
  * Mode 1: Direct On-chain Read
  * Query contract methods directly via RPC
  */
-export async function readOnchainTruth(): Promise<PoolTruthSnapshot> {
-    const FinancingPool = loadContract("FinancingPool");
+export async function readOnchainTruth(chainId?: number): Promise<PoolTruthSnapshot> {
+    const provider = getProvider(chainId);
+    const FinancingPool = loadContract("FinancingPool", chainId);
     const currentBlock = await provider.getBlockNumber();
     const currentBlockData = await provider.getBlock(currentBlock);
-    
+
     const [
         nav,
         sharePriceWad,
@@ -80,7 +84,7 @@ export async function readOnchainTruth(): Promise<PoolTruthSnapshot> {
         FinancingPool.totalLiquidity(),
         FinancingPool.totalBorrowed(),
     ]);
-    
+
     return {
         blockNumber: currentBlock,
         timestamp: currentBlockData.timestamp,
@@ -101,13 +105,21 @@ export async function readOnchainTruth(): Promise<PoolTruthSnapshot> {
  * Mode 2: Subgraph Indexed Truth
  * Query subgraph for PoolMetrics entity
  */
-export async function readSubgraphTruth(): Promise<PoolIndexedSnapshot | null> {
+export async function readSubgraphTruth(chainId?: number): Promise<PoolIndexedSnapshot | null> {
+    // TODO: support multiple subgraphs based on chainId
+    // For now, if chainId != default, return null unless configured
+    const defaultChainId = NETWORKS[DEFAULT_NETWORK].chainId;
+    if (chainId && chainId !== defaultChainId) {
+        console.warn(`[TruthService] Subgraph not configured for chain ${chainId}`);
+        return null;
+    }
+
     const subgraphUrl = env.SUBGRAPH_URL || process.env.SUBGRAPH_URL;
     if (!subgraphUrl) {
         console.warn('[TruthService] SUBGRAPH_URL not configured, skipping subgraph query');
         return null;
     }
-    
+
     try {
         const query = `
             query {
@@ -133,32 +145,33 @@ export async function readSubgraphTruth(): Promise<PoolIndexedSnapshot | null> {
                 }
             }
         `;
-        
+
         const response = await fetch(subgraphUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query }),
         });
-        
+
         if (!response.ok) {
             throw new Error(`Subgraph query failed: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.errors) {
             throw new Error(`Subgraph errors: ${JSON.stringify(data.errors)}`);
         }
-        
+
         const metrics = data.data?.poolMetrics;
         if (!metrics) {
             return null; // No indexed data yet
         }
-        
+
+        const provider = getProvider(chainId);
         const currentBlock = await provider.getBlockNumber();
         const indexedBlock = Number(metrics.lastEventBlock || data.data?._meta?.block?.number || 0);
         const subgraphLagBlocks = currentBlock - indexedBlock;
-        
+
         return {
             blockNumber: indexedBlock,
             timestamp: Number(metrics.lastEventTimestamp || 0),
@@ -175,6 +188,7 @@ export async function readSubgraphTruth(): Promise<PoolIndexedSnapshot | null> {
             indexedBlockNumber: indexedBlock,
             indexedAt: Number(metrics.lastEventTimestamp || 0),
             subgraphLagBlocks,
+            chainId: chainId || defaultChainId
         };
     } catch (e: any) {
         console.error('[TruthService] Subgraph query failed:', e.message);
@@ -190,7 +204,7 @@ function compareSnapshots(
     indexed: PoolIndexedSnapshot
 ): Mismatch[] {
     const mismatches: Mismatch[] = [];
-    
+
     // Compare NAV (WAD tolerance)
     const navDiff = BigInt(onchain.nav) - BigInt(indexed.nav);
     if (navDiff < 0n ? -navDiff > TOLERANCE_WAD : navDiff > TOLERANCE_WAD) {
@@ -201,7 +215,7 @@ function compareSnapshots(
             diff: navDiff.toString(),
         });
     }
-    
+
     // Compare Share Price (WAD tolerance)
     const sharePriceDiff = BigInt(onchain.sharePriceWad) - BigInt(indexed.sharePriceWad);
     if (sharePriceDiff < 0n ? -sharePriceDiff > TOLERANCE_WAD : sharePriceDiff > TOLERANCE_WAD) {
@@ -212,7 +226,7 @@ function compareSnapshots(
             diff: sharePriceDiff.toString(),
         });
     }
-    
+
     // Compare Utilization (BPS tolerance)
     const utilDiff = Math.abs(onchain.utilizationBps - indexed.utilizationBps);
     if (utilDiff > TOLERANCE_BPS) {
@@ -223,7 +237,7 @@ function compareSnapshots(
             diff: utilDiff,
         });
     }
-    
+
     // Compare Principal Outstanding (wei tolerance)
     const principalDiff = BigInt(onchain.totalPrincipalOutstanding) - BigInt(indexed.totalPrincipalOutstanding);
     if (principalDiff < 0n ? -principalDiff > TOLERANCE_WEI : principalDiff > TOLERANCE_WEI) {
@@ -234,7 +248,7 @@ function compareSnapshots(
             diff: principalDiff.toString(),
         });
     }
-    
+
     // Compare Interest Accrued (wei tolerance)
     const interestDiff = BigInt(onchain.totalInterestAccrued) - BigInt(indexed.totalInterestAccrued);
     if (interestDiff < 0n ? -interestDiff > TOLERANCE_WEI : interestDiff > TOLERANCE_WEI) {
@@ -245,7 +259,7 @@ function compareSnapshots(
             diff: interestDiff.toString(),
         });
     }
-    
+
     // Compare Losses (wei tolerance)
     const lossesDiff = BigInt(onchain.totalLosses) - BigInt(indexed.totalLosses);
     if (lossesDiff < 0n ? -lossesDiff > TOLERANCE_WEI : lossesDiff > TOLERANCE_WEI) {
@@ -256,7 +270,7 @@ function compareSnapshots(
             diff: lossesDiff.toString(),
         });
     }
-    
+
     return mismatches;
 }
 
@@ -264,10 +278,11 @@ function compareSnapshots(
  * Mode 3: Reconciled Snapshot (Preferred)
  * Fetch both on-chain and subgraph, compare, and return reconciled result
  */
-export async function getReconciledSnapshot(): Promise<ReconciledSnapshot> {
-    const onchain = await readOnchainTruth();
-    const indexed = await readSubgraphTruth();
-    
+export async function getReconciledSnapshot(chainId?: number): Promise<ReconciledSnapshot> {
+    const onchain = await readOnchainTruth(chainId);
+    const indexed = await readSubgraphTruth(chainId);
+    const usedChainId = chainId || NETWORKS[DEFAULT_NETWORK].chainId;
+
     // If subgraph unavailable, return on-chain only
     if (!indexed) {
         return {
@@ -278,9 +293,10 @@ export async function getReconciledSnapshot(): Promise<ReconciledSnapshot> {
                 subgraphLagBlocks: -1, // Unknown
                 lastOnchainBlock: onchain.blockNumber,
             },
+            chainId: usedChainId
         };
     }
-    
+
     // Check subgraph lag threshold
     const SUBGRAPH_LAG_THRESHOLD = 100; // blocks
     if (indexed.subgraphLagBlocks > SUBGRAPH_LAG_THRESHOLD) {
@@ -295,17 +311,18 @@ export async function getReconciledSnapshot(): Promise<ReconciledSnapshot> {
                 lastIndexedAt: indexed.indexedAt,
                 lastOnchainBlock: onchain.blockNumber,
             },
+            chainId: usedChainId
         };
     }
-    
+
     // Compare and detect mismatches
     const mismatches = compareSnapshots(onchain, indexed);
-    
+
     // Log mismatches if any
     if (mismatches.length > 0) {
         console.warn('[TruthService] Mismatches detected:', mismatches);
     }
-    
+
     return {
         modeUsed: 'reconciled',
         onchain,
@@ -316,21 +333,22 @@ export async function getReconciledSnapshot(): Promise<ReconciledSnapshot> {
             lastIndexedAt: indexed.indexedAt,
             lastOnchainBlock: onchain.blockNumber,
         },
+        chainId: usedChainId
     };
 }
 
 /**
  * Get invoice truth from on-chain
  */
-export async function getInvoiceTruth(invoiceIdOnChain: string): Promise<{
+export async function getInvoiceTruth(invoiceIdOnChain: string, chainId?: number): Promise<{
     onchain: any;
     dbOutOfSync?: boolean;
 }> {
-    const FinancingPool = loadContract("FinancingPool");
-    
+    const FinancingPool = loadContract("FinancingPool", chainId);
+
     try {
         const position = await FinancingPool.getPosition(invoiceIdOnChain);
-        
+
         return {
             onchain: {
                 exists: position.exists,
@@ -350,25 +368,25 @@ export async function getInvoiceTruth(invoiceIdOnChain: string): Promise<{
 /**
  * Get LP position truth
  */
-export async function getLPPositionTruth(wallet: string): Promise<{
+export async function getLPPositionTruth(wallet: string, chainId?: number): Promise<{
     lpShares: string;
     underlyingValue: string;
     sharePriceWad: string;
     nav: string;
 }> {
-    const FinancingPool = loadContract("FinancingPool");
-    const LPShareToken = loadContract("LPShareToken");
-    
+    const FinancingPool = loadContract("FinancingPool", chainId);
+    const LPShareToken = loadContract("LPShareToken", chainId);
+
     const [lpShares, sharePriceWad, nav] = await Promise.all([
         LPShareToken.balanceOf(wallet),
         FinancingPool.sharePriceWad(),
         FinancingPool.getNAV(),
     ]);
-    
+
     // Compute underlying value: shares * sharePriceWad / 1e18
     // This is allowed because sharePriceWad is canonical
     const underlyingValue = (lpShares.mul(sharePriceWad)).div(ethers.BigNumber.from('1000000000000000000'));
-    
+
     return {
         lpShares: lpShares.toString(),
         underlyingValue: underlyingValue.toString(),
@@ -381,7 +399,7 @@ export async function getLPPositionTruth(wallet: string): Promise<{
  * Calculate APR/APY from InterestPaid events only
  * Uses on-chain NAV queries at event blocks
  */
-export async function calculateYieldFromEvents(windowDays: number = 7): Promise<{
+export async function calculateYieldFromEvents(windowDays: number = 7, chainId?: number): Promise<{
     windowDays: number;
     windowStartTimestamp: number;
     windowEndTimestamp: number;
@@ -398,20 +416,23 @@ export async function calculateYieldFromEvents(windowDays: number = 7): Promise<
     if (!subgraphUrl) {
         throw new Error('SUBGRAPH_URL not configured');
     }
-    
+
+    // TODO: Verify if subgraph matches chainId logic (similar to readSubgraphTruth)
+
     const now = Math.floor(Date.now() / 1000);
     const windowStartTimestamp = now - (windowDays * 24 * 3600);
     const windowEndTimestamp = now;
-    
+
     // Get block numbers for window boundaries
+    const provider = getProvider(chainId);
     const currentBlock = await provider.getBlockNumber();
     const endBlock = currentBlock;
-    
+
     // Estimate start block (approximate: 1 block per 2 seconds)
     const blocksPerSecond = 2;
     const blocksInWindow = windowDays * 24 * 3600 * blocksPerSecond;
     const startBlock = Math.max(0, currentBlock - blocksInWindow);
-    
+
     // Query InterestPaid events from subgraph
     const query = `
         query {
@@ -430,7 +451,7 @@ export async function calculateYieldFromEvents(windowDays: number = 7): Promise<
             }
         }
     `;
-    
+
     let events: any[] = [];
     try {
         const response = await fetch(subgraphUrl, {
@@ -438,7 +459,7 @@ export async function calculateYieldFromEvents(windowDays: number = 7): Promise<
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query }),
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             events = data.data?.interestPaidEvents || [];
@@ -446,35 +467,35 @@ export async function calculateYieldFromEvents(windowDays: number = 7): Promise<
     } catch (e) {
         console.warn('[TruthService] Failed to fetch InterestPaid events:', e);
     }
-    
+
     // Sum LP interest paid
     let lpInterestPaid = ethers.BigNumber.from(0);
     for (const event of events) {
         lpInterestPaid = lpInterestPaid.add(ethers.BigNumber.from(event.lpInterest || '0'));
     }
-    
+
     // Get NAV at start and end blocks
-    const FinancingPool = loadContract("FinancingPool");
+    const FinancingPool = loadContract("FinancingPool", chainId);
     const [navStart, navEnd] = await Promise.all([
         FinancingPool.getNAV({ blockTag: startBlock }).catch(() => FinancingPool.getNAV()),
         FinancingPool.getNAV({ blockTag: endBlock }),
     ]);
-    
+
     // Average NAV
     const avgNav = navStart.add(navEnd).div(2);
-    
+
     // Calculate APR
     // APR = (lpInterestPaid / avgNAV) * (secondsPerYear / windowSeconds)
     const windowSeconds = windowDays * 24 * 3600;
     const secondsPerYear = 365 * 24 * 3600;
-    
+
     let apr = '0';
     if (avgNav.gt(0) && lpInterestPaid.gt(0)) {
         // APR in basis points: (lpInterestPaid * 10000 * secondsPerYear) / (avgNav * windowSeconds)
         const aprBps = lpInterestPaid.mul(10000).mul(secondsPerYear).div(avgNav.mul(windowSeconds));
         apr = (Number(aprBps.toString()) / 100).toFixed(4);
     }
-    
+
     // Calculate APY (compounded daily)
     // APY = (1 + APR/365)^365 - 1
     let apy = '0';
@@ -484,7 +505,7 @@ export async function calculateYieldFromEvents(windowDays: number = 7): Promise<
         const apyDecimal = Math.pow(1 + dailyRate, 365) - 1;
         apy = (apyDecimal * 100).toFixed(4);
     }
-    
+
     return {
         windowDays,
         windowStartTimestamp,

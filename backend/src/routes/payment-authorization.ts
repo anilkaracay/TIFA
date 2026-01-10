@@ -262,3 +262,8 @@ export async function registerPaymentAuthorizationRoutes(app: FastifyInstance) {
     });
 }
 
+
+
+
+
+

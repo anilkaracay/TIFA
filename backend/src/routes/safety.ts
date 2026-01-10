@@ -1,12 +1,12 @@
 import { FastifyInstance } from 'fastify';
-import { provider, loadContract } from '../onchain/provider';
+import { getProvider, loadContract } from '../onchain/provider';
 
 export async function registerSafetyRoutes(app: FastifyInstance) {
     // GET /limits - Get all safety limits and current state (registered with /pool prefix)
     app.get('/limits', async (req, reply) => {
         try {
             const FinancingPool = loadContract("FinancingPool");
-            
+
             // Fetch all safety parameters
             const [
                 paused,
@@ -18,21 +18,21 @@ export async function registerSafetyRoutes(app: FastifyInstance) {
                 totalLiquidity,
                 totalBorrowed,
             ] = await Promise.all([
-                FinancingPool.paused().catch(() => false), // Fallback if not in ABI
+                (typeof FinancingPool.paused === 'function' ? FinancingPool.paused() : Promise.resolve(false)).catch(() => false),
                 FinancingPool.utilization(),
-                FinancingPool.maxUtilizationBps(),
+                (typeof FinancingPool.maxUtilizationBps === 'function' ? FinancingPool.maxUtilizationBps() : Promise.resolve(8000n)),
                 FinancingPool.getNAV(),
-                FinancingPool.maxLoanBpsOfTVL().catch(() => 1000n), // Default 10%
-                FinancingPool.maxIssuerExposureBps().catch(() => 2500n), // Default 25%
+                (typeof FinancingPool.maxLoanBpsOfTVL === 'function' ? FinancingPool.maxLoanBpsOfTVL() : Promise.resolve(1000n)).catch(() => 1000n),
+                (typeof FinancingPool.maxIssuerExposureBps === 'function' ? FinancingPool.maxIssuerExposureBps() : Promise.resolve(2500n)).catch(() => 2500n),
                 FinancingPool.totalLiquidity(),
                 FinancingPool.totalBorrowed(),
             ]);
-            
+
             const utilizationBps = Number(utilization.toString());
             const navValue = Number(nav.toString());
             const maxSingleLoan = (navValue * Number(maxLoanBpsOfTVL.toString())) / 10000;
             const maxIssuerExposure = (navValue * Number(maxIssuerExposureBps.toString())) / 10000;
-            
+
             return {
                 paused: Boolean(paused),
                 utilization: utilizationBps,
@@ -55,13 +55,13 @@ export async function registerSafetyRoutes(app: FastifyInstance) {
             return { error: `Failed to fetch pool limits: ${e.message}` };
         }
     });
-    
+
     // GET /issuer/:address/exposure - Get issuer exposure and limits (registered with /pool prefix)
     app.get<{ Params: { address: string } }>('/issuer/:address/exposure', async (req, reply) => {
         try {
             const { address } = req.params;
             const FinancingPool = loadContract("FinancingPool");
-            
+
             const [
                 currentExposure,
                 nav,
@@ -71,11 +71,11 @@ export async function registerSafetyRoutes(app: FastifyInstance) {
                 FinancingPool.getNAV(),
                 FinancingPool.maxIssuerExposureBps().catch(() => 2500n), // Default 25%
             ]);
-            
+
             const navValue = Number(nav.toString());
             const maxAllowed = (navValue * Number(maxIssuerExposureBps.toString())) / 10000;
             const currentExposureValue = Number(currentExposure.toString());
-            
+
             return {
                 issuer: address,
                 currentExposure: currentExposure.toString(),

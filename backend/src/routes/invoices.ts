@@ -11,7 +11,8 @@ import {
     RepayNotificationSchema
 } from '../schemas/invoices';
 import { ethers } from 'ethers';
-import { provider, signer, loadContract } from '../onchain/provider';
+import { getProvider, getSigner, loadContract } from '../onchain/provider';
+import { getChainIdFromRequest } from '../utils/chain';
 import { roleResolutionMiddleware, requireRole, requireWallet } from '../middleware/roleAuth';
 import { Role } from '../auth/roles';
 import { emitInvoiceEvent, emitPoolEvent } from '../websocket/server';
@@ -95,14 +96,32 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         });
 
         // Fetch debt information: Use DB first, then on-chain as fallback
-        const FinancingPool = loadContract("FinancingPool");
-        const invoicesWithDebt = await Promise.all(
+        const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
+
+        // Fetch latest agent decisions for risk scores
+        const invoiceIds = invoices.map(i => i.id);
+        const latestDecisions = await prisma.agentDecision.findMany({
+            where: { invoiceId: { in: invoiceIds } },
+            orderBy: { createdAt: 'desc' },
+            // We fetch all matching to find the latest per invoice in memory 
+            // since we can't easily do "distinct on" with all DB types via Prisma here without raw query
+            // optimization: usually not too many decisions per invoice
+        });
+
+        const latestDecisionMap = new Map<string, number>();
+        latestDecisions.forEach(d => {
+            if (d.invoiceId && !latestDecisionMap.has(d.invoiceId) && d.riskScore !== null) {
+                latestDecisionMap.set(d.invoiceId, d.riskScore);
+            }
+        });
+
+        const invoicesWithDetails = await Promise.all(
             invoices.map(async (inv) => {
+                let usedCredit = inv.usedCredit || "0";
+                let maxCreditLine = inv.maxCreditLine || "0";
+
                 // Use DB value if exists, otherwise read from on-chain
                 if (inv.invoiceIdOnChain && inv.isFinanced) {
-                    let usedCredit = inv.usedCredit || "0";
-                    let maxCreditLine = inv.maxCreditLine || "0";
-                    
                     // If DB doesn't have values, read from on-chain and sync
                     if (!inv.usedCredit || inv.usedCredit === "0" || !inv.maxCreditLine || inv.maxCreditLine === "0") {
                         try {
@@ -110,7 +129,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                             if (position.exists) {
                                 usedCredit = position.usedCredit.toString();
                                 maxCreditLine = position.maxCreditLine.toString();
-                                
+
                                 // Sync to DB
                                 await prisma.invoice.update({
                                     where: { id: inv.id },
@@ -124,23 +143,18 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                             console.error(`Error fetching debt for invoice ${inv.id}:`, e);
                         }
                     }
-                    
-                    return {
-                        ...inv,
-                        usedCredit: usedCredit,
-                        maxCreditLine: maxCreditLine
-                    };
                 }
-                
+
                 return {
                     ...inv,
-                    usedCredit: inv.usedCredit || "0",
-                    maxCreditLine: inv.maxCreditLine || "0"
+                    usedCredit,
+                    maxCreditLine,
+                    riskScore: latestDecisionMap.get(inv.id) // Attach risk score
                 };
             })
         );
 
-        return invoicesWithDebt;
+        return invoicesWithDetails;
     });
 
     // GET /invoices/:id
@@ -154,12 +168,12 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice) {
             return reply.code(404).send({ error: 'Invoice not found' });
         }
-        
+
         // If financed, ensure usedCredit is populated
         if (invoice.isFinanced && invoice.invoiceIdOnChain) {
             if (!invoice.usedCredit || invoice.usedCredit === "0" || !invoice.maxCreditLine || invoice.maxCreditLine === "0") {
                 try {
-                    const FinancingPool = loadContract("FinancingPool");
+                    const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
                     const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
                     if (position.exists) {
                         // Sync to DB
@@ -178,7 +192,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 }
             }
         }
-        
+
         return invoice;
     });
 
@@ -194,7 +208,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (body.status && body.status !== invoice.status && invoice.invoiceIdOnChain) {
             try {
                 console.log(`Updating status on-chain for ${invoice.externalId} to ${body.status}...`);
-                const InvoiceRegistry = loadContract("InvoiceRegistry");
+                const InvoiceRegistry = loadContract("InvoiceRegistry", getChainIdFromRequest(req));
                 const statusEnum = STATUS_MAP[body.status];
 
                 if (statusEnum !== undefined) {
@@ -221,11 +235,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (body.status && body.status !== invoice.status) {
             emitInvoiceEvent(id, {
                 type: 'invoice.status_changed',
-                payload: { 
-                    invoiceId: id, 
+                payload: {
+                    invoiceId: id,
                     externalId: invoice.externalId,
-                    previousStatus: invoice.status, 
-                    newStatus: body.status 
+                    previousStatus: invoice.status,
+                    newStatus: body.status
                 },
             });
         }
@@ -265,11 +279,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 return { ...updated, txHash: mockTxHash };
             }
 
-            const InvoiceToken = loadContract("InvoiceToken");
+            const InvoiceToken = loadContract("InvoiceToken", getChainIdFromRequest(req));
             // ... Real logic ...
             const invoiceIdOnChain = ethers.utils.id(invoice.externalId);
-            const issuerAddress = signer.address;
-            const debtorAddress = signer.address;
+            const issuerAddress = getSigner(getChainIdFromRequest(req)).address;
+            const debtorAddress = getSigner(getChainIdFromRequest(req)).address;
 
             // Convert amount to cents (2 decimals)
             // invoice.amount is in TRY units (e.g., "50000"), convert to cents (5000000)
@@ -306,12 +320,12 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             // Emit WebSocket event
             emitInvoiceEvent(id, {
                 type: 'invoice.tokenized',
-                payload: { 
-                    invoiceId: id, 
+                payload: {
+                    invoiceId: id,
                     externalId: invoice.externalId,
-                    tokenId, 
+                    tokenId,
                     invoiceIdOnChain,
-                    txHash: receipt.transactionHash 
+                    txHash: receipt.transactionHash
                 },
             });
 
@@ -358,14 +372,14 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             // If txHash is provided, on-chain transaction was already completed by frontend
             if (body.txHash) {
                 console.log(`[Finance] On-chain transaction already completed for ${invoice.externalId}, txHash: ${body.txHash}`);
-                
+
                 // Verify the transaction on-chain and get position data
                 let usedCredit = requestedAmount.toString();
                 let maxCreditLine = requestedAmount.toString();
                 try {
-                    const FinancingPool = loadContract("FinancingPool");
+                    const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
                     const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
-                    
+
                     if (position.exists) {
                         usedCredit = position.usedCredit.toString();
                         maxCreditLine = position.maxCreditLine.toString();
@@ -381,8 +395,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 // Update database to reflect financing
                 const updated = await prisma.invoice.update({
                     where: { id },
-                    data: { 
-                        isFinanced: true, 
+                    data: {
+                        isFinanced: true,
                         status: 'FINANCED',
                         usedCredit: usedCredit,
                         maxCreditLine: maxCreditLine,
@@ -392,11 +406,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 // Emit WebSocket events
                 emitInvoiceEvent(id, {
                     type: 'invoice.financed',
-                    payload: { 
-                        invoiceId: id, 
+                    payload: {
+                        invoiceId: id,
                         externalId: invoice.externalId,
                         approvedAmount: requestedAmount.toString(),
-                        txHash: body.txHash 
+                        txHash: body.txHash
                     },
                 });
                 emitPoolEvent({
@@ -423,8 +437,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
                 const updated = await prisma.invoice.update({
                     where: { id },
-                    data: { 
-                        isFinanced: true, 
+                    data: {
+                        isFinanced: true,
                         status: 'FINANCED',
                         usedCredit: requestedAmount.toString(),
                         maxCreditLine: requestedAmount.toString(),
@@ -434,11 +448,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 // Emit WebSocket event
                 emitInvoiceEvent(id, {
                     type: 'invoice.financed',
-                    payload: { 
-                        invoiceId: id, 
+                    payload: {
+                        invoiceId: id,
                         externalId: invoice.externalId,
                         approvedAmount: requestedAmount.toString(),
-                        txHash: mockTxHash 
+                        txHash: mockTxHash
                     },
                 });
                 emitPoolEvent({
@@ -454,13 +468,13 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 };
             }
 
-            const InvoiceToken = loadContract("InvoiceToken");
-            const FinancingPool = loadContract("FinancingPool");
+            const InvoiceToken = loadContract("InvoiceToken", getChainIdFromRequest(req));
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
 
             // Check current owner and position status
             const currentOwner = await InvoiceToken.ownerOf(invoice.tokenId);
             const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
-            
+
             let positionExists = position.exists;
 
             if (currentOwner === FinancingPool.address) {
@@ -471,7 +485,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                     const txRecover = await FinancingPool.recoverLockCollateral(
                         invoice.invoiceIdOnChain,
                         invoice.tokenId,
-                        signer.address
+                        getSigner(getChainIdFromRequest(req)).address
                     );
                     await txRecover.wait();
                     console.log("Position recovered successfully.");
@@ -484,7 +498,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 // 1. Approve/Transfer NFT to Financing Pool
                 console.log("Transferring NFT to Pool...");
                 const txTransfer = await InvoiceToken["safeTransferFrom(address,address,uint256)"](
-                    signer.address,
+                    getSigner(getChainIdFromRequest(req)).address,
                     FinancingPool.address,
                     invoice.tokenId
                 );
@@ -495,7 +509,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 const txLock = await FinancingPool.lockCollateral(
                     invoice.invoiceIdOnChain,
                     invoice.tokenId,
-                    signer.address // company receives excess? or who receives credit?
+                    getSigner(getChainIdFromRequest(req)).address // company receives excess? or who receives credit?
                 );
                 await txLock.wait();
                 positionExists = true;
@@ -515,7 +529,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const txDraw = await FinancingPool.drawCredit(
                 invoice.invoiceIdOnChain,
                 requestedAmount.toString(),
-                signer.address // funds go to signer for this demo
+                getSigner(getChainIdFromRequest(req)).address // funds go to signer for this demo
             );
             const receipt = await txDraw.wait();
             console.log(`Credit drawn. Tx: ${receipt.transactionHash}`);
@@ -524,8 +538,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const finalPosition = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
             const updated = await prisma.invoice.update({
                 where: { id },
-                data: { 
-                    isFinanced: true, 
+                data: {
+                    isFinanced: true,
                     status: 'FINANCED',
                     usedCredit: finalPosition.usedCredit.toString(),
                     maxCreditLine: finalPosition.maxCreditLine.toString(),
@@ -535,11 +549,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             // Emit WebSocket events
             emitInvoiceEvent(id, {
                 type: 'invoice.financed',
-                payload: { 
-                    invoiceId: id, 
+                payload: {
+                    invoiceId: id,
                     externalId: invoice.externalId,
                     approvedAmount: requestedAmount.toString(),
-                    txHash: receipt.transactionHash 
+                    txHash: receipt.transactionHash
                 },
             });
             emitPoolEvent({
@@ -588,7 +602,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         // Or we can blindly call Registry.setStatus() if we want consistency.
 
         if (newStatus !== invoice.status && invoice.invoiceIdOnChain) {
-            const InvoiceRegistry = loadContract("InvoiceRegistry");
+            const InvoiceRegistry = loadContract("InvoiceRegistry", getChainIdFromRequest(req));
             const statusEnum = STATUS_MAP[newStatus];
             if (statusEnum) {
                 // Async update (fire and forget for latency?)
@@ -621,12 +635,12 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         // Emit WebSocket event
         emitInvoiceEvent(id, {
             type: 'invoice.payment_recorded',
-            payload: { 
-                invoiceId: id, 
+            payload: {
+                invoiceId: id,
                 externalId: invoice.externalId,
                 paymentAmount: body.amount,
                 cumulativePaid: newPaid.toString(),
-                status: newStatus 
+                status: newStatus
             },
         });
         if (newStatus === 'PAID') {
@@ -650,9 +664,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice.isFinanced) return reply.code(400).send({ error: 'Invoice not financed' });
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
             const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
-            
+
             if (!position.exists) {
                 return reply.code(404).send({ error: 'Position not found on-chain' });
             }
@@ -674,11 +688,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             const paymentAmount = ethers.BigNumber.from(body.amount);
 
             // Pay recourse on-chain
-            const TestToken = loadContract("TestToken");
+            const TestToken = loadContract("TestToken", getChainIdFromRequest(req));
             const amountWei = ethers.utils.parseUnits(body.amount, 18);
 
             // Check allowance
-            const allowance = await TestToken.allowance(signer.address, FinancingPool.address);
+            const allowance = await TestToken.allowance(getSigner(getChainIdFromRequest(req)).address, FinancingPool.address);
             if (allowance.lt(amountWei)) {
                 const approveTx = await TestToken.approve(FinancingPool.address, amountWei);
                 await approveTx.wait();
@@ -741,9 +755,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice.isFinanced) return reply.code(400).send({ error: 'Invoice not financed' });
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
             const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
-            
+
             if (!position.exists) {
                 return reply.code(404).send({ error: 'Position not found on-chain' });
             }
@@ -760,7 +774,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
             const currentTime = Math.floor(Date.now() / 1000);
             if (currentTime < graceEndsAt.toNumber()) {
-                return reply.code(400).send({ 
+                return reply.code(400).send({
                     error: 'Grace period not ended',
                     graceEndsAt: graceEndsAt.toString(),
                     currentTime: currentTime.toString(),
@@ -831,9 +845,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         if (!invoice.isFinanced) return reply.code(400).send({ error: 'Invoice not financed' });
 
         try {
-            const FinancingPool = loadContract("FinancingPool");
+            const FinancingPool = loadContract("FinancingPool", getChainIdFromRequest(req));
             const position = await FinancingPool.getPosition(invoice.invoiceIdOnChain);
-            
+
             if (!position.exists) {
                 return reply.code(404).send({ error: 'Position not found on-chain' });
             }
@@ -869,7 +883,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 payload: {
                     invoiceId: id,
                     externalId: invoice.externalId,
-                    repaidAmount: body.amount || (BigInt(invoice.usedCredit || "0").sub(currentUsedCredit).toString()),
+                    repaidAmount: body.amount || (BigInt(invoice.usedCredit || "0") - BigInt(currentUsedCredit.toString())).toString(),
                     remainingDebt: currentUsedCredit.toString(),
                     totalDebt: totalDebt.toString(),
                     status: newStatus,

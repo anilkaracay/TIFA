@@ -5,3 +5,5 @@ packages:
   - 'frontend'
   - 'subgraph'
   - 'docs'
+  - 'config'
+

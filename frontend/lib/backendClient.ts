@@ -1,4 +1,23 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
+
+import { getChainId } from '@wagmi/core';
+import { config } from './wagmi';
+
+function getAuthHeaders(walletAddress?: string): Record<string, string> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (walletAddress) {
+        headers['x-wallet-address'] = walletAddress;
+    }
+    try {
+        const chainId = getChainId(config as any);
+        if (chainId) {
+            headers['x-chain-id'] = chainId.toString();
+        }
+    } catch (e) {
+        console.warn("Failed to get chain ID for headers", e);
+    }
+    return headers;
+}
 
 // Role-related types
 export interface UserRoleResponse {
@@ -18,7 +37,7 @@ export async function fetchUserRole(walletAddress: string): Promise<UserRoleResp
     return res.json();
 }
 
-export type InvoiceStatus = "pending" | "approved" | "rejected" | "paid" | "partially_paid" | "financed" | "tokenized";
+export type InvoiceStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID" | "PARTIALLY_PAID" | "FINANCED" | "TOKENIZED" | "DEFAULTED" | "ISSUED";
 
 export interface Invoice {
     id: string;
@@ -37,6 +56,7 @@ export interface Invoice {
     updatedAt: string;
     usedCredit?: string; // Debt amount in cents
     maxCreditLine?: string; // Max credit line in cents
+    riskScore?: number;
 }
 
 export type InvoicePayment = {
@@ -72,10 +92,7 @@ export async function fetchInvoiceDetail(id: string): Promise<InvoiceDetail> {
 }
 
 export async function recordPayment(id: string, payload: { amount: string; currency: string; paidAt: string; psp?: string; transactionId?: string }, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/payments`, {
         method: "POST",
         headers,
@@ -95,10 +112,7 @@ export async function recordPayment(id: string, payload: { amount: string; curre
 }
 
 export async function payRecourse(id: string, payload: { amount: string; currency?: string; paidAt?: string; txHash?: string }, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/recourse-payment`, {
         method: "POST",
         headers,
@@ -117,10 +131,7 @@ export async function payRecourse(id: string, payload: { amount: string; currenc
 }
 
 export async function declareDefault(id: string, payload: { reason?: string; lossAmount?: string }, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/declare-default`, {
         method: "POST",
         headers,
@@ -134,10 +145,7 @@ export async function declareDefault(id: string, payload: { reason?: string; los
 }
 
 export async function notifyRepayment(id: string, payload: { txHash: string; amount?: string }, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/repay-notification`, {
         method: "POST",
         headers,
@@ -168,10 +176,7 @@ export async function fetchInvoices(params?: { status?: string; companyId?: stri
 }
 
 export async function tokenizeInvoice(id: string, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const res = await fetch(`${BACKEND_URL}/invoices/${id}/tokenize`, {
         method: "POST",
         headers,
@@ -185,10 +190,7 @@ export async function tokenizeInvoice(id: string, walletAddress?: string) {
 }
 
 export async function requestFinancing(id: string, walletAddress?: string, txHash?: string, amount?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
+    const headers = getAuthHeaders(walletAddress);
     const body: any = {};
     if (txHash) {
         body.txHash = txHash;
@@ -209,13 +211,8 @@ export async function requestFinancing(id: string, walletAddress?: string, txHas
 }
 
 export async function createInvoice(data: any, walletAddress?: string) {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    
-    // Add wallet address to header if provided
-    if (walletAddress) {
-        headers['x-wallet-address'] = walletAddress;
-    }
-    
+    const headers = getAuthHeaders(walletAddress);
+
     const url = `${BACKEND_URL}/invoices`;
     console.log('[createInvoice] Request:', {
         url,
@@ -223,21 +220,21 @@ export async function createInvoice(data: any, walletAddress?: string) {
         headers,
         body: data
     });
-    
+
     try {
         const res = await fetch(url, {
             method: "POST",
             headers,
             body: JSON.stringify(data),
         });
-        
+
         console.log('[createInvoice] Response:', {
             status: res.status,
             statusText: res.statusText,
             ok: res.ok,
             url: res.url
         });
-        
+
         if (!res.ok) {
             const errBody = await res.json().catch(() => ({}));
             const errorMsg = errBody.error || errBody.message || `Failed to create invoice: ${res.statusText}`;
@@ -344,7 +341,7 @@ export interface IssuerExposure {
 }
 
 export async function fetchPoolLimits(): Promise<PoolLimits> {
-    const res = await fetch(`${BACKEND_URL}/pool/limits`, { 
+    const res = await fetch(`${BACKEND_URL}/pool/limits`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -355,7 +352,7 @@ export async function fetchPoolLimits(): Promise<PoolLimits> {
 }
 
 export async function fetchIssuerExposure(issuerAddress: string): Promise<IssuerExposure> {
-    const res = await fetch(`${BACKEND_URL}/pool/issuer/${issuerAddress}/exposure`, { 
+    const res = await fetch(`${BACKEND_URL}/pool/issuer/${issuerAddress}/exposure`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -538,7 +535,7 @@ export interface PoolYieldTruth {
 }
 
 export async function fetchPoolTruth(): Promise<ReconciledPoolTruth> {
-    const res = await fetch(`${BACKEND_URL}/truth/pool`, { 
+    const res = await fetch(`${BACKEND_URL}/truth/pool`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -549,7 +546,7 @@ export async function fetchPoolTruth(): Promise<ReconciledPoolTruth> {
 }
 
 export async function fetchInvoiceTruth(invoiceId: string): Promise<InvoiceTruth> {
-    const res = await fetch(`${BACKEND_URL}/truth/invoice/${invoiceId}`, { 
+    const res = await fetch(`${BACKEND_URL}/truth/invoice/${invoiceId}`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -560,7 +557,7 @@ export async function fetchInvoiceTruth(invoiceId: string): Promise<InvoiceTruth
 }
 
 export async function fetchLPPositionTruth(wallet: string): Promise<LPPositionTruth> {
-    const res = await fetch(`${BACKEND_URL}/truth/lp/${wallet}`, { 
+    const res = await fetch(`${BACKEND_URL}/truth/lp/${wallet}`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -571,7 +568,7 @@ export async function fetchLPPositionTruth(wallet: string): Promise<LPPositionTr
 }
 
 export async function fetchPoolYieldTruth(windowDays: number = 7): Promise<PoolYieldTruth> {
-    const res = await fetch(`${BACKEND_URL}/truth/pool/yield?windowDays=${windowDays}`, { 
+    const res = await fetch(`${BACKEND_URL}/truth/pool/yield?windowDays=${windowDays}`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -593,7 +590,7 @@ export interface LPPosition {
 }
 
 export async function fetchPoolOverview(): Promise<PoolOverview> {
-    const res = await fetch(`${BACKEND_URL}/pool/overview`, { 
+    const res = await fetch(`${BACKEND_URL}/pool/overview`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -608,7 +605,7 @@ export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
     if (wallet) {
         url.searchParams.set("wallet", wallet);
     }
-    const res = await fetch(url.toString(), { 
+    const res = await fetch(url.toString(), {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -623,7 +620,7 @@ export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
 export async function depositLiquidity(amount: string): Promise<{ success: boolean; txHash: string; lpShares: string }> {
     const res = await fetch(`${BACKEND_URL}/lp/deposit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ amount }),
     });
     if (!res.ok) {
@@ -636,7 +633,7 @@ export async function depositLiquidity(amount: string): Promise<{ success: boole
 export async function withdrawLiquidity(lpShares: string): Promise<{ success: boolean; txHash: string }> {
     const res = await fetch(`${BACKEND_URL}/lp/withdraw`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ lpShares }),
     });
     if (!res.ok) {
@@ -671,7 +668,7 @@ export async function fetchLPTransactions(wallet?: string, limit = 50, offset = 
     }
     url.searchParams.set("limit", limit.toString());
     url.searchParams.set("offset", offset.toString());
-    
+
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -681,7 +678,7 @@ export async function fetchLPTransactions(wallet?: string, limit = 50, offset = 
 }
 
 export async function fetchPoolMetrics(): Promise<PoolMetrics> {
-    const res = await fetch(`${BACKEND_URL}/pool/metrics`, { 
+    const res = await fetch(`${BACKEND_URL}/pool/metrics`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -744,7 +741,7 @@ export interface PortfolioAnalytics {
 }
 
 export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics> {
-    const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, { 
+    const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -820,16 +817,31 @@ export interface AgentConsoleData {
 }
 
 export async function fetchAgentConsole(): Promise<AgentConsoleData> {
-    const res = await fetch(`${BACKEND_URL}/agent/console`, { 
-        cache: "no-store"
-    });
-    if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        const errorMessage = error.error || "Failed to fetch agent console data";
-        const errorDetails = error.details ? `: ${error.details}` : "";
-        throw new Error(`${errorMessage}${errorDetails}`);
+    // Add timeout to prevent infinite loading
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/agent/console`, {
+            cache: "no-store",
+            signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            const errorMessage = error.error || "Failed to fetch agent console data";
+            const errorDetails = error.details ? `: ${error.details}` : "";
+            throw new Error(`${errorMessage}${errorDetails}`);
+        }
+        return res.json();
+    } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Request timeout - please try again');
+        }
+        throw err;
     }
-    return res.json();
 }
 
 export interface AgentHealth {
@@ -841,7 +853,7 @@ export interface AgentHealth {
 }
 
 export async function fetchAgentHealth(): Promise<AgentHealth> {
-    const res = await fetch(`${BACKEND_URL}/agent/health`, { 
+    const res = await fetch(`${BACKEND_URL}/agent/health`, {
         cache: "no-store"
     });
     if (!res.ok) {
@@ -857,7 +869,7 @@ export interface AgentConfig {
 }
 
 export async function fetchAgentConfig(): Promise<AgentConfig> {
-    const res = await fetch(`${BACKEND_URL}/agent/config`, { 
+    const res = await fetch(`${BACKEND_URL}/agent/config`, {
         cache: "no-store"
     });
     if (!res.ok) {

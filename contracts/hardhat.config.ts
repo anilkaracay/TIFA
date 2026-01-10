@@ -2,9 +2,9 @@ import "dotenv/config";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "hardhat-deploy";
+import { NETWORKS } from "@tifa/config";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
-const BASE_SEPOLIA_RPC = process.env.BASE_SEPOLIA_RPC || "https://sepolia.base.org";
 
 const config: HardhatUserConfig = {
     solidity: {
@@ -26,9 +26,15 @@ const config: HardhatUserConfig = {
             chainId: 31337,
         },
         baseSepolia: {
-            url: BASE_SEPOLIA_RPC,
+            url: NETWORKS.base_testnet.rpcUrl,
             accounts: PRIVATE_KEY ? [PRIVATE_KEY.startsWith("0x") ? PRIVATE_KEY : `0x${PRIVATE_KEY}`] : [],
-            chainId: 84532,
+            chainId: NETWORKS.base_testnet.chainId,
+        },
+        mantleSepolia: {
+            url: NETWORKS.mantle_testnet.rpcUrl,
+            accounts: PRIVATE_KEY ? [PRIVATE_KEY.startsWith("0x") ? PRIVATE_KEY : `0x${PRIVATE_KEY}`] : [],
+            chainId: NETWORKS.mantle_testnet.chainId,
+            // Mantle uses ETH/MNT as gas, verify if specialized gasPrice is needed
         },
     },
     paths: {

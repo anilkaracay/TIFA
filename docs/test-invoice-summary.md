@@ -181,3 +181,8 @@ curl "http://localhost:4000/invoices/{invoiceId}" | jq '.status'
 curl "http://localhost:4000/invoices?status=all" | jq '[.[] | select(.externalId | startswith("TEST-"))] | length'
 ```
 
+
+
+
+
+

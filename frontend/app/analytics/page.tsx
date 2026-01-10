@@ -14,8 +14,6 @@ import {
     Legend,
     Filler
 } from "chart.js";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import { fetchPortfolioAnalytics, PortfolioAnalytics } from "../../lib/backendClient";
 import { formatAmount } from "../../lib/format";
@@ -36,10 +34,10 @@ ChartJS.register(
 const styles = {
     page: {
         minHeight: "100vh",
-        background: "#ffffff",
+        background: "#f8fafc", // Soft off-white
         padding: "0",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
-        color: "#1a1a1a",
+        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+        color: "#0f172a",
         display: "flex",
         flexDirection: "column",
     },
@@ -137,26 +135,37 @@ const styles = {
         marginTop: "16px",
     },
     dateRange: {
-        fontSize: "13px",
-        color: "#374151",
-        padding: "8px 12px",
-        border: "1px solid #d1d5db",
-        borderRadius: "4px",
+        fontSize: "14px",
+        fontWeight: 500,
+        color: "#334155",
+        padding: "10px 40px 10px 16px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
         background: "#ffffff",
         cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+        appearance: "none",
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 12px center",
+        backgroundSize: "16px",
+        outline: "none",
     },
     exportButton: {
-        fontSize: "13px",
-        fontWeight: 500,
-        color: "#2563eb",
-        padding: "8px 16px",
-        border: "1px solid #2563eb",
-        borderRadius: "4px",
-        background: "#ffffff",
+        fontSize: "14px",
+        fontWeight: 600,
+        color: "#ffffff",
+        padding: "10px 20px",
+        border: "none",
+        borderRadius: "12px",
+        background: "#0f172a",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
-        gap: "6px",
+        gap: "8px",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+        transition: "transform 0.1s ease",
     },
     kpiGrid: {
         display: "grid",
@@ -166,9 +175,15 @@ const styles = {
     },
     kpiCard: {
         background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "0",
+        border: "1px solid #f1f5f9",
+        borderRadius: "16px",
         padding: "24px",
+        minHeight: "160px",
+        display: "flex",
+        flexDirection: "column" as const,
+        justifyContent: "space-between",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02)",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
     },
     kpiTitle: {
         fontSize: "11px",
@@ -211,9 +226,10 @@ const styles = {
     },
     chartCard: {
         background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "0",
-        padding: "24px",
+        border: "1px solid #f1f5f9",
+        borderRadius: "16px",
+        padding: "32px",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02)",
     },
     chartTitle: {
         fontSize: "14px",
@@ -223,10 +239,11 @@ const styles = {
     },
     yieldSection: {
         background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "0",
-        padding: "24px",
+        border: "1px solid #f1f5f9",
+        borderRadius: "16px",
+        padding: "32px",
         marginBottom: "24px",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02)",
     },
     yieldBar: {
         display: "flex",
@@ -270,10 +287,11 @@ const styles = {
     },
     tableSection: {
         background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "0",
-        padding: "24px",
+        border: "1px solid #f1f5f9",
+        borderRadius: "16px",
+        padding: "32px",
         marginBottom: "40px",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02)",
     },
     tableHeader: {
         display: "flex",
@@ -359,7 +377,7 @@ const styles = {
         color: "#9ca3af",
         marginTop: "12px",
     },
-};
+} as const;
 
 function formatDelta(value: number): string {
     const sign = value >= 0 ? "+" : "";
@@ -393,7 +411,6 @@ function getPerformanceBadgeStyle(performance: string): any {
 }
 
 export default function PortfolioAnalyticsPage() {
-    const pathname = usePathname();
 
     // Nuclear scroll position preservation
     const scrollPositionRef = React.useRef({ x: 0, y: 0 });
@@ -540,7 +557,10 @@ export default function PortfolioAnalyticsPage() {
         datasets: [
             {
                 label: "Utilization",
-                data: data.utilizationTrend.map(d => d.utilization),
+                data: data.utilizationTrend.map(d => {
+                    const val = isNaN(d.utilization) || !isFinite(d.utilization) ? 0 : d.utilization;
+                    return Math.max(0, Math.min(100, val)); // Clamp between 0-100
+                }),
                 borderColor: "#2563eb",
                 backgroundColor: "rgba(37, 99, 235, 0.1)",
                 fill: true,
@@ -600,7 +620,10 @@ export default function PortfolioAnalyticsPage() {
         datasets: [
             {
                 label: "Invoices",
-                data: data.durationDistribution.map(d => d.count),
+                data: data.durationDistribution.map(d => {
+                    const count = isNaN(d.count) || !isFinite(d.count) ? 0 : d.count;
+                    return Math.max(0, count);
+                }),
                 backgroundColor: "#2563eb",
                 borderRadius: 2,
             },
@@ -647,9 +670,10 @@ export default function PortfolioAnalyticsPage() {
 
     // Yield Composition - find max for scaling
     const maxYield = Math.max(
-        data.yieldComposition.grossYield,
-        data.yieldComposition.netYield,
-        data.yieldComposition.benchmarkYield
+        isNaN(data.yieldComposition.grossYield) ? 0 : data.yieldComposition.grossYield,
+        isNaN(data.yieldComposition.netYield) ? 0 : data.yieldComposition.netYield,
+        isNaN(data.yieldComposition.benchmarkYield) ? 0 : data.yieldComposition.benchmarkYield,
+        1 // Ensure at least 1% to avoid division by zero
     );
 
     return (
@@ -691,25 +715,43 @@ export default function PortfolioAnalyticsPage() {
                 <div style={styles.kpiGrid}>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Current Utilization</div>
-                        <div style={styles.kpiValue}>{data.kpis.currentUtilization.value.toFixed(1)}%</div>
+                        <div style={styles.kpiValue}>
+                            {isNaN(data.kpis.currentUtilization.value) || !isFinite(data.kpis.currentUtilization.value)
+                                ? "0.0"
+                                : data.kpis.currentUtilization.value.toFixed(1)}%
+                        </div>
                         <div style={{ ...styles.kpiDelta, color: getDeltaColor(data.kpis.currentUtilization.delta) }}>
-                            {formatDeltaPercent(data.kpis.currentUtilization.delta)}
+                            {isNaN(data.kpis.currentUtilization.delta) || !isFinite(data.kpis.currentUtilization.delta)
+                                ? "N/A"
+                                : formatDeltaPercent(data.kpis.currentUtilization.delta)}
                         </div>
                         <div style={styles.kpiReference}>Target allocation: {data.kpis.currentUtilization.target}%</div>
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Net Yield</div>
-                        <div style={styles.kpiValue}>{data.kpis.netYield.value.toFixed(1)}%</div>
+                        <div style={styles.kpiValue}>
+                            {isNaN(data.kpis.netYield.value) || !isFinite(data.kpis.netYield.value)
+                                ? "0.0"
+                                : data.kpis.netYield.value.toFixed(1)}%
+                        </div>
                         <div style={{ ...styles.kpiDelta, color: getDeltaColor(data.kpis.netYield.delta) }}>
-                            {formatDeltaPercent(data.kpis.netYield.delta)}
+                            {isNaN(data.kpis.netYield.delta) || !isFinite(data.kpis.netYield.delta)
+                                ? "N/A"
+                                : formatDeltaPercent(data.kpis.netYield.delta)}
                         </div>
                         <div style={styles.kpiReference}>vs. Benchmark: {data.kpis.netYield.benchmark}%</div>
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Default Rate</div>
-                        <div style={styles.kpiValue}>{data.kpis.defaultRate.value.toFixed(1)}%</div>
+                        <div style={styles.kpiValue}>
+                            {isNaN(data.kpis.defaultRate.value) || !isFinite(data.kpis.defaultRate.value)
+                                ? "0.0"
+                                : data.kpis.defaultRate.value.toFixed(1)}%
+                        </div>
                         <div style={{ ...styles.kpiDelta, color: getDeltaColor(-data.kpis.defaultRate.delta) }}>
-                            {formatDeltaPercent(-data.kpis.defaultRate.delta)}
+                            {isNaN(data.kpis.defaultRate.delta) || !isFinite(data.kpis.defaultRate.delta)
+                                ? "N/A"
+                                : formatDeltaPercent(-data.kpis.defaultRate.delta)}
                         </div>
                         <div style={styles.kpiReference}>
                             {data.kpis.defaultRate.value < data.kpis.defaultRate.tolerance
@@ -719,9 +761,15 @@ export default function PortfolioAnalyticsPage() {
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Avg Invoice Duration</div>
-                        <div style={styles.kpiValue}>{Math.round(data.kpis.avgInvoiceDuration)} days</div>
+                        <div style={styles.kpiValue}>
+                            {isNaN(data.kpis.avgInvoiceDuration.value) || !isFinite(data.kpis.avgInvoiceDuration.value)
+                                ? "N/A"
+                                : `${Math.round(data.kpis.avgInvoiceDuration.value)} days`}
+                        </div>
                         <div style={{ ...styles.kpiDelta, color: getDeltaColor(data.kpis.avgInvoiceDuration.delta) }}>
-                            {formatDelta(Math.round(data.kpis.avgInvoiceDuration.delta))} days
+                            {isNaN(data.kpis.avgInvoiceDuration.delta) || !isFinite(data.kpis.avgInvoiceDuration.delta)
+                                ? "N/A"
+                                : `${formatDelta(Math.round(data.kpis.avgInvoiceDuration.delta))} days`}
                         </div>
                         <div style={styles.kpiReference}>Historical avg: {data.kpis.avgInvoiceDuration.historical} days</div>
                     </div>
@@ -752,11 +800,13 @@ export default function PortfolioAnalyticsPage() {
                             <div
                                 style={{
                                     ...styles.yieldBarFill,
-                                    width: `${(data.yieldComposition.grossYield / maxYield) * 100}%`,
+                                    width: `${Math.max(0, Math.min(100, ((isNaN(data.yieldComposition.grossYield) ? 0 : data.yieldComposition.grossYield) / maxYield) * 100))}%`,
                                 }}
                             />
                         </div>
-                        <div style={styles.yieldValue}>{data.yieldComposition.grossYield.toFixed(1)}%</div>
+                        <div style={styles.yieldValue}>
+                            {isNaN(data.yieldComposition.grossYield) ? "0.0" : data.yieldComposition.grossYield.toFixed(1)}%
+                        </div>
                     </div>
                     <div style={styles.yieldBar}>
                         <div style={styles.yieldLabel}>Net Yield</div>
@@ -764,11 +814,13 @@ export default function PortfolioAnalyticsPage() {
                             <div
                                 style={{
                                     ...styles.yieldBarFill,
-                                    width: `${(data.yieldComposition.netYield / maxYield) * 100}%`,
+                                    width: `${Math.max(0, Math.min(100, ((isNaN(data.yieldComposition.netYield) ? 0 : data.yieldComposition.netYield) / maxYield) * 100))}%`,
                                 }}
                             />
                         </div>
-                        <div style={styles.yieldValue}>{data.yieldComposition.netYield.toFixed(1)}%</div>
+                        <div style={styles.yieldValue}>
+                            {isNaN(data.yieldComposition.netYield) ? "0.0" : data.yieldComposition.netYield.toFixed(1)}%
+                        </div>
                     </div>
                     <div style={styles.yieldBar}>
                         <div style={styles.yieldLabel}>Benchmark</div>
@@ -776,11 +828,13 @@ export default function PortfolioAnalyticsPage() {
                             <div
                                 style={{
                                     ...styles.yieldBarFill,
-                                    width: `${(data.yieldComposition.benchmarkYield / maxYield) * 100}%`,
+                                    width: `${Math.max(0, Math.min(100, ((isNaN(data.yieldComposition.benchmarkYield) ? 0 : data.yieldComposition.benchmarkYield) / maxYield) * 100))}%`,
                                 }}
                             />
                         </div>
-                        <div style={styles.yieldValue}>{data.yieldComposition.benchmarkYield.toFixed(1)}%</div>
+                        <div style={styles.yieldValue}>
+                            {isNaN(data.yieldComposition.benchmarkYield) ? "0.0" : data.yieldComposition.benchmarkYield.toFixed(1)}%
+                        </div>
                     </div>
                     <div style={styles.yieldFootnote}>
                         Net yield calculated after losses and protocol fees. Benchmark is for reference only.
@@ -810,12 +864,22 @@ export default function PortfolioAnalyticsPage() {
                                 <tr key={idx} style={styles.tableRow}>
                                     <td style={styles.tableCell}>{vintage.vintage}</td>
                                     <td style={styles.tableCell}>
-                                        {formatAmount(vintage.originatedVolume.toString(), "TRY")}
+                                        {formatAmount(
+                                            (isNaN(vintage.originatedVolume) ? 0 : vintage.originatedVolume).toString(),
+                                            "TRY"
+                                        )}
                                     </td>
                                     <td style={styles.tableCell}>
-                                        {formatAmount(vintage.outstanding.toString(), "TRY")}
+                                        {formatAmount(
+                                            (isNaN(vintage.outstanding) ? 0 : vintage.outstanding).toString(),
+                                            "TRY"
+                                        )}
                                     </td>
-                                    <td style={styles.tableCell}>{vintage.defaultRate.toFixed(2)}%</td>
+                                    <td style={styles.tableCell}>
+                                        {isNaN(vintage.defaultRate) || !isFinite(vintage.defaultRate)
+                                            ? "0.00"
+                                            : vintage.defaultRate.toFixed(2)}%
+                                    </td>
                                     <td style={styles.tableCell}>
                                         <span style={getPerformanceBadgeStyle(vintage.performance)}>
                                             {vintage.performance}
@@ -851,7 +915,7 @@ export default function PortfolioAnalyticsPage() {
                             day: "numeric",
                         })}
                         <br />
-                        Generated by TIFA Platform v1.0
+                        Generated by Platform v1.0
                     </div>
                 </div>
             </div>

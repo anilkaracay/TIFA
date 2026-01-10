@@ -1,21 +1,22 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useParams, usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 import useSWR from "swr";
 import Link from "next/link";
 import Navbar from "../../../components/Navbar";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract, useChainId } from "wagmi";
 import { useTransactionManager } from "../../../lib/transactionManager";
 import { fetchInvoiceDetail, fetchInvoiceTruth, InvoiceTruth, recordPayment, payRecourse, declareDefault, requestFinancing, notifyRepayment } from "../../../lib/backendClient";
 import { fetchCompanies, Company } from "../../../lib/companyClient";
 import { formatAmount, formatDate, statusColor } from "../../../lib/format";
 import Deployments from "../../../lib/deployments.json";
-import { InvoiceRiskPanel } from "../../../components/invoice/InvoiceRiskPanel";
 import { useInvoiceWebSocket } from "../../../lib/websocketClient";
 import { useToast } from "../../../components/Toast";
 import { fetchUserRole } from "../../../lib/backendClient";
 import { X402PaymentButton } from "../../../components/invoice/X402PaymentButton";
+import { Select } from "../../../components/ui/Select";
+import { NumberInput } from "../../../components/ui/NumberInput";
 
 // Premium institutional fintech styling
 const styles = {
@@ -89,7 +90,7 @@ const styles = {
         margin: "0 auto",
         padding: "32px 40px",
         flex: 1,
-    width: "100%",
+        width: "100%",
     },
     breadcrumb: {
         marginBottom: "24px",
@@ -135,29 +136,33 @@ const styles = {
         padding: "10px 20px",
         fontSize: "14px",
         fontWeight: 500,
-        background: "#ffffff",
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        color: "#1a1a1a",
+        background: "rgba(255, 255, 255, 0.98)",
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        color: "#0f172a",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         display: "flex",
         alignItems: "center",
         gap: "8px",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
     },
     buttonPrimary: {
         padding: "10px 20px",
         fontSize: "14px",
-        fontWeight: 500,
-        background: "#2563eb",
+        fontWeight: 600,
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
         border: "none",
-        borderRadius: "4px",
+        borderRadius: "8px",
         color: "#ffffff",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         display: "flex",
         alignItems: "center",
         gap: "8px",
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
+        letterSpacing: "-0.01em",
     },
     statusBadge: {
         display: "inline-block",
@@ -177,6 +182,10 @@ const styles = {
         border: "1px solid #e0e0e0",
         borderRadius: "4px",
         padding: "20px",
+        minHeight: "140px",
+        display: "flex",
+        flexDirection: "column" as const,
+        justifyContent: "space-between",
     },
     summaryCardLabel: {
         fontSize: "12px",
@@ -319,7 +328,7 @@ const styles = {
     healthFactorStatus: {
         fontSize: "12px",
         color: "#15803d",
-    marginTop: "4px",
+        marginTop: "4px",
         fontWeight: 500,
     },
     riskList: {
@@ -389,7 +398,7 @@ const styles = {
         flex: 1,
     },
     auditEvent: {
-    fontSize: "14px",
+        fontSize: "14px",
         fontWeight: 600,
         color: "#1a1a1a",
         marginBottom: "4px",
@@ -465,45 +474,41 @@ const styles = {
     },
     formInput: {
         width: "100%",
-        padding: "8px 12px",
+        padding: "10px 16px",
         fontSize: "14px",
-        border: "1px solid #d1d5db",
-        borderRadius: "4px",
-        background: "#ffffff",
+        fontWeight: 500,
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.98)",
+        color: "#0f172a",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
     },
     formSelect: {
         width: "100%",
-        padding: "8px 12px",
+        padding: "10px 40px 10px 16px",
         fontSize: "14px",
-        border: "1px solid #d1d5db",
-        borderRadius: "4px",
-        background: "#ffffff",
+        fontWeight: 500,
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.98)",
+        color: "#0f172a",
+        cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        appearance: "none",
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 12px center",
+        backgroundSize: "12px",
+        letterSpacing: "-0.01em",
     },
     modalActions: {
         display: "flex",
         gap: "12px",
         justifyContent: "flex-end",
         marginTop: "24px",
-    },
-    buttonPrimary: {
-        padding: "8px 16px",
-        fontSize: "13px",
-        fontWeight: 500,
-        color: "#ffffff",
-        background: "#2563eb",
-        border: "none",
-        borderRadius: "4px",
-        cursor: "pointer",
-    },
-    buttonSecondary: {
-        padding: "8px 16px",
-        fontSize: "13px",
-        fontWeight: 500,
-        color: "#374151",
-        background: "#f3f4f6",
-        border: "none",
-        borderRadius: "4px",
-        cursor: "pointer",
     },
     creditLineCard: {
         background: "#ffffff",
@@ -723,28 +728,56 @@ const styles = {
     fcsActionPrimary: {
         padding: "10px 20px",
         fontSize: "13px",
-        fontWeight: 500,
-        background: "#3b82f6",
+        fontWeight: 600,
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
         border: "none",
-        borderRadius: "4px",
+        borderRadius: "8px",
         color: "#ffffff",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
+        letterSpacing: "-0.01em",
     },
     fcsActionSecondary: {
         padding: "10px 20px",
         fontSize: "13px",
         fontWeight: 500,
         background: "transparent",
-        border: "1px solid #475569",
-        borderRadius: "4px",
+        border: "1px solid rgba(71, 85, 105, 0.3)",
+        borderRadius: "8px",
         color: "#cbd5e1",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        letterSpacing: "-0.01em",
     },
     fcsActionWarning: {
         borderColor: "#f59e0b",
         color: "#fbbf24",
+    },
+    fcsActionPrimaryDisabled: {
+        padding: "10px 20px",
+        fontSize: "13px",
+        fontWeight: 600,
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
+        border: "none",
+        borderRadius: "8px",
+        color: "#ffffff",
+        cursor: "not-allowed",
+        opacity: 0.5,
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
+        letterSpacing: "-0.01em",
+    },
+    fcsActionSecondaryDisabled: {
+        padding: "10px 20px",
+        fontSize: "13px",
+        fontWeight: 500,
+        background: "transparent",
+        border: "1px solid rgba(71, 85, 105, 0.3)",
+        borderRadius: "8px",
+        color: "#64748b",
+        cursor: "not-allowed",
+        opacity: 0.5,
+        letterSpacing: "-0.01em",
     },
     fcsWarningLine: {
         fontSize: "11px",
@@ -759,7 +792,7 @@ const styles = {
         fontStyle: "italic",
         marginTop: "8px",
     },
-};
+} as const;
 
 export default function InvoiceDetailPage() {
     const params = useParams();
@@ -767,9 +800,11 @@ export default function InvoiceDetailPage() {
     const { address } = useAccount();
     const publicClient = usePublicClient();
     const { writeContractAsync } = useWriteContract();
+    const chainId = useChainId();
+    const deploymentKey = chainId === 84532 ? "baseSepolia" : chainId === 5003 ? "mantleSepolia" : "baseSepolia";
     const { showToast } = useToast();
     const { trackTransaction } = useTransactionManager();
-    
+
     const { data: inv, error, isLoading, mutate: mutateInvoice } = useSWR(
         id ? ["invoice-detail", id] : null,
         () => fetchInvoiceDetail(id)
@@ -785,7 +820,7 @@ export default function InvoiceDetailPage() {
         () => fetchInvoiceTruth(id!),
         {
             refreshInterval: 10000,
-            onError: () => {},
+            onError: () => { },
         }
     );
 
@@ -866,7 +901,7 @@ export default function InvoiceDetailPage() {
         if (inv?.isFinanced && inv.invoiceIdOnChain && publicClient) {
             const fetchPosition = async () => {
                 try {
-                    const FinancingPool = Deployments.FinancingPool;
+                    const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
                     const position = await publicClient.readContract({
                         address: FinancingPool.address as `0x${string}`,
                         abi: FinancingPool.abi,
@@ -885,6 +920,7 @@ export default function InvoiceDetailPage() {
         } else {
             // Clear position data when invoice is not financed
             setPositionData(null);
+            return undefined;
         }
     }, [inv?.isFinanced, inv?.invoiceIdOnChain, publicClient]);
 
@@ -911,17 +947,17 @@ export default function InvoiceDetailPage() {
         return {
             ...styles.statusBadge,
             background: color === "#0ea5e9" ? "#e0f2fe" :
-                       color === "#a855f7" ? "#f3e8ff" :
-                       color === "#22c55e" ? "#dcfce7" :
-                       color === "#16a34a" ? "#f0fdf4" :
-                       color === "#ef4444" ? "#fee2e2" :
-                       "#f5f5f5",
+                color === "#a855f7" ? "#f3e8ff" :
+                    color === "#22c55e" ? "#dcfce7" :
+                        color === "#16a34a" ? "#f0fdf4" :
+                            color === "#ef4444" ? "#fee2e2" :
+                                "#f5f5f5",
             color: color === "#0ea5e9" ? "#0369a1" :
-                   color === "#a855f7" ? "#7c3aed" :
-                   color === "#22c55e" ? "#16a34a" :
-                   color === "#16a34a" ? "#15803d" :
-                   color === "#ef4444" ? "#dc2626" :
-                   "#666",
+                color === "#a855f7" ? "#7c3aed" :
+                    color === "#22c55e" ? "#16a34a" :
+                        color === "#16a34a" ? "#15803d" :
+                            color === "#ef4444" ? "#dc2626" :
+                                "#666",
         };
     };
 
@@ -1008,33 +1044,33 @@ export default function InvoiceDetailPage() {
             showToast('error', 'Please enter a valid amount');
             return;
         }
-        
+
         // Convert amount to BigInt (amount is in human-readable format, multiply by 100)
         let amountToDraw = BigInt(Math.floor(parseFloat(financeAmount) * 100));
-        
+
         // Validate amount
         if (amountToDraw > availableCredit) {
             showToast('error', `Amount exceeds available credit. Max: ${formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}`);
             return;
         }
-        
+
         if (amountToDraw > poolAvailableLiquidity) {
             showToast('error', `Amount exceeds pool liquidity. Max: ${formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}`);
             return;
         }
-        
+
         if (amountToDraw <= 0n) {
             showToast('error', 'Amount must be greater than zero');
             return;
         }
-        
+
         try {
             setLoading(true);
             setShowFinanceModal(false);
             showToast('info', 'Starting finance process...');
 
-            const pool = Deployments.FinancingPool;
-            const token = Deployments.InvoiceToken;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            const token = (Deployments as any)[deploymentKey]?.InvoiceToken;
             const poolAddress = pool.address as `0x${string}`;
 
             // Step 1: Check approval
@@ -1102,7 +1138,7 @@ export default function InvoiceDetailPage() {
             // Step 3: Draw credit
             if (owner.toLowerCase() === poolAddress.toLowerCase()) {
                 showToast('info', 'Step 3/4: Drawing credit...');
-                
+
                 // Re-check position after lock (if it was just locked)
                 const position = await publicClient.readContract({
                     address: poolAddress,
@@ -1114,21 +1150,21 @@ export default function InvoiceDetailPage() {
                 const maxCreditLine = position.maxCreditLine as bigint;
                 const currentUsedCredit = position.usedCredit as bigint;
                 const availableCreditAfterLock = maxCreditLine - currentUsedCredit;
-                
+
                 // Validate amountToDraw against current position
                 if (amountToDraw > availableCreditAfterLock) {
                     showToast('error', `Amount exceeds available credit line. Max: ${formatAmount((Number(availableCreditAfterLock) / 100).toString(), inv.currency || "TRY")}`);
                     setLoading(false);
                     return;
                 }
-                
+
                 // Re-check pool liquidity
                 const currentPoolLiquidity = await publicClient.readContract({
                     address: poolAddress,
                     abi: pool.abi,
                     functionName: "availableLiquidity",
                 }) as bigint;
-                
+
                 if (amountToDraw > currentPoolLiquidity) {
                     showToast('error', `Amount exceeds pool liquidity. Available: ${formatAmount((Number(currentPoolLiquidity) / 100).toString(), inv.currency || "TRY")}`);
                     setLoading(false);
@@ -1162,12 +1198,12 @@ export default function InvoiceDetailPage() {
                 showToast('info', 'Step 4/4: Notifying backend...');
                 try {
                     const backendResponse = await requestFinancing(
-                        inv.id, 
-                        address, 
+                        inv.id,
+                        address,
                         receipt.transactionHash,
                         amountToDraw.toString()
                     );
-                    
+
                     // Check if backend successfully processed the notification
                     if (backendResponse && (backendResponse.approved || backendResponse.invoiceId)) {
                         showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
@@ -1187,7 +1223,7 @@ export default function InvoiceDetailPage() {
                     }
                 } catch (backendError: any) {
                     console.error('[Finance] Backend notification failed:', backendError);
-                    
+
                     // Check if error is "Already financed" - this means backend already has the state
                     if (backendError.message && backendError.message.includes('Already financed')) {
                         console.log('[Finance] Invoice already financed in backend, refreshing state...');
@@ -1248,9 +1284,9 @@ export default function InvoiceDetailPage() {
         }
         try {
             setLoading(true);
-            const pool = Deployments.FinancingPool;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
             const poolAddress = pool.address as `0x${string}`;
-            
+
             // Check pool liquidity
             const liquidity = await publicClient.readContract({
                 address: poolAddress,
@@ -1258,7 +1294,7 @@ export default function InvoiceDetailPage() {
                 functionName: "availableLiquidity",
             }) as bigint;
             setPoolAvailableLiquidity(liquidity);
-            
+
             // Get position (may not exist yet if not locked)
             let position: any = null;
             try {
@@ -1271,10 +1307,10 @@ export default function InvoiceDetailPage() {
             } catch (e) {
                 // Position may not exist yet, that's okay
             }
-            
+
             let creditLine = 0n;
             let usedCredit = 0n;
-            
+
             if (position && position.exists) {
                 creditLine = position.maxCreditLine as bigint;
                 usedCredit = position.usedCredit as bigint;
@@ -1284,11 +1320,11 @@ export default function InvoiceDetailPage() {
                 const invoiceAmount = BigInt(Math.floor(parseFloat(inv.amount || "0") * 100));
                 creditLine = (invoiceAmount * 60n) / 100n; // 60% LTV estimate
             }
-            
+
             const available = creditLine - usedCredit;
             const maxAvailable = available > liquidity ? liquidity : available;
             setAvailableCredit(maxAvailable > 0n ? maxAvailable : 0n);
-            
+
             setFinanceAmount("");
             setSelectedFinancePercentage(null);
             setShowFinanceModal(true);
@@ -1312,7 +1348,7 @@ export default function InvoiceDetailPage() {
         }
         try {
             setLoading(true);
-            const pool = Deployments.FinancingPool;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
             const position = await publicClient.readContract({
                 address: pool.address as `0x${string}`,
                 abi: pool.abi,
@@ -1342,8 +1378,8 @@ export default function InvoiceDetailPage() {
 
         try {
             setLoading(true);
-            const pool = Deployments.FinancingPool;
-            const token = Deployments.TestToken;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            const token = (Deployments as any)[deploymentKey]?.TestToken;
 
             let amountToRepay = BigInt(Math.floor(parseFloat(repayAmount) * 100));
 
@@ -1392,7 +1428,7 @@ export default function InvoiceDetailPage() {
             });
 
             trackTransaction(repayTx);
-            const receipt = await publicClient.waitForTransactionReceipt({ hash: repayTx });
+            await publicClient.waitForTransactionReceipt({ hash: repayTx });
 
             // Add repayment to state for Audit Trail
             setRepayments(prev => [...prev, {
@@ -1415,16 +1451,16 @@ export default function InvoiceDetailPage() {
             showToast('success', `Repayment successful! Amount: ${formatAmount(repayAmount, inv.currency || "TRY")}`);
             setRepayAmount("");
             setSelectedPercentage(null);
-            
+
             // Refresh data
             await Promise.all([
                 mutateInvoice(),
                 mutateTruth(),
             ]);
-            
+
             // Refresh position data
             if (inv.invoiceIdOnChain) {
-                const pool = Deployments.FinancingPool;
+                const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
                 const position = await publicClient.readContract({
                     address: pool.address as `0x${string}`,
                     abi: pool.abi,
@@ -1444,7 +1480,7 @@ export default function InvoiceDetailPage() {
     // Calculate credit line info
     const creditLineInfo = useMemo(() => {
         if (!positionData || !inv) return null;
-        
+
         // Safely convert BigInt values to numbers - CRITICAL: Must ensure all are numbers
         const safeToNumber = (value: any): number => {
             if (value === null || value === undefined) return 0;
@@ -1463,7 +1499,7 @@ export default function InvoiceDetailPage() {
                 return 0;
             }
         };
-        
+
         // Convert all values to numbers explicitly
         const maxCreditLineNum = safeToNumber(positionData.maxCreditLine) / 100;
         const usedCreditNum = safeToNumber(positionData.usedCredit) / 100;
@@ -1473,11 +1509,11 @@ export default function InvoiceDetailPage() {
         const recourseModeNum = safeToNumber(positionData.recourseMode || "1"); // 0 = RECOURSE, 1 = NON_RECOURSE
         const isInDefaultBool = Boolean(positionData.isInDefault || false);
         const graceEndsAtStr = positionData.graceEndsAt ? String(safeToNumber(positionData.graceEndsAt)) : "0";
-        const defaultDeclaredAtStr = positionData.defaultDeclaredAt && positionData.defaultDeclaredAt > 0n 
-            ? String(safeToNumber(positionData.defaultDeclaredAt)) 
+        const defaultDeclaredAtStr = positionData.defaultDeclaredAt && positionData.defaultDeclaredAt > 0n
+            ? String(safeToNumber(positionData.defaultDeclaredAt))
             : null;
         const totalDebtNum = usedCreditNum + interestAccruedNum;
-        
+
         // Ensure all values are primitive numbers/booleans/strings (not BigInt)
         return {
             maxCreditLine: Number(maxCreditLineNum),
@@ -1496,10 +1532,10 @@ export default function InvoiceDetailPage() {
     // Calculate repayment progress (after creditLineInfo is defined)
     const repaymentProgress = useMemo(() => {
         if (!inv) return { paid: 0, total: 0, percentage: 0 };
-        
+
         let paidAmount: number;
         let totalAmount: number;
-        
+
         // Safely convert BigInt or string to number
         const safeToNumber = (value: any): number => {
             if (value === null || value === undefined) return 0;
@@ -1508,7 +1544,7 @@ export default function InvoiceDetailPage() {
             if (typeof value === 'number') return value;
             return Number(value.toString()) || 0;
         };
-        
+
         if (inv.isFinanced && creditLineInfo) {
             // For financed invoices:
             // - Paid = cumulativePaid (already paid amount)
@@ -1519,7 +1555,7 @@ export default function InvoiceDetailPage() {
             const interestAccruedNum = Number(creditLineInfo.interestAccrued) * 100; // Convert back to cents
             const currentDebtCents = usedCreditNum + interestAccruedNum;
             const totalDebtCents = currentDebtCents + paidCents; // Total = remaining + paid
-            
+
             paidAmount = paidCents / 100;
             totalAmount = totalDebtCents / 100;
         } else if (inv.isFinanced && inv.usedCredit !== undefined) {
@@ -1527,7 +1563,7 @@ export default function InvoiceDetailPage() {
             const paidCents = safeToNumber(inv.cumulativePaid);
             const remainingDebtCents = safeToNumber(inv.usedCredit);
             const totalDebtCents = remainingDebtCents + paidCents; // Total = remaining + paid
-            
+
             paidAmount = paidCents / 100;
             totalAmount = totalDebtCents / 100;
         } else {
@@ -1537,7 +1573,7 @@ export default function InvoiceDetailPage() {
             paidAmount = paidCents / 100;
             totalAmount = invoiceAmount;
         }
-        
+
         // Ensure paid doesn't exceed total
         paidAmount = Math.min(paidAmount, totalAmount);
         const percentage = totalAmount > 0 ? Math.min(100, Math.round((paidAmount / totalAmount) * 100)) : 0;
@@ -1547,17 +1583,17 @@ export default function InvoiceDetailPage() {
     // Calculate dynamic payment status based on repayment progress
     const paymentStatus = useMemo(() => {
         if (!inv || !repaymentProgress) return inv?.status || "pending";
-        
+
         // If fully paid
         if (repaymentProgress.total > 0 && repaymentProgress.paid >= repaymentProgress.total) {
             return "PAID";
         }
-        
+
         // If partially paid
         if (repaymentProgress.paid > 0 && repaymentProgress.paid < repaymentProgress.total) {
             return "PARTIALLY_PAID";
         }
-        
+
         // Otherwise use invoice status
         return inv.status || "pending";
     }, [inv, repaymentProgress]);
@@ -1597,11 +1633,11 @@ export default function InvoiceDetailPage() {
     // Build audit trail from invoice data
     const auditTrail = useMemo(() => {
         if (!inv) return [];
-        
+
         const trail = [];
         const createdAtTime = new Date(inv.createdAt).getTime();
         const updatedAtTime = new Date(inv.updatedAt).getTime();
-        
+
         // 1. Invoice Issued (first event - uses createdAt)
         trail.push({
             event: "Invoice Issued",
@@ -1610,7 +1646,7 @@ export default function InvoiceDetailPage() {
             order: 1,
             link: null,
         });
-        
+
         // 2. Invoice Tokenized (happens after issue, before financing)
         if ((inv.status as string) === "TOKENIZED" || (inv.status as string) === "FINANCED" || inv.isFinanced) {
             // Use updatedAt if tokenized, but ensure it's after createdAt
@@ -1623,7 +1659,7 @@ export default function InvoiceDetailPage() {
                 link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/tx/${inv.invoiceIdOnChain}` : null,
             });
         }
-        
+
         // 3. Collateral Locked (happens during financing, before disbursement)
         if (inv.isFinanced && inv.invoiceIdOnChain) {
             // Collateral is locked right before financing disbursement
@@ -1633,10 +1669,10 @@ export default function InvoiceDetailPage() {
                 description: "Asset token locked in smart contract vault.",
                 timestamp: new Date(collateralTime).toISOString(),
                 order: 3,
-                link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/address/${Deployments.FinancingPool.address}` : null,
+                link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/address/${(Deployments as any)[deploymentKey]?.FinancingPool.address}` : null,
             });
         }
-        
+
         // 4. Financing Disbursed (final step of financing)
         if (inv.isFinanced) {
             trail.push({
@@ -1647,7 +1683,7 @@ export default function InvoiceDetailPage() {
                 link: inv.invoiceIdOnChain ? `https://sepolia.basescan.org/tx/${inv.invoiceIdOnChain}` : null,
             });
         }
-        
+
         // 5. Payments (happen after financing)
         if (inv.payments && inv.payments.length > 0) {
             inv.payments.forEach((payment: any) => {
@@ -1660,7 +1696,7 @@ export default function InvoiceDetailPage() {
                 });
             });
         }
-        
+
         // 6. On-chain Credit Repayments (repayCredit transactions)
         repayments.forEach((repayment) => {
             trail.push({
@@ -1671,7 +1707,7 @@ export default function InvoiceDetailPage() {
                 link: `https://sepolia.basescan.org/tx/${repayment.txHash}`,
             });
         });
-        
+
         // Sort by order first (logical sequence), then by timestamp (oldest first)
         // Then reverse to show newest first (top to bottom)
         return trail.sort((a, b) => {
@@ -1695,11 +1731,11 @@ export default function InvoiceDetailPage() {
                         }
                     }
                 `}</style>
-            <div style={styles.page}>
-                <div style={styles.container}>
-                    <p style={{ padding: "60px", textAlign: "center", color: "#666" }}>Loading invoice...</p>
+                <div style={styles.page}>
+                    <div style={styles.container}>
+                        <p style={{ padding: "60px", textAlign: "center", color: "#666" }}>Loading invoice...</p>
+                    </div>
                 </div>
-            </div>
             </>
         );
     }
@@ -1717,16 +1753,15 @@ export default function InvoiceDetailPage() {
                         }
                     }
                 `}</style>
-            <div style={styles.page}>
-                <div style={styles.container}>
-                    <p style={{ padding: "60px", textAlign: "center", color: "#dc2626" }}>Failed to load invoice detail.</p>
+                <div style={styles.page}>
+                    <div style={styles.container}>
+                        <p style={{ padding: "60px", textAlign: "center", color: "#dc2626" }}>Failed to load invoice detail.</p>
+                    </div>
                 </div>
-            </div>
             </>
         );
     }
 
-    const pathname = usePathname();
 
     return (
         <>
@@ -1740,905 +1775,896 @@ export default function InvoiceDetailPage() {
                     }
                 }
             `}</style>
-        <div style={styles.page}>
-            <Navbar />
+            <div style={styles.page}>
+                <Navbar />
 
-            <div style={styles.container}>
-                {/* Breadcrumb */}
-                <div style={styles.breadcrumb}>
-                    <Link href="/invoices" style={styles.breadcrumbLink}>Invoices</Link>
-                    <span style={styles.breadcrumbSeparator}>/</span>
-                    <span>{inv.externalId}</span>
-                </div>
+                <div style={styles.container}>
+                    {/* Breadcrumb */}
+                    <div style={styles.breadcrumb}>
+                        <Link href="/invoices" style={styles.breadcrumbLink}>Invoices</Link>
+                        <span style={styles.breadcrumbSeparator}>/</span>
+                        <span>{inv.externalId}</span>
+                    </div>
 
-                {/* Warning Banner */}
-                {invoiceTruth?.dbOutOfSync && (
-                    <div style={styles.warningBanner}>
-                        <span style={{ fontWeight: 700, color: "#f59e0b" }}>WARNING</span>
-                        <div style={styles.warningText}>
-                            <strong>Backend Cache Out of Sync:</strong> Backend database differs from on-chain state. Showing on-chain status.
+                    {/* Warning Banner */}
+                    {invoiceTruth?.dbOutOfSync && (
+                        <div style={styles.warningBanner}>
+                            <span style={{ fontWeight: 700, color: "#f59e0b" }}>WARNING</span>
+                            <div style={styles.warningText}>
+                                <strong>Backend Cache Out of Sync:</strong> Backend database differs from on-chain state. Showing on-chain status.
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Header */}
-                <div style={styles.header}>
-                    <div style={styles.headerLeft}>
-                        <h1 style={styles.invoiceTitle}>{inv.externalId}</h1>
-                        <div style={styles.invoiceSubtitle}>
-                            Issued by {issuerCompany?.name || inv.companyId}
-                            {daysUntilMaturity !== null && (
-                                <>
-                                    {" • "}
-                                    Due {formatDate(inv.dueDate)}
-                                    {daysUntilMaturity > 0 && ` (${daysUntilMaturity} days left)`}
-                                    {daysUntilMaturity <= 0 && " (Overdue)"}
-                                </>
-                            )}
-                        </div>
-                        <span style={getStatusBadgeStyle(paymentStatus)}>
-                            {paymentStatus}
-                        </span>
-                    </div>
-                    <div style={styles.headerActions}>
-                        <button style={styles.buttonSecondary}>
-                            <span>Download PDF</span>
-                        </button>
-                        {((inv.status as string) === "TOKENIZED" || (inv.status as string) === "FINANCED" || inv.isFinanced) && (
-                            (() => {
-                                // Check if there's available credit to draw
-                                let hasAvailableCredit = false;
-                                
-                                if (inv.isFinanced || (inv.status as string) === "FINANCED") {
-                                    // If already financed, check if there's remaining available credit
-                                    if (creditLineInfo) {
-                                        hasAvailableCredit = creditLineInfo.availableCredit > 0;
-                                    } else {
-                                        // Fallback: use invoice data if creditLineInfo not loaded yet
-                                        // Both are strings in cents format
-                                        const usedCreditStr = inv.usedCredit ? String(inv.usedCredit) : "0";
-                                        const maxCreditLineStr = inv.maxCreditLine ? String(inv.maxCreditLine) : "0";
-                                        
-                                        const usedCreditNum = Number(usedCreditStr);
-                                        const maxCreditLineNum = Number(maxCreditLineStr);
-                                        
-                                        if (!isNaN(usedCreditNum) && !isNaN(maxCreditLineNum)) {
-                                            hasAvailableCredit = (maxCreditLineNum - usedCreditNum) > 0;
-                                        } else {
-                                            // If we can't parse the values, assume there might be credit available
-                                            // This prevents the button from disappearing while data loads
-                                            hasAvailableCredit = true;
-                                        }
-                                    }
-                                } else {
-                                    // If not financed yet, can always finance (will be limited by position after lock)
-                                    hasAvailableCredit = true;
-                                }
-                                
-                                return hasAvailableCredit ? (
-                                    <button 
-                                        style={styles.buttonPrimary}
-                                        onClick={openFinanceModal}
-                                        disabled={loading || !address}
-                                    >
-                                        <span>✓</span>
-                                        <span>{inv.isFinanced || (inv.status as string) === "FINANCED" ? "Draw More Credit" : "Approve Financing"}</span>
-                                    </button>
-                                ) : null;
-                            })()
-                        )}
-                    </div>
-                </div>
-
-                {/* Summary Cards */}
-                <div style={styles.summaryCards}>
-                    <div style={styles.summaryCard}>
-                        <div style={styles.summaryCardLabel}>Issuer</div>
-                        <div style={styles.summaryCardAvatar}>
-                            {getCompanyInitials(inv.companyId, issuerCompany)}
-                        </div>
-                        <div style={styles.summaryCardValue}>
-                            {issuerCompany?.name || inv.companyId}
-                        </div>
-                    </div>
-                    <div style={styles.summaryCard}>
-                        <div style={styles.summaryCardLabel}>Counterparty</div>
-                        <div style={styles.summaryCardAvatar}>
-                            {inv.debtorId.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div style={styles.summaryCardValue}>
-                            {inv.debtorId}
-                            </div>
-                        <div style={styles.summaryCardMeta}>Debtor</div>
-                            </div>
-                    <div style={styles.summaryCard}>
-                        <div style={styles.summaryCardLabel}>Face Value</div>
-                        <div style={styles.summaryCardValue}>
-                            {formatAmount(inv.amount, inv.currency || "TRY")}
-                            </div>
-                            </div>
-                    <div style={styles.summaryCard}>
-                        <div style={styles.summaryCardLabel}>Maturity Date</div>
-                        <div style={styles.summaryCardValue}>
-                            {formatDate(inv.dueDate)}
-                        </div>
-                        {daysUntilMaturity !== null && (
-                            <div style={{
-                                ...styles.summaryCardMeta,
-                                color: daysUntilMaturity <= 7 ? "#f97316" : "#666",
-                                fontWeight: daysUntilMaturity <= 7 ? 600 : 400,
-                            }}>
-                                {daysUntilMaturity > 0 ? `${daysUntilMaturity} days left` : "Overdue"}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Financial State Section */}
-                <div style={styles.section}>
-                    <div style={styles.sectionHeader}>
-                        <h2 style={styles.sectionTitle}>Financial State</h2>
-                    </div>
-                    <div style={styles.financialGrid}>
-                            <div>
-                            <div style={styles.financialItem}>
-                                <div style={styles.financialLabel}>Principal Outstanding</div>
-                                <div style={styles.financialValue}>
-                                    {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0
-                                        ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
-                                        : inv.isFinanced && inv.usedCredit
-                                        ? (() => {
-                                            // Safely convert BigInt or number to number, then divide by 100
-                                            const usedCreditNum = typeof inv.usedCredit === 'bigint' 
-                                                ? Number(inv.usedCredit) 
-                                                : Number(inv.usedCredit || 0);
-                                            return formatAmount(usedCreditNum / 100, inv.currency || "TRY");
-                                        })()
-                                        : formatAmount(inv.amount, inv.currency || "TRY")}
-                                </div>
-                                {inv.payments && inv.payments.length > 0 && (
-                                    <div style={styles.financialNote}>
-                                        ↓ {formatAmount(inv.payments[inv.payments.length - 1].amount, inv.currency || "TRY")} paid recently
-                                    </div>
+                    {/* Header */}
+                    <div style={styles.header}>
+                        <div style={styles.headerLeft}>
+                            <h1 style={styles.invoiceTitle}>{inv.externalId}</h1>
+                            <div style={styles.invoiceSubtitle}>
+                                Issued by {issuerCompany?.name || inv.companyId}
+                                {daysUntilMaturity !== null && (
+                                    <>
+                                        {" • "}
+                                        Due {formatDate(inv.dueDate)}
+                                        {daysUntilMaturity > 0 && ` (${daysUntilMaturity} days left)`}
+                                        {daysUntilMaturity <= 0 && " (Overdue)"}
+                                    </>
                                 )}
                             </div>
-                            {inv.isFinanced && creditLineInfo && (
-                                <div style={styles.financialItem}>
-                                    <div style={styles.financialLabel}>Accrued Interest</div>
-                                    <div style={{ ...styles.financialValue, color: "#f97316" }}>
-                                        {creditLineInfo.interestAccrued > 0
-                                            ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
-                                            : "—"}
-                                    </div>
-                                    {creditLineInfo.interestAccrued > 0 && (
-                                    <div style={styles.financialNote}>
-                                            Accruing daily
-                                    </div>
-                                    )}
-                                </div>
-                            )}
-                            <div style={styles.financialItem}>
-                                <div style={styles.financialLabel}>Repayment Progress</div>
-                                <div style={styles.progressBar}>
-                                    <div style={{ ...styles.progressFill, width: `${repaymentProgress.percentage}%` }}></div>
-                                </div>
-                                <div style={styles.progressText}>
-                                    {formatAmount(repaymentProgress.paid, inv.currency || "TRY")} Repaid
-                                    {" / "}
-                                    {formatAmount(repaymentProgress.total, inv.currency || "TRY")} Total
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            {inv.invoiceIdOnChain && (
-                                <div style={styles.financialItem}>
-                                    <div style={styles.financialLabel}>Token Identification</div>
-                                    <div style={styles.tokenInfo}>
-                                        <span style={styles.tokenAddress}>
-                                            {inv.invoiceIdOnChain.slice(0, 6)}...{inv.invoiceIdOnChain.slice(-4)}
-                                        </span>
-                                        <span style={styles.verifiedBadge}>VERIFIED</span>
-                                        <button
-                                            style={styles.iconButton}
-                                            onClick={() => copyToClipboard(inv.invoiceIdOnChain!)}
-                                            title="Copy address"
-                                        >
-                                            Copy
-                                        </button>
-                                        <a
-                                            href={`https://sepolia.basescan.org/address/${inv.invoiceIdOnChain}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={styles.iconButton}
-                                            title="View on BaseScan"
-                                        >
-                                            View
-                                        </a>
-                                    </div>
-                                </div>
-                            )}
-                            {inv.isFinanced && creditLineInfo && (
-                                <div style={styles.financialItem}>
-                                    <div style={styles.financialLabel}>Collateral Health</div>
-                                    <div style={styles.healthFactor}>
-                                        <div style={styles.healthFactorLabel}>Current Valuation</div>
-                                        <div style={styles.healthFactorValue}>
-                                            {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
-                                        </div>
-                                        <div style={styles.healthFactorLabel}>Health Factor</div>
-                                        <div style={styles.healthFactorValue}>
-                                            {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
-                                                ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit).toFixed(2)
-                                                : "—"}
-                                        </div>
-                                        <div style={styles.healthFactorStatus}>
-                                            {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
-                                                ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.2
-                                                    ? "Safe"
-                                                    : (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.0
-                                                    ? "Warning"
-                                                    : "Critical"
-                                                : "—"}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Credit Line Management Section */}
-                {inv.isFinanced && creditLineInfo && (
-                    <div style={styles.section}>
-                        <div style={styles.sectionHeader}>
-                            <h2 style={styles.sectionTitle}>Credit Line Management</h2>
-                        </div>
-                        <div style={styles.creditLineCard}>
-                            <div style={styles.creditLineGrid}>
-                                <div style={styles.creditLineItem}>
-                                    <div style={styles.creditLineLabel}>Max Credit Line</div>
-                                    <div style={styles.creditLineValue}>
-                                        {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
-                                    </div>
-                                </div>
-                                <div style={styles.creditLineItem}>
-                                    <div style={styles.creditLineLabel}>Used Credit</div>
-                                    <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
-                                        {formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")}
-                                    </div>
-                                </div>
-                                <div style={styles.creditLineItem}>
-                                    <div style={styles.creditLineLabel}>Available Credit</div>
-                                    <div style={{ ...styles.creditLineValue, color: "#16a34a" }}>
-                                        {formatAmount(Math.max(0, Number(creditLineInfo.availableCredit)), inv.currency || "TRY")}
-                                    </div>
-                                </div>
-                                <div style={styles.creditLineItem}>
-                                    <div style={styles.creditLineLabel}>LTV Ratio</div>
-                                    <div style={styles.creditLineValue}>
-                                        {(Number(creditLineInfo.ltvBps) / 100).toFixed(2)}%
-                                    </div>
-                                </div>
-                            </div>
-                            {Number(creditLineInfo.interestAccrued) > 0 && (
-                                <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
-                                    <div style={styles.creditLineLabel}>Accrued Interest</div>
-                                    <div style={{ ...styles.creditLineValue, color: "#f97316" }}>
-                                        {formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")}
-                                    </div>
-                                </div>
-                            )}
-                            <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
-                                <div style={styles.creditLineLabel}>Total Debt</div>
-                                <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
-                                    {formatAmount(Number(creditLineInfo.totalDebt), inv.currency || "TRY")}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Financial Control Surface - Unified Institutional Panel */}
-                {inv.isFinanced && positionData && creditLineInfo && (
-                    <div style={styles.financialControlSurface}>
-                        {/* Header Layer - Risk Context */}
-                        <div style={styles.fcsHeader}>
-                            <div style={styles.fcsHeaderLeft}>
-                                <span style={styles.fcsRiskLabel}>RISK MODE</span>
-                                <div style={styles.fcsRiskBadgeContainer}>
-                                    <span style={{
-                                        ...styles.fcsRiskBadge,
-                                        borderColor: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
-                                        color: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
-                                    }}>
-                                        {positionData.recourseMode === 0 ? "RECOURSE" : "NON-RECOURSE"}
-                                    </span>
-                                    <span
-                                        style={styles.fcsInfoTooltip}
-                                        title={
-                                            positionData.recourseMode === 0
-                                                ? "Recourse: If debtor defaults, issuer is obligated to repay. LP losses are minimized."
-                                                : "Non-Recourse: If debtor defaults, pool bears the loss. Reserve protects LPs first."
-                                        }
-                                    >
-                                        i
-                                    </span>
-                                </div>
-                            </div>
-                            <div style={styles.fcsHeaderRight}>
-                                <span style={styles.fcsStatusLabel}>SYSTEM STATUS</span>
-                                <span style={{
-                                    ...styles.fcsStatusBadge,
-                                    color: creditLineInfo.isInDefault ? "#ef4444" : timelineStatus?.status === "overdue" ? "#f59e0b" : "#22c55e",
-                                }}>
-                                    {creditLineInfo.isInDefault ? "DEFAULTED" : timelineStatus?.label || "ACTIVE"}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* AI Monitoring Strip */}
-                        <div style={styles.fcsAiStrip}>
-                            <div style={styles.fcsAiContent}>
-                                <div style={styles.fcsAiPulse}></div>
-                                <span style={styles.fcsAiText}>AI Risk Agent monitoring payment behavior in real time</span>
-                            </div>
-                            <span style={styles.fcsAiTimestamp}>
-                                Last evaluation: {formatDate(new Date().toISOString(), true)}
+                            <span style={getStatusBadgeStyle(paymentStatus)}>
+                                {paymentStatus}
                             </span>
                         </div>
+                        <div style={styles.headerActions}>
+                            <button style={styles.buttonSecondary}>
+                                <span>Download PDF</span>
+                            </button>
+                            {((inv.status as string) === "TOKENIZED" || (inv.status as string) === "FINANCED" || inv.isFinanced) && (
+                                (() => {
+                                    // Check if there's available credit to draw
+                                    let hasAvailableCredit = false;
 
-                        {/* Core Financial State - Two Columns */}
-                        <div style={styles.fcsFinancialState}>
-                            <div style={styles.fcsFinancialColumn}>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>OUTSTANDING PRINCIPAL</div>
-                                    <div style={styles.fcsMetricValue}>
-                                        {creditLineInfo.usedCredit > 0
-                                            ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
-                                            : "—"}
-                                    </div>
-                                </div>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>ACCRUED INTEREST</div>
-                                    <div style={{ ...styles.fcsMetricValue, color: "#f97316" }}>
-                                        {creditLineInfo.interestAccrued > 0
-                                            ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
-                                            : "—"}
-                                    </div>
-                                </div>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>NEXT DUE DATE</div>
-                                    <div style={styles.fcsMetricValue}>
-                                        {positionData.dueDate > 0n
-                                            ? formatDate(new Date(Number(positionData.dueDate) * 1000).toISOString())
-                                            : "—"}
-                                    </div>
-                                </div>
+                                    if (inv.isFinanced || (inv.status as string) === "FINANCED") {
+                                        // If already financed, check if there's remaining available credit
+                                        if (creditLineInfo) {
+                                            hasAvailableCredit = creditLineInfo.availableCredit > 0;
+                                        } else {
+                                            // Fallback: use invoice data if creditLineInfo not loaded yet
+                                            // Both are strings in cents format
+                                            const usedCreditStr = inv.usedCredit ? String(inv.usedCredit) : "0";
+                                            const maxCreditLineStr = inv.maxCreditLine ? String(inv.maxCreditLine) : "0";
+
+                                            const usedCreditNum = Number(usedCreditStr);
+                                            const maxCreditLineNum = Number(maxCreditLineStr);
+
+                                            if (!isNaN(usedCreditNum) && !isNaN(maxCreditLineNum)) {
+                                                hasAvailableCredit = (maxCreditLineNum - usedCreditNum) > 0;
+                                            } else {
+                                                // If we can't parse the values, assume there might be credit available
+                                                // This prevents the button from disappearing while data loads
+                                                hasAvailableCredit = true;
+                                            }
+                                        }
+                                    } else {
+                                        // If not financed yet, can always finance (will be limited by position after lock)
+                                        hasAvailableCredit = true;
+                                    }
+
+                                    return hasAvailableCredit ? (
+                                        <button
+                                            style={styles.buttonPrimary}
+                                            onClick={openFinanceModal}
+                                            disabled={loading || !address}
+                                        >
+                                            <span>✓</span>
+                                            <span>{inv.isFinanced || (inv.status as string) === "FINANCED" ? "Draw More Credit" : "Approve Financing"}</span>
+                                        </button>
+                                    ) : null;
+                                })()
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Summary Cards */}
+                    <div style={styles.summaryCards}>
+                        <div style={styles.summaryCard}>
+                            <div style={styles.summaryCardLabel}>Issuer</div>
+                            <div style={styles.summaryCardAvatar}>
+                                {getCompanyInitials(inv.companyId, issuerCompany)}
                             </div>
-                            <div style={styles.fcsFinancialColumn}>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>LAST PAYMENT RECORDED</div>
-                                    <div style={styles.fcsMetricValue}>
-                                        {inv.payments && inv.payments.length > 0
-                                            ? formatAmount(inv.payments[inv.payments.length - 1].amount, inv.payments[inv.payments.length - 1].currency)
-                                            : "—"}
+                            <div style={styles.summaryCardValue}>
+                                {issuerCompany?.name || inv.companyId}
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={styles.summaryCardLabel}>Counterparty</div>
+                            <div style={styles.summaryCardAvatar}>
+                                {inv.debtorId.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={styles.summaryCardValue}>
+                                {inv.debtorId}
+                            </div>
+                            <div style={styles.summaryCardMeta}>Debtor</div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={styles.summaryCardLabel}>Face Value</div>
+                            <div style={styles.summaryCardValue}>
+                                {formatAmount(inv.amount, inv.currency || "TRY")}
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={styles.summaryCardLabel}>Maturity Date</div>
+                            <div style={styles.summaryCardValue}>
+                                {formatDate(inv.dueDate)}
+                            </div>
+                            {daysUntilMaturity !== null && (
+                                <div style={{
+                                    ...styles.summaryCardMeta,
+                                    color: daysUntilMaturity <= 7 ? "#f97316" : "#666",
+                                    fontWeight: daysUntilMaturity <= 7 ? 600 : 400,
+                                }}>
+                                    {daysUntilMaturity > 0 ? `${daysUntilMaturity} days left` : "Overdue"}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Financial State Section */}
+                    <div style={styles.section}>
+                        <div style={styles.sectionHeader}>
+                            <h2 style={styles.sectionTitle}>Financial State</h2>
+                        </div>
+                        <div style={styles.financialGrid}>
+                            <div>
+                                <div style={styles.financialItem}>
+                                    <div style={styles.financialLabel}>Principal Outstanding</div>
+                                    <div style={styles.financialValue}>
+                                        {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0
+                                            ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                            : inv.isFinanced && inv.usedCredit
+                                                ? (() => {
+                                                    // Safely convert BigInt or number to number, then divide by 100
+                                                    const usedCreditNum = typeof inv.usedCredit === 'bigint'
+                                                        ? Number(inv.usedCredit)
+                                                        : Number(inv.usedCredit || 0);
+                                                    return formatAmount(usedCreditNum / 100, inv.currency || "TRY");
+                                                })()
+                                                : formatAmount(inv.amount, inv.currency || "TRY")}
                                     </div>
                                     {inv.payments && inv.payments.length > 0 && (
-                                        <div style={styles.fcsMetricNote}>
-                                            {formatDate(inv.payments[inv.payments.length - 1].paidAt, true)}
+                                        <div style={styles.financialNote}>
+                                            ↓ {formatAmount(inv.payments[inv.payments.length - 1].amount, inv.currency || "TRY")} paid recently
                                         </div>
                                     )}
                                 </div>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>DAYS OUTSTANDING</div>
-                                    <div style={styles.fcsMetricValue}>
-                                        {daysUntilMaturity !== null ? Math.abs(daysUntilMaturity) : "—"}
+                                {inv.isFinanced && creditLineInfo && (
+                                    <div style={styles.financialItem}>
+                                        <div style={styles.financialLabel}>Accrued Interest</div>
+                                        <div style={{ ...styles.financialValue, color: "#f97316" }}>
+                                            {creditLineInfo.interestAccrued > 0
+                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                                : "—"}
+                                        </div>
+                                        {creditLineInfo.interestAccrued > 0 && (
+                                            <div style={styles.financialNote}>
+                                                Accruing daily
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <div style={styles.financialItem}>
+                                    <div style={styles.financialLabel}>Repayment Progress</div>
+                                    <div style={styles.progressBar}>
+                                        <div style={{ ...styles.progressFill, width: `${repaymentProgress.percentage}%` }}></div>
+                                    </div>
+                                    <div style={styles.progressText}>
+                                        {formatAmount(repaymentProgress.paid, inv.currency || "TRY")} Repaid
+                                        {" / "}
+                                        {formatAmount(repaymentProgress.total, inv.currency || "TRY")} Total
                                     </div>
                                 </div>
-                                <div style={styles.fcsFinancialMetric}>
-                                    <div style={styles.fcsMetricLabel}>GRACE PERIOD STATUS</div>
-                                    <div style={styles.fcsMetricValue}>
-                                        {creditLineInfo.graceEndsAt !== "0"
-                                            ? `Active until ${formatDate(new Date(parseInt(creditLineInfo.graceEndsAt) * 1000).toISOString())}`
-                                            : "—"}
+                            </div>
+                            <div>
+                                {inv.invoiceIdOnChain && (
+                                    <div style={styles.financialItem}>
+                                        <div style={styles.financialLabel}>Token Identification</div>
+                                        <div style={styles.tokenInfo}>
+                                            <span style={styles.tokenAddress}>
+                                                {inv.invoiceIdOnChain.slice(0, 6)}...{inv.invoiceIdOnChain.slice(-4)}
+                                            </span>
+                                            <span style={styles.verifiedBadge}>VERIFIED</span>
+                                            <button
+                                                style={styles.iconButton}
+                                                onClick={() => copyToClipboard(inv.invoiceIdOnChain!)}
+                                                title="Copy address"
+                                            >
+                                                Copy
+                                            </button>
+                                            <a
+                                                href={`https://sepolia.basescan.org/address/${inv.invoiceIdOnChain}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={styles.iconButton}
+                                                title="View on BaseScan"
+                                            >
+                                                View
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+                                {inv.isFinanced && creditLineInfo && (
+                                    <div style={styles.financialItem}>
+                                        <div style={styles.financialLabel}>Collateral Health</div>
+                                        <div style={styles.healthFactor}>
+                                            <div style={styles.healthFactorLabel}>Current Valuation</div>
+                                            <div style={styles.healthFactorValue}>
+                                                {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
+                                            </div>
+                                            <div style={styles.healthFactorLabel}>Health Factor</div>
+                                            <div style={styles.healthFactorValue}>
+                                                {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
+                                                    ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit).toFixed(2)
+                                                    : "—"}
+                                            </div>
+                                            <div style={styles.healthFactorStatus}>
+                                                {creditLineInfo.maxCreditLine > 0 && creditLineInfo.usedCredit > 0
+                                                    ? (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.2
+                                                        ? "Safe"
+                                                        : (creditLineInfo.maxCreditLine / creditLineInfo.usedCredit) >= 1.0
+                                                            ? "Warning"
+                                                            : "Critical"
+                                                    : "—"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Credit Line Management Section */}
+                    {inv.isFinanced && creditLineInfo && (
+                        <div style={styles.section}>
+                            <div style={styles.sectionHeader}>
+                                <h2 style={styles.sectionTitle}>Credit Line Management</h2>
+                            </div>
+                            <div style={styles.creditLineCard}>
+                                <div style={styles.creditLineGrid}>
+                                    <div style={styles.creditLineItem}>
+                                        <div style={styles.creditLineLabel}>Max Credit Line</div>
+                                        <div style={styles.creditLineValue}>
+                                            {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
+                                        </div>
+                                    </div>
+                                    <div style={styles.creditLineItem}>
+                                        <div style={styles.creditLineLabel}>Used Credit</div>
+                                        <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
+                                            {formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")}
+                                        </div>
+                                    </div>
+                                    <div style={styles.creditLineItem}>
+                                        <div style={styles.creditLineLabel}>Available Credit</div>
+                                        <div style={{ ...styles.creditLineValue, color: "#16a34a" }}>
+                                            {formatAmount(Math.max(0, Number(creditLineInfo.availableCredit)), inv.currency || "TRY")}
+                                        </div>
+                                    </div>
+                                    <div style={styles.creditLineItem}>
+                                        <div style={styles.creditLineLabel}>LTV Ratio</div>
+                                        <div style={styles.creditLineValue}>
+                                            {(Number(creditLineInfo.ltvBps) / 100).toFixed(2)}%
+                                        </div>
+                                    </div>
+                                </div>
+                                {Number(creditLineInfo.interestAccrued) > 0 && (
+                                    <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
+                                        <div style={styles.creditLineLabel}>Accrued Interest</div>
+                                        <div style={{ ...styles.creditLineValue, color: "#f97316" }}>
+                                            {formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")}
+                                        </div>
+                                    </div>
+                                )}
+                                <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
+                                    <div style={styles.creditLineLabel}>Total Debt</div>
+                                    <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
+                                        {formatAmount(Number(creditLineInfo.totalDebt), inv.currency || "TRY")}
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* Action Layer */}
-                        <div style={styles.fcsActionLayer}>
-                            <div style={styles.fcsActionButtons}>
-                                <button
-                                    style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
-                                    onClick={() => setShowPaymentModal(true)}
-                                    disabled={loading || !address}
-                                >
-                                    Record Payment
-                                </button>
-                                {process.env.NEXT_PUBLIC_X402_ENABLED === 'true' && (
-                                    <X402PaymentButton
-                                        invoiceId={id}
-                                        invoiceStatus={inv.status}
-                                        onPaymentConfirmed={() => {
-                                            mutateInvoice();
-                                            mutateTruth();
-                                        }}
-                                    />
-                                )}
-                                {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0 && (
-                                    <button
-                                        style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
-                                        onClick={openRepayModal}
-                                        disabled={loading || !address}
-                                    >
-                                        Repay Credit
-                                    </button>
-                                )}
-                                {userRole?.isAdmin && (
-                                    <button
-                                        style={{
-                                            ...((loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault)
-                                                ? styles.fcsActionSecondaryDisabled
-                                                : {
-                                                    ...styles.fcsActionSecondary,
-                                                    ...(creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault
-                                                        ? styles.fcsActionWarning
-                                                        : {}),
-                                                }),
-                                        }}
-                                        onClick={() => setShowDefaultModal(true)}
-                                        disabled={loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault}
-                                    >
-                                        Declare Default
-                                    </button>
-                                )}
-                                {creditLineInfo && creditLineInfo.recourseMode === 0 && creditLineInfo.isInDefault && recourseObligation && (
-                                    <button
-                                        style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
-                                        onClick={() => setShowRecourseModal(true)}
-                                        disabled={loading || !address}
-                                    >
-                                        Pay Recourse
-                                    </button>
-                                )}
-                            </div>
-                            {creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault && (
-                                <div style={styles.fcsWarningLine}>
-                                    Default declaration available. Grace period has ended.
+                    {/* Financial Control Surface - Unified Institutional Panel */}
+                    {inv.isFinanced && positionData && creditLineInfo && (
+                        <div style={styles.financialControlSurface}>
+                            {/* Header Layer - Risk Context */}
+                            <div style={styles.fcsHeader}>
+                                <div style={styles.fcsHeaderLeft}>
+                                    <span style={styles.fcsRiskLabel}>RISK MODE</span>
+                                    <div style={styles.fcsRiskBadgeContainer}>
+                                        <span style={{
+                                            ...styles.fcsRiskBadge,
+                                            borderColor: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
+                                            color: positionData.recourseMode === 0 ? "#64748b" : "#f97316",
+                                        }}>
+                                            {positionData.recourseMode === 0 ? "RECOURSE" : "NON-RECOURSE"}
+                                        </span>
+                                        <span
+                                            style={styles.fcsInfoTooltip}
+                                            title={
+                                                positionData.recourseMode === 0
+                                                    ? "Recourse: If debtor defaults, issuer is obligated to repay. LP losses are minimized."
+                                                    : "Non-Recourse: If debtor defaults, pool bears the loss. Reserve protects LPs first."
+                                            }
+                                        >
+                                            i
+                                        </span>
+                                    </div>
                                 </div>
-                            )}
-                            <div style={styles.fcsComplianceNote}>
-                                Actions are logged and require on-chain confirmation.
+                                <div style={styles.fcsHeaderRight}>
+                                    <span style={styles.fcsStatusLabel}>SYSTEM STATUS</span>
+                                    <span style={{
+                                        ...styles.fcsStatusBadge,
+                                        color: creditLineInfo.isInDefault ? "#ef4444" : timelineStatus?.status === "overdue" ? "#f59e0b" : "#22c55e",
+                                    }}>
+                                        {creditLineInfo.isInDefault ? "DEFAULTED" : timelineStatus?.label || "ACTIVE"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* AI Monitoring Strip */}
+                            <div style={styles.fcsAiStrip}>
+                                <div style={styles.fcsAiContent}>
+                                    <div style={styles.fcsAiPulse}></div>
+                                    <span style={styles.fcsAiText}>AI Risk Agent monitoring payment behavior in real time</span>
+                                </div>
+                                <span style={styles.fcsAiTimestamp}>
+                                    Last evaluation: {formatDate(new Date().toISOString(), true)}
+                                </span>
+                            </div>
+
+                            {/* Core Financial State - Two Columns */}
+                            <div style={styles.fcsFinancialState}>
+                                <div style={styles.fcsFinancialColumn}>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>OUTSTANDING PRINCIPAL</div>
+                                        <div style={styles.fcsMetricValue}>
+                                            {creditLineInfo.usedCredit > 0
+                                                ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                                : "—"}
+                                        </div>
+                                    </div>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>ACCRUED INTEREST</div>
+                                        <div style={{ ...styles.fcsMetricValue, color: "#f97316" }}>
+                                            {creditLineInfo.interestAccrued > 0
+                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                                : "—"}
+                                        </div>
+                                    </div>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>NEXT DUE DATE</div>
+                                        <div style={styles.fcsMetricValue}>
+                                            {positionData.dueDate > 0n
+                                                ? formatDate(new Date(Number(positionData.dueDate) * 1000).toISOString())
+                                                : "—"}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={styles.fcsFinancialColumn}>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>LAST PAYMENT RECORDED</div>
+                                        <div style={styles.fcsMetricValue}>
+                                            {inv.payments && inv.payments.length > 0
+                                                ? formatAmount(inv.payments[inv.payments.length - 1].amount, inv.payments[inv.payments.length - 1].currency)
+                                                : "—"}
+                                        </div>
+                                        {inv.payments && inv.payments.length > 0 && (
+                                            <div style={styles.fcsMetricNote}>
+                                                {formatDate(inv.payments[inv.payments.length - 1].paidAt, true)}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>DAYS OUTSTANDING</div>
+                                        <div style={styles.fcsMetricValue}>
+                                            {daysUntilMaturity !== null ? Math.abs(daysUntilMaturity) : "—"}
+                                        </div>
+                                    </div>
+                                    <div style={styles.fcsFinancialMetric}>
+                                        <div style={styles.fcsMetricLabel}>GRACE PERIOD STATUS</div>
+                                        <div style={styles.fcsMetricValue}>
+                                            {creditLineInfo.graceEndsAt !== "0"
+                                                ? `Active until ${formatDate(new Date(parseInt(creditLineInfo.graceEndsAt) * 1000).toISOString())}`
+                                                : "—"}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Layer */}
+                            <div style={styles.fcsActionLayer}>
+                                <div style={styles.fcsActionButtons}>
+                                    <button
+                                        style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                        onClick={() => setShowPaymentModal(true)}
+                                        disabled={loading || !address}
+                                    >
+                                        Record Payment
+                                    </button>
+                                    {process.env.NEXT_PUBLIC_X402_ENABLED === 'true' && (
+                                        <X402PaymentButton
+                                            invoiceId={id}
+                                            invoiceStatus={inv.status}
+                                            onPaymentConfirmed={() => {
+                                                mutateInvoice();
+                                                mutateTruth();
+                                            }}
+                                        />
+                                    )}
+                                    {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0 && (
+                                        <button
+                                            style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                            onClick={openRepayModal}
+                                            disabled={loading || !address}
+                                        >
+                                            Repay Credit
+                                        </button>
+                                    )}
+                                    {userRole?.isAdmin && (
+                                        <button
+                                            style={{
+                                                ...((loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault)
+                                                    ? styles.fcsActionSecondaryDisabled
+                                                    : {
+                                                        ...styles.fcsActionSecondary,
+                                                        ...(creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault
+                                                            ? styles.fcsActionWarning
+                                                            : {}),
+                                                    }),
+                                            }}
+                                            onClick={() => setShowDefaultModal(true)}
+                                            disabled={loading || !address || creditLineInfo.graceEndsAt === "0" || creditLineInfo.isInDefault}
+                                        >
+                                            Declare Default
+                                        </button>
+                                    )}
+                                    {creditLineInfo && creditLineInfo.recourseMode === 0 && creditLineInfo.isInDefault && recourseObligation && (
+                                        <button
+                                            style={(loading || !address) ? styles.fcsActionPrimaryDisabled : styles.fcsActionPrimary}
+                                            onClick={() => setShowRecourseModal(true)}
+                                            disabled={loading || !address}
+                                        >
+                                            Pay Recourse
+                                        </button>
+                                    )}
+                                </div>
+                                {creditLineInfo.graceEndsAt !== "0" && creditLineInfo.graceEndsAt && parseInt(creditLineInfo.graceEndsAt) * 1000 <= Date.now() && !creditLineInfo.isInDefault && (
+                                    <div style={styles.fcsWarningLine}>
+                                        Default declaration available. Grace period has ended.
+                                    </div>
+                                )}
+                                <div style={styles.fcsComplianceNote}>
+                                    Actions are logged and require on-chain confirmation.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Audit Trail */}
+                    <div style={styles.section}>
+                        <div style={styles.sectionHeader}>
+                            <h2 style={styles.sectionTitle}>Audit Trail</h2>
+                        </div>
+                        <ul style={styles.auditTrail}>
+                            {auditTrail.map((item, index) => (
+                                <li key={index} style={styles.auditItem}>
+                                    {index < auditTrail.length - 1 && <div style={styles.auditTimeline}></div>}
+                                    <div style={styles.auditDot}></div>
+                                    <div style={styles.auditContent}>
+                                        <div style={styles.auditEvent}>{item.event}</div>
+                                        <div style={styles.auditDescription}>{item.description}</div>
+                                        <div style={styles.auditTimestamp}>
+                                            {formatDate(item.timestamp, true)} UTC
+                                        </div>
+                                        {item.link && (
+                                            <a
+                                                href={item.link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={styles.auditLink}
+                                            >
+                                                View Transaction <span>↗</span>
+                                            </a>
+                                        )}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+
+                {/* Payment Recording Modal */}
+                {showPaymentModal && (
+                    <div style={styles.modalOverlay} onClick={() => !loading && setShowPaymentModal(false)}>
+                        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                            <div style={styles.modalHeader}>Record Payment</div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Amount</label>
+                                <NumberInput
+                                    value={paymentForm.amount}
+                                    onChange={(value) => setPaymentForm({ ...paymentForm, amount: value })}
+                                    placeholder="0.00"
+                                    step={0.01}
+                                    min={0}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Currency</label>
+                                <Select
+                                    value={paymentForm.currency}
+                                    onChange={(value) => setPaymentForm({ ...paymentForm, currency: value })}
+                                    placeholder="Select currency..."
+                                    options={[
+                                        { value: "TRY", label: "TRY" },
+                                        { value: "USD", label: "USD" },
+                                        { value: "EUR", label: "EUR" },
+                                    ]}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Payment Date</label>
+                                <input
+                                    type="date"
+                                    style={styles.formInput}
+                                    value={paymentForm.paidAt}
+                                    onChange={(e) => setPaymentForm({ ...paymentForm, paidAt: e.target.value })}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>PSP (Optional)</label>
+                                <input
+                                    type="text"
+                                    style={styles.formInput}
+                                    value={paymentForm.psp}
+                                    onChange={(e) => setPaymentForm({ ...paymentForm, psp: e.target.value })}
+                                    placeholder="Payment Service Provider"
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Transaction ID (Optional)</label>
+                                <input
+                                    type="text"
+                                    style={styles.formInput}
+                                    value={paymentForm.transactionId}
+                                    onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })}
+                                    placeholder="Transaction reference"
+                                />
+                            </div>
+                            <div style={styles.modalActions}>
+                                <button
+                                    style={styles.buttonSecondary}
+                                    onClick={() => setShowPaymentModal(false)}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    style={styles.buttonPrimary}
+                                    onClick={handleRecordPayment}
+                                    disabled={loading || !paymentForm.amount}
+                                >
+                                    {loading ? "Recording..." : "Record Payment"}
+                                </button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* Audit Trail */}
-                <div style={styles.section}>
-                    <div style={styles.sectionHeader}>
-                        <h2 style={styles.sectionTitle}>Audit Trail</h2>
-                    </div>
-                    <ul style={styles.auditTrail}>
-                        {auditTrail.map((item, index) => (
-                            <li key={index} style={styles.auditItem}>
-                                {index < auditTrail.length - 1 && <div style={styles.auditTimeline}></div>}
-                                <div style={styles.auditDot}></div>
-                                <div style={styles.auditContent}>
-                                    <div style={styles.auditEvent}>{item.event}</div>
-                                    <div style={styles.auditDescription}>{item.description}</div>
-                                    <div style={styles.auditTimestamp}>
-                                        {formatDate(item.timestamp, true)} UTC
+                {/* Recourse Payment Modal */}
+                {showRecourseModal && (
+                    <div style={styles.modalOverlay} onClick={() => !loading && setShowRecourseModal(false)}>
+                        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                            <div style={styles.modalHeader}>Pay Recourse Obligation</div>
+                            <div style={{ marginBottom: "16px", fontSize: "14px", color: "#7c2d12" }}>
+                                You are required to pay the recourse obligation for this invoice.
+                                {recourseObligation && (
+                                    <div style={{ marginTop: "8px", fontWeight: 600 }}>
+                                        Total Obligation: {formatAmount(recourseObligation, inv.currency || "TRY")}
                                     </div>
-                                    {item.link && (
-                                        <a
-                                            href={item.link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={styles.auditLink}
-                                        >
-                                            View Transaction <span>↗</span>
-                                        </a>
-                                    )}
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </div>
-
-            {/* Payment Recording Modal */}
-            {showPaymentModal && (
-                <div style={styles.modalOverlay} onClick={() => !loading && setShowPaymentModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>Record Payment</div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Amount</label>
-                            <input
-                                type="number"
-                                style={styles.formInput}
-                                value={paymentForm.amount}
-                                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                                placeholder="0.00"
-                                step="0.01"
-                                min="0"
-                            />
-        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Currency</label>
-                            <select
-                                style={styles.formSelect}
-                                value={paymentForm.currency}
-                                onChange={(e) => setPaymentForm({ ...paymentForm, currency: e.target.value })}
-                            >
-                                <option value="TRY">TRY</option>
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                            </select>
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Payment Date</label>
-                            <input
-                                type="date"
-                                style={styles.formInput}
-                                value={paymentForm.paidAt}
-                                onChange={(e) => setPaymentForm({ ...paymentForm, paidAt: e.target.value })}
-                            />
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>PSP (Optional)</label>
-                            <input
-                                type="text"
-                                style={styles.formInput}
-                                value={paymentForm.psp}
-                                onChange={(e) => setPaymentForm({ ...paymentForm, psp: e.target.value })}
-                                placeholder="Payment Service Provider"
-                            />
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Transaction ID (Optional)</label>
-                            <input
-                                type="text"
-                                style={styles.formInput}
-                                value={paymentForm.transactionId}
-                                onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })}
-                                placeholder="Transaction reference"
-                            />
-                        </div>
-                        <div style={styles.modalActions}>
-                            <button
-                                style={styles.buttonSecondary}
-                                onClick={() => setShowPaymentModal(false)}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                style={styles.buttonPrimary}
-                                onClick={handleRecordPayment}
-                                disabled={loading || !paymentForm.amount}
-                            >
-                                {loading ? "Recording..." : "Record Payment"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Recourse Payment Modal */}
-            {showRecourseModal && (
-                <div style={styles.modalOverlay} onClick={() => !loading && setShowRecourseModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>Pay Recourse Obligation</div>
-                        <div style={{ marginBottom: "16px", fontSize: "14px", color: "#7c2d12" }}>
-                            You are required to pay the recourse obligation for this invoice.
-                            {recourseObligation && (
-                                <div style={{ marginTop: "8px", fontWeight: 600 }}>
-                                    Total Obligation: {formatAmount(recourseObligation, inv.currency || "TRY")}
-                                </div>
-                            )}
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Amount</label>
-                            <input
-                                type="number"
-                                style={styles.formInput}
-                                value={recourseForm.amount}
-                                onChange={(e) => setRecourseForm({ ...recourseForm, amount: e.target.value })}
-                                placeholder={recourseObligation !== null ? Number(recourseObligation).toFixed(2) : "0.00"}
-                                step="0.01"
-                                min="0"
-                            />
-                        </div>
-                        <div style={styles.modalActions}>
-                            <button
-                                style={styles.buttonSecondary}
-                                onClick={() => setShowRecourseModal(false)}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                style={styles.buttonPrimary}
-                                onClick={handlePayRecourse}
-                                disabled={loading || !recourseForm.amount}
-                            >
-                                {loading ? "Processing..." : "Pay Recourse"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Default Declaration Modal */}
-            {showDefaultModal && (
-                <div style={styles.modalOverlay} onClick={() => !loading && setShowDefaultModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>Declare Default</div>
-                        <div style={{ marginBottom: "16px", fontSize: "14px", color: "#991b1b" }}>
-                            This action will mark the invoice as defaulted. This cannot be undone.
-                            {creditLineInfo && (
-                                <div style={{ marginTop: "8px" }}>
-                                    Total Debt: {formatAmount(creditLineInfo.totalDebt, inv.currency || "TRY")}
-                                </div>
-                            )}
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Reason (Optional)</label>
-                            <textarea
-                                style={{ ...styles.formInput, minHeight: "80px", resize: "vertical" as const }}
-                                value={defaultForm.reason}
-                                onChange={(e) => setDefaultForm({ ...defaultForm, reason: e.target.value })}
-                                placeholder="Reason for default declaration"
-                            />
-                        </div>
-                        <div style={styles.modalActions}>
-                            <button
-                                style={styles.buttonSecondary}
-                                onClick={() => setShowDefaultModal(false)}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                style={{ ...styles.buttonPrimary, background: "#dc2626" }}
-                                onClick={handleDeclareDefault}
-                                disabled={loading}
-                            >
-                                {loading ? "Declaring..." : "Declare Default"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Finance Modal */}
-            {showFinanceModal && inv && (
-                <div style={styles.modalOverlay} onClick={() => !loading && setShowFinanceModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Approve Financing</h2>
-                            <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
-                                Invoice: <strong>{inv.externalId}</strong>
-                            </p>
-                        </div>
-                        <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
-                            <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Available Credit</div>
-                                <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                    {formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}
-                                </div>
+                                )}
                             </div>
-                            {poolAvailableLiquidity > 0n && (
-                                <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
-                                    Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Quick Select</label>
-                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                {[10, 25, 50, 75, 100].map((percent) => {
-                                    const amount = (Number(availableCredit) / 100) * (percent / 100);
-                                    const isSelected = selectedFinancePercentage === percent;
-                                    return (
-                                        <button
-                                            key={percent}
-                                            onClick={() => {
-                                                setSelectedFinancePercentage(percent);
-                                                setFinanceAmount(amount.toFixed(2));
-                                            }}
-                                            style={{
-                                                flex: "1 1 auto",
-                                                minWidth: "60px",
-                                                padding: "10px",
-                                                fontSize: "13px",
-                                                fontWeight: isSelected ? 600 : 500,
-                                                border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
-                                                borderRadius: "4px",
-                                                background: isSelected ? "#2563eb" : "#ffffff",
-                                                color: isSelected ? "#ffffff" : "#1a1a1a",
-                                                cursor: "pointer",
-                                            }}
-                                        >
-                                            {percent}%
-                                        </button>
-                                    );
-                                })}
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Amount</label>
+                                <NumberInput
+                                    value={recourseForm.amount}
+                                    onChange={(value) => setRecourseForm({ ...recourseForm, amount: value })}
+                                    placeholder={recourseObligation !== null ? Number(recourseObligation).toFixed(2) : "0.00"}
+                                    step={0.01}
+                                    min={0}
+                                />
+                            </div>
+                            <div style={styles.modalActions}>
+                                <button
+                                    style={styles.buttonSecondary}
+                                    onClick={() => setShowRecourseModal(false)}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    style={styles.buttonPrimary}
+                                    onClick={handlePayRecourse}
+                                    disabled={loading || !recourseForm.amount}
+                                >
+                                    {loading ? "Processing..." : "Pay Recourse"}
+                                </button>
                             </div>
                         </div>
+                    </div>
+                )}
 
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Or Enter Custom Amount</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max={Number(availableCredit) / 100}
-                                value={financeAmount}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setFinanceAmount(value);
-                                    if (selectedFinancePercentage !== null) {
-                                        const expectedAmount = (Number(availableCredit) / 100) * (selectedFinancePercentage / 100);
-                                        if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
-                                            setSelectedFinancePercentage(null);
+                {/* Default Declaration Modal */}
+                {showDefaultModal && (
+                    <div style={styles.modalOverlay} onClick={() => !loading && setShowDefaultModal(false)}>
+                        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                            <div style={styles.modalHeader}>Declare Default</div>
+                            <div style={{ marginBottom: "16px", fontSize: "14px", color: "#991b1b" }}>
+                                This action will mark the invoice as defaulted. This cannot be undone.
+                                {creditLineInfo && (
+                                    <div style={{ marginTop: "8px" }}>
+                                        Total Debt: {formatAmount(creditLineInfo.totalDebt, inv.currency || "TRY")}
+                                    </div>
+                                )}
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Reason (Optional)</label>
+                                <textarea
+                                    style={{ ...styles.formInput, minHeight: "80px", resize: "vertical" as const }}
+                                    value={defaultForm.reason}
+                                    onChange={(e) => setDefaultForm({ ...defaultForm, reason: e.target.value })}
+                                    placeholder="Reason for default declaration"
+                                />
+                            </div>
+                            <div style={styles.modalActions}>
+                                <button
+                                    style={styles.buttonSecondary}
+                                    onClick={() => setShowDefaultModal(false)}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    style={{ ...styles.buttonPrimary, background: "#dc2626" }}
+                                    onClick={handleDeclareDefault}
+                                    disabled={loading}
+                                >
+                                    {loading ? "Declaring..." : "Declare Default"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Finance Modal */}
+                {showFinanceModal && inv && (
+                    <div style={styles.modalOverlay} onClick={() => !loading && setShowFinanceModal(false)}>
+                        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                            <div style={styles.modalHeader}>
+                                <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Approve Financing</h2>
+                                <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
+                                    Invoice: <strong>{inv.externalId}</strong>
+                                </p>
+                            </div>
+                            <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+                                <div style={{ marginBottom: "12px" }}>
+                                    <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Available Credit</div>
+                                    <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
+                                        {formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}
+                                    </div>
+                                </div>
+                                {poolAvailableLiquidity > 0n && (
+                                    <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
+                                        Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Quick Select</label>
+                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    {[10, 25, 50, 75, 100].map((percent) => {
+                                        const amount = (Number(availableCredit) / 100) * (percent / 100);
+                                        const isSelected = selectedFinancePercentage === percent;
+                                        return (
+                                            <button
+                                                key={percent}
+                                                onClick={() => {
+                                                    setSelectedFinancePercentage(percent);
+                                                    setFinanceAmount(amount.toFixed(2));
+                                                }}
+                                                style={{
+                                                    flex: "1 1 auto",
+                                                    minWidth: "60px",
+                                                    padding: "10px",
+                                                    fontSize: "13px",
+                                                    fontWeight: isSelected ? 600 : 500,
+                                                    border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
+                                                    borderRadius: "4px",
+                                                    background: isSelected ? "#2563eb" : "#ffffff",
+                                                    color: isSelected ? "#ffffff" : "#1a1a1a",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                {percent}%
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Or Enter Custom Amount</label>
+                                <NumberInput
+                                    value={financeAmount}
+                                    onChange={(value) => {
+                                        setFinanceAmount(value);
+                                        if (selectedFinancePercentage !== null) {
+                                            const expectedAmount = (Number(availableCredit) / 100) * (selectedFinancePercentage / 100);
+                                            if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
+                                                setSelectedFinancePercentage(null);
+                                            }
                                         }
-                                    }
-                                    const numValue = parseFloat(value);
-                                    if (!isNaN(numValue) && numValue > Number(availableCredit) / 100) {
-                                        setFinanceAmount((Number(availableCredit) / 100).toString());
-                                    }
-                                }}
-                                style={styles.formInput}
-                                placeholder="0.00"
-                            />
-                            {financeAmount && parseFloat(financeAmount) > 0 && (
-                                <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                    Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), inv.currency || "TRY")}
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={styles.modalActions}>
-                            <button
-                                style={styles.buttonSecondary}
-                                onClick={() => {
-                                    setShowFinanceModal(false);
-                                    setFinanceAmount("");
-                                    setSelectedFinancePercentage(null);
-                                }}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                style={{
-                                    ...styles.buttonPrimary,
-                                    ...((!financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                                }}
-                                onClick={handleFinance}
-                                disabled={loading || !financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100}
-                            >
-                                {loading ? "Processing..." : "Confirm Financing"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Repay Credit Modal */}
-            {showRepayModal && inv && (
-                <div style={styles.modalOverlay} onClick={() => !loading && setShowRepayModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Repay Credit</h2>
-                            <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
-                                Invoice: <strong>{inv.externalId}</strong>
-                            </p>
-                        </div>
-                        <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
-                            <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Outstanding Debt</div>
-                                <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                    {formatAmount((Number(currentDebt) / 100).toString(), inv.currency || "TRY")}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Quick Select</label>
-                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                {[10, 25, 50, 75, 100].map((percent) => {
-                                    const amount = (Number(currentDebt) / 100) * (percent / 100);
-                                    const isSelected = selectedPercentage === percent;
-                                    return (
-                                        <button
-                                            key={percent}
-                                            onClick={() => {
-                                                setSelectedPercentage(percent);
-                                                setRepayAmount(amount.toFixed(2));
-                                            }}
-                                            style={{
-                                                flex: "1 1 auto",
-                                                minWidth: "60px",
-                                                padding: "10px",
-                                                fontSize: "13px",
-                                                fontWeight: isSelected ? 600 : 500,
-                                                border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
-                                                borderRadius: "4px",
-                                                background: isSelected ? "#2563eb" : "#ffffff",
-                                                color: isSelected ? "#ffffff" : "#1a1a1a",
-                                                cursor: "pointer",
-                                            }}
-                                        >
-                                            {percent}%
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.formLabel}>Or Enter Custom Amount</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max={Number(currentDebt) / 100}
-                                value={repayAmount}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setRepayAmount(value);
-                                    if (selectedPercentage !== null) {
-                                        const expectedAmount = (Number(currentDebt) / 100) * (selectedPercentage / 100);
-                                        if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
-                                            setSelectedPercentage(null);
+                                        const numValue = parseFloat(value);
+                                        if (!isNaN(numValue) && numValue > Number(availableCredit) / 100) {
+                                            setFinanceAmount((Number(availableCredit) / 100).toString());
                                         }
-                                    }
-                                    const numValue = parseFloat(value);
-                                    if (!isNaN(numValue) && numValue > Number(currentDebt) / 100) {
-                                        setRepayAmount((Number(currentDebt) / 100).toString());
-                                    }
-                                }}
-                                style={styles.formInput}
-                                placeholder="0.00"
-                            />
-                            {repayAmount && parseFloat(repayAmount) > 0 && (
-                                <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                    Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), inv.currency || "TRY")}
-                                </div>
-                            )}
-                        </div>
+                                    }}
+                                    placeholder="0.00"
+                                    step={0.01}
+                                    min={0}
+                                    max={Number(availableCredit) / 100}
+                                />
+                                {financeAmount && parseFloat(financeAmount) > 0 && (
+                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
+                                        Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), inv.currency || "TRY")}
+                                    </div>
+                                )}
+                            </div>
 
-                        <div style={styles.modalActions}>
-                            <button
-                                style={styles.buttonSecondary}
-                                onClick={() => {
-                                    setShowRepayModal(false);
-                                    setRepayAmount("");
-                                    setSelectedPercentage(null);
-                                }}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                style={{
-                                    ...styles.buttonPrimary,
-                                    ...((!repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                                }}
-                                onClick={executeRepayment}
-                                disabled={loading || !repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100}
-                            >
-                                {loading ? "Processing..." : "Confirm Repayment"}
-                            </button>
+                            <div style={styles.modalActions}>
+                                <button
+                                    style={styles.buttonSecondary}
+                                    onClick={() => {
+                                        setShowFinanceModal(false);
+                                        setFinanceAmount("");
+                                        setSelectedFinancePercentage(null);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    style={{
+                                        ...styles.buttonPrimary,
+                                        ...((!financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                                    }}
+                                    onClick={handleFinance}
+                                    disabled={loading || !financeAmount || parseFloat(financeAmount) <= 0 || parseFloat(financeAmount) > Number(availableCredit) / 100}
+                                >
+                                    {loading ? "Processing..." : "Confirm Financing"}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Repay Credit Modal */}
+                {showRepayModal && inv && (
+                    <div style={styles.modalOverlay} onClick={() => !loading && setShowRepayModal(false)}>
+                        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                            <div style={styles.modalHeader}>
+                                <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>Repay Credit</h2>
+                                <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>
+                                    Invoice: <strong>{inv.externalId}</strong>
+                                </p>
+                            </div>
+                            <div style={{ marginBottom: "24px", padding: "20px", background: "#f8f9fa", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+                                <div style={{ marginBottom: "12px" }}>
+                                    <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Outstanding Debt</div>
+                                    <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
+                                        {formatAmount((Number(currentDebt) / 100).toString(), inv.currency || "TRY")}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Quick Select</label>
+                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    {[10, 25, 50, 75, 100].map((percent) => {
+                                        const amount = (Number(currentDebt) / 100) * (percent / 100);
+                                        const isSelected = selectedPercentage === percent;
+                                        return (
+                                            <button
+                                                key={percent}
+                                                onClick={() => {
+                                                    setSelectedPercentage(percent);
+                                                    setRepayAmount(amount.toFixed(2));
+                                                }}
+                                                style={{
+                                                    flex: "1 1 auto",
+                                                    minWidth: "60px",
+                                                    padding: "10px",
+                                                    fontSize: "13px",
+                                                    fontWeight: isSelected ? 600 : 500,
+                                                    border: `1px solid ${isSelected ? "#2563eb" : "#e0e0e0"}`,
+                                                    borderRadius: "4px",
+                                                    background: isSelected ? "#2563eb" : "#ffffff",
+                                                    color: isSelected ? "#ffffff" : "#1a1a1a",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                {percent}%
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.formLabel}>Or Enter Custom Amount</label>
+                                <NumberInput
+                                    value={repayAmount}
+                                    onChange={(value) => {
+                                        setRepayAmount(value);
+                                        if (selectedPercentage !== null) {
+                                            const expectedAmount = (Number(currentDebt) / 100) * (selectedPercentage / 100);
+                                            if (Math.abs(parseFloat(value || "0") - expectedAmount) > 0.01) {
+                                                setSelectedPercentage(null);
+                                            }
+                                        }
+                                        const numValue = parseFloat(value);
+                                        if (!isNaN(numValue) && numValue > Number(currentDebt) / 100) {
+                                            setRepayAmount((Number(currentDebt) / 100).toString());
+                                        }
+                                    }}
+                                    placeholder="0.00"
+                                    step={0.01}
+                                    min={0}
+                                    max={Number(currentDebt) / 100}
+                                />
+                                {repayAmount && parseFloat(repayAmount) > 0 && (
+                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
+                                        Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), inv.currency || "TRY")}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={styles.modalActions}>
+                                <button
+                                    style={styles.buttonSecondary}
+                                    onClick={() => {
+                                        setShowRepayModal(false);
+                                        setRepayAmount("");
+                                        setSelectedPercentage(null);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    style={{
+                                        ...styles.buttonPrimary,
+                                        ...((!repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100) ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                                    }}
+                                    onClick={executeRepayment}
+                                    disabled={loading || !repayAmount || parseFloat(repayAmount) <= 0 || parseFloat(repayAmount) > Number(currentDebt) / 100}
+                                >
+                                    {loading ? "Processing..." : "Confirm Repayment"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

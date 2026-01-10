@@ -1,33 +1,42 @@
 import fs from "fs";
 import path from "path";
 
-const DEPLOYMENTS_DIR = path.join(__dirname, "../deployments/baseSepolia");
-
 // Target paths in backend and agent packages
 const BACKEND_TARGET = path.join(__dirname, "../../backend/src/onchain/deployments.json");
 const AGENT_TARGET = path.join(__dirname, "../../agent/src/onchain/deployments.json");
 const FRONTEND_TARGET = path.join(__dirname, "../../frontend/lib/deployments.json");
 
 async function main() {
-    if (!fs.existsSync(DEPLOYMENTS_DIR)) {
-        console.error(`Deployments not found at ${DEPLOYMENTS_DIR}. Did you run 'npm run deploy:base'?`);
-        process.exit(1);
-    }
-
+    const networks = ["baseSepolia", "mantleSepolia"];
     const exported: Record<string, any> = {};
-    const files = fs.readdirSync(DEPLOYMENTS_DIR).filter(f => f.endsWith(".json"));
 
-    for (const file of files) {
-        const name = file.replace(".json", "");
-        const content = JSON.parse(fs.readFileSync(path.join(DEPLOYMENTS_DIR, file), "utf8"));
+    // Structure: { [networkName]: { [ContractName]: { address, abi } } }
 
-        exported[name] = {
-            address: content.address,
-            abi: content.abi,
-        };
+    for (const network of networks) {
+        const networkDeploymentsDir = path.join(__dirname, `../deployments/${network}`);
+        if (!fs.existsSync(networkDeploymentsDir)) {
+            console.warn(`⚠️  No deployments found for ${network} at ${networkDeploymentsDir}`);
+            continue;
+        }
+
+        exported[network] = {};
+        const files = fs.readdirSync(networkDeploymentsDir).filter(f => f.endsWith(".json"));
+
+        for (const file of files) {
+            const name = file.replace(".json", "");
+            try {
+                const content = JSON.parse(fs.readFileSync(path.join(networkDeploymentsDir, file), "utf8"));
+                exported[network][name] = {
+                    address: content.address,
+                    abi: content.abi,
+                };
+            } catch (e) {
+                console.error(`Error reading ${file}:`, e);
+            }
+        }
     }
 
-    console.log(`Exporting ${Object.keys(exported).length} contracts...`);
+    console.log(`Exporting deployments for networks: ${Object.keys(exported).join(", ")}`);
 
     // Ensure directories exist
     [BACKEND_TARGET, AGENT_TARGET, FRONTEND_TARGET].forEach(target => {

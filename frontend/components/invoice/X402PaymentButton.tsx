@@ -24,12 +24,12 @@ export function X402PaymentButton({ invoiceId, invoiceStatus, onPaymentConfirmed
     setIsLoading(true);
     try {
       const response = await requestX402Payment(invoiceId);
-      
+
       if ('x402' in response && response.x402) {
         setPaymentRequest(response as X402PaymentRequest);
         showToast('info', 'Payment request created. Please send the payment and enter the transaction hash.');
       } else {
-        showToast('info', response.message || 'x402 payment is not available for this invoice');
+        showToast('info', (response as any).message || 'x402 payment is not available for this invoice');
       }
     } catch (error: any) {
       showToast('error', error.message || 'Failed to request payment');
@@ -51,7 +51,7 @@ export function X402PaymentButton({ invoiceId, invoiceStatus, onPaymentConfirmed
 
     setIsConfirming(true);
     try {
-      const result = await confirmX402Payment(invoiceId, {
+      await confirmX402Payment(invoiceId, {
         sessionId: paymentRequest.sessionId,
         txHash: txHash.trim(),
       });
@@ -94,7 +94,7 @@ export function X402PaymentButton({ invoiceId, invoiceStatus, onPaymentConfirmed
         <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "16px", fontWeight: 600 }}>
           Pay with x402
         </h3>
-        
+
         <div style={{ marginBottom: "16px" }}>
           <div style={{ marginBottom: "8px", fontSize: "14px", color: "#64748b" }}>
             <strong>Amount:</strong> {paymentRequest.payment.amount} {paymentRequest.payment.currency}
@@ -192,4 +192,9 @@ export function X402PaymentButton({ invoiceId, invoiceStatus, onPaymentConfirmed
     </button>
   );
 }
+
+
+
+
+
 

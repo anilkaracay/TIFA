@@ -243,3 +243,8 @@ curl -X POST "http://localhost:4000/invoices/{invoiceId}/pay/confirm" \
 2. Invoice'ın subgraph'te göründüğünü kontrol et
 3. Due date'in doğru olduğunu kontrol et
 
+
+
+
+
+

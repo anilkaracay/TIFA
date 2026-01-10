@@ -9,10 +9,10 @@ export interface X402Config {
 }
 
 export const x402Config: X402Config = {
-  enabled: process.env.X402_ENABLED === 'true',
-  chain: process.env.X402_CHAIN || 'base',
-  currency: process.env.X402_CURRENCY || 'USDC',
-  recipient: process.env.X402_RECIPIENT || '',
+  enabled: process.env.X402_ENABLED === 'true' || true,
+  chain: process.env.X402_CHAIN || 'Mantle Sepolia',
+  currency: process.env.X402_CURRENCY || 'USD',
+  recipient: process.env.X402_RECIPIENT || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
   ttlSeconds: Number(process.env.X402_TTL_SECONDS || '300'),
 };
 
@@ -26,4 +26,9 @@ export function validateX402Config(): void {
     }
   }
 }
+
+
+
+
+
 

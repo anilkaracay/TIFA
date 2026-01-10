@@ -323,7 +323,7 @@ export default function AILifecycleRing({ totalInvoices, statusDistribution }: A
                         lineHeight: "1.4",
                         marginBottom: "2px"
                     }}>
-                        Active Invoices
+                        Total Invoices
                     </div>
                     <div style={{
                         fontSize: "9px",
@@ -381,5 +381,8 @@ export default function AILifecycleRing({ totalInvoices, statusDistribution }: A
         </div>
     );
 }
+
+
+
 
 

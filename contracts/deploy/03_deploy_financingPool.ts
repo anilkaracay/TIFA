@@ -2,7 +2,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-    const { deployments, getNamedAccounts } = hre;
+    const { deployments, getNamedAccounts, ethers } = hre;
     const { deploy, get } = deployments;
     const { deployer } = await getNamedAccounts();
 
@@ -12,7 +12,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const lpShareToken = await get("LPShareToken");
 
     // 15% APR in WAD (0.15e18)
-    const borrowAprWad = ethers.utils.parseEther("0.15");
+    const borrowAprWad = ethers.parseEther("0.15");
     // 10% protocol fee (1000 basis points)
     const protocolFeeBps = 1000;
 
@@ -32,7 +32,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     });
 
     console.log(`FinancingPool deployed at: ${financingPool.address}`);
-    
+
     // Grant pool roles to FinancingPool
     const lpTokenContract = await hre.ethers.getContractAt("LPShareToken", lpShareToken.address);
     await lpTokenContract.grantPoolRoles(financingPool.address);

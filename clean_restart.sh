@@ -3,7 +3,7 @@
 echo "Stopping existing services..."
 
 # Kill Frontend (Port 3000)
-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true
 echo "Frontend stopped."
 
 # Kill Backend (Port 4000)
@@ -19,21 +19,21 @@ echo "Starting Services..."
 
 # Start Backend
 cd backend
-npm run dev > ../backend.log 2>&1 &
+pnpm run dev > ../backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend started (PID $BACKEND_PID)"
 cd ..
 
 # Start Agent
 cd agent
-npm run dev > ../agent.log 2>&1 &
+pnpm run dev > ../agent.log 2>&1 &
 AGENT_PID=$!
 echo "Agent started (PID $AGENT_PID)"
 cd ..
 
 # Start Frontend
 cd frontend
-npm run dev > ../frontend.log 2>&1 &
+pnpm run dev > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "Frontend started (PID $FRONTEND_PID)"
 cd ..

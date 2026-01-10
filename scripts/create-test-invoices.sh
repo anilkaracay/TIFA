@@ -143,3 +143,8 @@ echo "3. Make partial payments: POST /invoices/{id}/payments"
 echo "4. Test x402 payments on TOKENIZED/FINANCED/PARTIALLY_PAID invoices"
 echo "5. Test agent auto-payment on COMP-DEBTOR-003 invoices"
 
+
+
+
+
+

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import { useAccount } from "wagmi";
 import { fetchAgentConsole, AgentConsoleData, fetchAgentConfig, pauseAgent, resumeAgent, updateAgentConfig, AgentConfig, fetchSystemParameters, fetchPredictiveIntelligence, SystemParameters, PredictiveIntelligence } from "../../lib/backendClient";
@@ -597,11 +596,11 @@ const styles = {
         fontSize: "11px",
         color: "#9ca3af",
     },
-};
+} as const;
 
 // Add CSS animations for premium AI interface
-const styleSheet = document.createElement("style");
-styleSheet.textContent = `
+// Moved to component useEffect to avoid SSR issues
+const styleSheetContent = `
     @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
@@ -633,10 +632,6 @@ styleSheet.textContent = `
         }
     }
 `;
-if (typeof document !== "undefined" && !document.getElementById("agent-console-styles")) {
-    styleSheet.id = "agent-console-styles";
-    document.head.appendChild(styleSheet);
-}
 
 function formatTimestamp(timestamp: string | Date): string {
     const date = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
@@ -650,7 +645,7 @@ function formatTimestamp(timestamp: string | Date): string {
 }
 
 // Risk Composition Panel Component
-function RiskCompositionPanel({ invoiceId, riskScore }: { invoiceId: string; riskScore?: number }) {
+function RiskCompositionPanel({ invoiceId }: { invoiceId: string }) {
     const [breakdown, setBreakdown] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -722,9 +717,9 @@ function RiskCompositionPanel({ invoiceId, riskScore }: { invoiceId: string; ris
             {breakdown.factors && breakdown.factors.length > 0 ? (
                 <>
                     {breakdown.factors.map((factor: any, i: number) => (
-                        <div key={i} style={{ 
-                            display: "flex", 
-                            justifyContent: "space-between", 
+                        <div key={i} style={{
+                            display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
                             marginBottom: "6px",
                             paddingBottom: "6px",
@@ -734,8 +729,8 @@ function RiskCompositionPanel({ invoiceId, riskScore }: { invoiceId: string; ris
                                 <div style={{ fontWeight: 500, color: "#374151" }}>{factor.name}</div>
                                 <div style={{ fontSize: "10px", color: "#6b7280", marginTop: "2px" }}>{factor.description}</div>
                             </div>
-                            <div style={{ 
-                                fontWeight: 600, 
+                            <div style={{
+                                fontWeight: 600,
                                 color: factor.impact > 0 ? "#dc2626" : factor.impact < 0 ? "#16a34a" : "#6b7280",
                                 marginLeft: "12px",
                                 minWidth: "40px",
@@ -745,9 +740,9 @@ function RiskCompositionPanel({ invoiceId, riskScore }: { invoiceId: string; ris
                             </div>
                         </div>
                     ))}
-                    <div style={{ 
-                        marginTop: "8px", 
-                        paddingTop: "8px", 
+                    <div style={{
+                        marginTop: "8px",
+                        paddingTop: "8px",
                         borderTop: "1px solid #e5e7eb",
                         display: "flex",
                         justifyContent: "space-between",
@@ -781,12 +776,36 @@ function formatRelativeTime(timestamp: string | Date): string {
 }
 
 export default function AgentConsolePage() {
-    const pathname = usePathname();
     const { address } = useAccount();
+
+    useEffect(() => {
+        if (typeof document !== "undefined" && !document.getElementById("agent-console-styles")) {
+            const styleSheet = document.createElement("style");
+            styleSheet.id = "agent-console-styles";
+            styleSheet.textContent = styleSheetContent;
+            document.head.appendChild(styleSheet);
+        }
+    }, []);
     const { data, error, isLoading, mutate } = useSWR<AgentConsoleData>(
         "agent-console",
         () => fetchAgentConsole(),
-        { refreshInterval: 3000 } // Refresh every 3 seconds
+        {
+            refreshInterval: 3000, // Fast polling (3s) + WebSocket for instant updates
+            revalidateOnFocus: false,
+            revalidateOnReconnect: true,
+            dedupingInterval: 500, // Reduced for faster WebSocket updates
+            shouldRetryOnError: true,
+            errorRetryCount: 3,
+            errorRetryInterval: 2000,
+            keepPreviousData: true,
+            loadingTimeout: 5000,
+            onError: (err) => {
+                console.error('[Agent Console] Fetch error (keeping stale data):', err);
+            },
+            onLoadingSlow: () => {
+                console.warn('[Agent Console] Loading is taking longer than expected...');
+            },
+        }
     );
 
     const { data: agentConfig, mutate: mutateConfig } = useSWR<AgentConfig>(
@@ -812,32 +831,137 @@ export default function AgentConsolePage() {
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [riskThreshold, setRiskThreshold] = useState(50);
     const [showAllTraces, setShowAllTraces] = useState(false);
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     // WebSocket integration for real-time updates
-    const { subscribe, isConnected } = useWebSocket("global");
+    const { subscribe } = useWebSocket("global");
+
+    // Track when initial load completes
+    useEffect(() => {
+        if (!isLoading && data) {
+            setInitialLoadComplete(true);
+        }
+    }, [isLoading, data]);
 
     useEffect(() => {
-        if (!subscribe) return;
+        // Only subscribe to WebSocket after initial data has loaded
+        if (!subscribe || !initialLoadComplete) return;
 
-        // Subscribe to agent decision events
+        // Subscribe to agent decision events with OPTIMISTIC UPDATE
         const unsubscribeDecision = subscribe("agent.decision", (event) => {
-            // Refresh console data when new decision arrives
-            mutate();
+            // Instantly update UI with new decision data (optimistic update)
+            mutate((currentData) => {
+                if (!currentData) return currentData;
+
+                const newSignal = {
+                    id: event.payload.decisionId || `temp-${Date.now()}`,
+                    timestamp: event.timestamp || new Date().toISOString(),
+                    sourceAgent: "status-management",
+                    severity: event.payload.riskScore > 70 ? "High" : event.payload.riskScore > 40 ? "Medium" : "Low",
+                    message: `${event.payload.actionType}: ${event.payload.invoiceExternalId || event.payload.invoiceId || "Invoice"}. Status: ${event.payload.nextStatus || "Updated"}, Financed: ${event.payload.financed ?? false}`,
+                    context: {
+                        invoiceId: event.payload.invoiceId,
+                        invoiceExternalId: event.payload.invoiceExternalId,
+                        riskScore: event.payload.riskScore,
+                    },
+                };
+
+                const newDecisionTrace = {
+                    id: event.payload.decisionId || `temp-${Date.now()}`,
+                    timestamp: event.timestamp || new Date().toISOString(),
+                    reasoningPipeline: [
+                        { step: "inputs", label: "Input Analysis", content: { invoiceId: event.payload.invoiceExternalId, status: event.payload.nextStatus, riskScore: event.payload.riskScore } },
+                        { step: "signals", label: "Signals Detected", content: [{ source: "status-management", severity: newSignal.severity, message: newSignal.message }] },
+                        { step: "evaluation", label: "Risk Evaluation", content: { riskScore: event.payload.riskScore, threshold: 50, passed: (event.payload.riskScore || 0) < 50 } },
+                        { step: "decision", label: "Final Decision", content: { actionType: event.payload.actionType, nextStatus: event.payload.nextStatus } },
+                    ],
+                    inputs: { invoiceId: event.payload.invoiceExternalId, riskScore: event.payload.riskScore },
+                    signals: [newSignal],
+                    evaluation: { actionType: event.payload.actionType, reasoning: newSignal.message },
+                    recommendation: { action: event.payload.actionType, confidence: 100 - (event.payload.riskScore || 50) },
+                };
+
+                return {
+                    ...currentData,
+                    signals: [newSignal, ...currentData.signals].slice(0, 20),
+                    decisionTraces: [newDecisionTrace, ...currentData.decisionTraces].slice(0, 5),
+                };
+            }, { revalidate: false }); // Instant UI update
+
+            // Immediately sync full data from backend (100ms delay to ensure UI updated first)
+            setTimeout(() => mutate(), 100);
         });
 
         // Subscribe to agent pause/resume events
-        const unsubscribePaused = subscribe("agent.paused", (event) => {
+        const unsubscribePaused = subscribe("agent.paused", () => {
             mutate();
             mutateConfig();
         });
 
-        const unsubscribeResumed = subscribe("agent.resumed", (event) => {
+        const unsubscribeResumed = subscribe("agent.resumed", () => {
             mutate();
             mutateConfig();
         });
 
-        const unsubscribeConfig = subscribe("agent.config.updated", (event) => {
+        const unsubscribeConfig = subscribe("agent.config.updated", () => {
             mutateConfig();
+        });
+
+        // Subscribe to agent status updates for REAL-TIME card metrics
+        const unsubscribeStatus = subscribe("agent.status", (event) => {
+            // Instantly update agent card with new metrics
+            mutate((currentData) => {
+                if (!currentData) return currentData;
+
+                const updatedAgents = currentData.agents.map((agent) => {
+                    // Match agent by name or id from event payload
+                    const agentName = event.payload.agentName || event.payload.agent;
+                    if (agent.name === agentName || agent.id === event.payload.agentId) {
+                        return {
+                            ...agent,
+                            state: event.payload.state || agent.state,
+                            confidence: event.payload.confidence ?? agent.confidence,
+                            workload: event.payload.workload ?? agent.workload,
+                            signalCount: event.payload.signalCount ?? agent.signalCount,
+                            lastAction: event.payload.timestamp || new Date().toISOString(),
+                            lastActionSummary: event.payload.message || event.payload.summary || agent.lastActionSummary,
+                        };
+                    }
+                    return agent;
+                });
+
+                return {
+                    ...currentData,
+                    agents: updatedAgents,
+                };
+            }, { revalidate: false });
+
+            // Background sync after 100ms
+            setTimeout(() => mutate(), 100);
+        });
+
+        // Subscribe to ANY agent-related event for immediate card refresh
+        const unsubscribeAgentActivity = subscribe("agent.activity", (event) => {
+            mutate((currentData) => {
+                if (!currentData) return currentData;
+
+                const updatedAgents = currentData.agents.map((agent) => {
+                    const agentName = event.payload.agentName || event.payload.agent;
+                    if (agent.name === agentName || agent.id === event.payload.agentId) {
+                        return {
+                            ...agent,
+                            lastAction: event.payload.timestamp || new Date().toISOString(),
+                            lastActionSummary: event.payload.action || event.payload.message,
+                            signalCount: (agent.signalCount || 0) + 1,
+                        };
+                    }
+                    return agent;
+                });
+
+                return { ...currentData, agents: updatedAgents };
+            }, { revalidate: false });
+
+            setTimeout(() => mutate(), 100);
         });
 
         return () => {
@@ -845,8 +969,15 @@ export default function AgentConsolePage() {
             unsubscribePaused();
             unsubscribeResumed();
             unsubscribeConfig();
+            unsubscribeStatus();
+            unsubscribeAgentActivity();
         };
-    }, [subscribe, mutate, mutateConfig]);
+    }, [subscribe, mutate, mutateConfig, initialLoadComplete]);
+
+    // Debug SWR state
+    React.useEffect(() => {
+        console.log('[Agent Console] SWR State:', { isLoading, hasError: !!error, hasData: !!data, errorMsg: error?.message });
+    }, [isLoading, error, data]);
 
     // Update risk threshold when config loads
     useEffect(() => {
@@ -920,7 +1051,9 @@ export default function AgentConsolePage() {
         }
     };
 
-    if (isLoading) {
+    // ONLY show loading screen on initial load when there's no data yet
+    // This prevents loading flash during background revalidation
+    if (isLoading && !data) {
         return (
             <div style={styles.page}>
                 <div style={styles.pageOverlay}></div>
@@ -936,7 +1069,9 @@ export default function AgentConsolePage() {
         );
     }
 
-    if (error || !data) {
+    // Only show error if we've never loaded data successfully
+    if (error && !data) {
+        console.error('[Agent Console] Failed to load (no data):', error);
         return (
             <div style={styles.page}>
                 <div style={styles.pageOverlay}></div>
@@ -945,6 +1080,39 @@ export default function AgentConsolePage() {
                     <div style={styles.container}>
                         <div style={{ textAlign: "center", padding: "60px", color: "#dc2626" }}>
                             Failed to load agent console data.
+                            {error && <div style={{ fontSize: "12px", marginTop: "10px", color: "#666" }}>{error.message}</div>}
+                            <div style={{ marginTop: "20px" }}>
+                                <button
+                                    onClick={() => mutate()}
+                                    style={{
+                                        padding: "10px 20px",
+                                        background: "#2563eb",
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // TypeScript guard: ensure data exists before rendering
+    if (!data) {
+        return (
+            <div style={styles.page}>
+                <div style={styles.pageOverlay}></div>
+                <div style={styles.pageContent}>
+                    <Navbar />
+                    <div style={styles.container}>
+                        <div style={{ textAlign: "center", padding: "60px", color: "#6b7280" }}>
+                            Loading agent console...
                         </div>
                     </div>
                 </div>
@@ -989,735 +1157,735 @@ export default function AgentConsolePage() {
             `}</style>
             <div style={styles.pageOverlay}></div>
             <div style={styles.pageContent}>
-            <Navbar />
+                <Navbar />
 
-            <div style={styles.container}>
-                {/* Page Header */}
-                <div style={styles.header}>
-                    <div style={styles.title}>AI Agent Console</div>
-                    <div style={styles.subtitle}>
-                        Autonomous risk monitoring and decision support system.
-                    </div>
-                    {/* AI Engine Status Bar - Premium Header */}
-                    <div style={{
-                        ...styles.aiEngineHeader,
-                        ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? styles.aiEngineHeaderActive : {})
-                    }}>
-                        {/* Engine Status */}
-                        <div style={styles.statusItem}>
-                            <span style={{
-                                ...styles.statusDot,
-                                ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle),
-                                background: data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? "#22c55e" : "#9ca3af",
-                            }}></span>
-                            <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : `${data.systemStatus.engineStatus}-Nominal`}</span>
+                <div style={styles.container}>
+                    {/* Page Header */}
+                    <div style={styles.header}>
+                        <div style={styles.title}>AI Agent Console</div>
+                        <div style={styles.subtitle}>
+                            Autonomous risk monitoring and decision support system.
                         </div>
-                        
-                        {/* Last Decision */}
-                        {(() => {
-                            // Get the most recent decision timestamp
-                            // Backend returns decisionTraces sorted by createdAt DESC, so first item is most recent
-                            let lastDecisionTime: Date | null = null;
-                            
-                            // Try decisionTraces first (most reliable, sorted by backend)
-                            if (data.decisionTraces && data.decisionTraces.length > 0) {
-                                // decisionTraces are already sorted DESC by backend, so first is most recent
-                                const mostRecentTrace = data.decisionTraces[0];
-                                lastDecisionTime = new Date(mostRecentTrace.timestamp);
-                            } 
-                            // Fallback to recommendations
-                            else if (data.recommendations && data.recommendations.length > 0) {
-                                // Find most recent recommendation
-                                const timestamps = data.recommendations.map(r => new Date(r.timestamp).getTime());
-                                const maxTime = Math.max(...timestamps);
-                                lastDecisionTime = new Date(maxTime);
-                            } 
-                            // Final fallback to systemStatus.lastEvaluation
-                            else {
-                                lastDecisionTime = new Date(data.systemStatus.lastEvaluation);
-                            }
-                            
-                            // Format: MM/DD/YYYY, HH:MM:SS AM/PM UTC
-                            const formatDecisionTime = (date: Date): string => {
-                                // Validate date
-                                if (isNaN(date.getTime())) {
-                                    return "N/A";
-                                }
-                                
-                                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                                const day = String(date.getUTCDate()).padStart(2, '0');
-                                const year = date.getUTCFullYear();
-                                let hours = date.getUTCHours();
-                                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-                                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-                                const ampm = hours >= 12 ? 'PM' : 'AM';
-                                hours = hours % 12;
-                                hours = hours ? hours : 12;
-                                const hoursStr = String(hours).padStart(2, '0');
-                                return `${month}/${day}/${year}, ${hoursStr}:${minutes}:${seconds} ${ampm} UTC`;
-                            };
-                            
-                            return (
-                                <div style={styles.statusItem}>
-                                    <span><strong>Last Decision:</strong> {lastDecisionTime ? formatDecisionTime(lastDecisionTime) : "N/A"}</span>
-                                </div>
-                            );
-                        })()}
-                        
-                        {/* Active Rules */}
-                        <div style={styles.statusItem}>
-                            <span><strong>Active Rules:</strong> {
-                                agentConfig && systemParams 
-                                    ? `Risk Threshold: ${agentConfig.riskThreshold}, LTV: ${(systemParams.ltvBps / 100).toFixed(0)}%`
-                                    : "N/A"
-                            }</span>
-                        </div>
-                        
-                        {/* System Load */}
-                        <div style={styles.statusItem}>
-                            <span><strong>System Load:</strong> {data.systemStatus.systemLoad.toFixed(1)}%</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Agent Overview Grid */}
-                <div style={styles.agentGrid}>
-                    {data.agents.map((agent) => {
-                        const isAlerting = agent.state === "Alerting";
-                        const stateStyle = agent.state === "Active" ? styles.agentStateActive :
-                            agent.state === "Idle" ? styles.agentStateIdle :
-                            styles.agentStateAlerting;
-                        const dotStyle = agent.state === "Active" ? styles.statusDot :
-                            agent.state === "Alerting" ? styles.statusDotAlert :
-                            styles.statusDotIdle;
-
-                        const isActive = agent.state === "Active";
-                        const cardStyle = isActive ? styles.agentCardActive : 
-                                        agent.state === "Idle" ? styles.agentCardIdle :
-                                        isAlerting ? styles.agentCardAlert : styles.agentCard;
-
-                        return (
-                            <div key={agent.id} style={{ ...styles.agentCard, ...cardStyle }}>
-                                {isActive && <div style={styles.agentActivityLine}></div>}
-                                <div style={styles.agentName}>{agent.name}</div>
-                                <div style={styles.agentScope}>{agent.scope}</div>
-                                <div style={{ ...styles.agentState, ...stateStyle }}>
-                                    <span style={dotStyle}></span> {agent.state}
-                                </div>
-                                <div style={styles.confidenceBar}>
-                                    <div style={{ ...styles.confidenceFill, width: `${agent.confidence}%` }}></div>
-                                </div>
-                                <div style={styles.agentMeta}>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                        <span>Confidence: {agent.confidence}%</span>
-                                        {(agent.workload !== undefined || agent.signalCount !== undefined) && (
-                                            <div style={{ display: "flex", gap: "12px", fontSize: "10px", color: "#6b7280" }}>
-                                                {agent.workload !== undefined && (
-                                                    <span>Workload: {agent.workload}/h</span>
-                                                )}
-                                                {agent.signalCount !== undefined && (
-                                                    <span>Signals: {agent.signalCount}</span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <span>{formatRelativeTime(agent.lastAction)}</span>
-                                </div>
-                                {(agent as any).lastActionSummary && (
-                                    <div style={styles.lastActionSummary}>
-                                        {(agent as any).lastActionSummary}
-                                    </div>
-                                )}
+                        {/* AI Engine Status Bar - Premium Header */}
+                        <div style={{
+                            ...styles.aiEngineHeader,
+                            ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? styles.aiEngineHeaderActive : {})
+                        }}>
+                            {/* Engine Status */}
+                            <div style={styles.statusItem}>
+                                <span style={{
+                                    ...styles.statusDot,
+                                    ...(data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? {} : styles.statusDotIdle),
+                                    background: data.systemStatus.engineStatus === "Running" && !agentConfig?.paused ? "#22c55e" : "#9ca3af",
+                                }}></span>
+                                <span><strong>Engine Status:</strong> {agentConfig?.paused ? "Paused" : `${data.systemStatus.engineStatus}-Nominal`}</span>
                             </div>
-                        );
-                    })}
-                </div>
 
-                {/* Two Column Layout: Signals & Decision Traces */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "40px" }}>
-                    {/* Real-Time AI Awareness Stream */}
-                    <div style={styles.signalsPanel}>
-                        <div style={styles.signalsTitle}>
-                            Real-Time AI Awareness Stream
-                            <span style={styles.signalsTitleLabel}>Live</span>
-                        </div>
-                        {data.signals.length === 0 ? (
-                            <div style={{ padding: "20px", textAlign: "center", color: "#9ca3af", fontSize: "12px" }}>
-                                No signals detected in the last evaluation cycle.
-                            </div>
-                        ) : (
-                            data.signals.map((signal) => {
-                                const severityStyle = signal.severity === "High" ? styles.severityHigh :
-                                    signal.severity === "Medium" ? styles.severityMedium :
-                                    styles.severityLow;
+                            {/* Last Decision */}
+                            {(() => {
+                                // Get the most recent decision timestamp
+                                // Backend returns decisionTraces sorted by createdAt DESC, so first item is most recent
+                                let lastDecisionTime: Date | null = null;
 
-                                // Determine impact
-                                let impact = "None";
-                                if (signal.context.txHash) {
-                                    impact = "Executed";
-                                } else if (signal.message.toLowerCase().includes("blocked")) {
-                                    impact = "Blocked";
-                                } else if (signal.message.toLowerCase().includes("skipped")) {
-                                    impact = "Skipped";
+                                // Try decisionTraces first (most reliable, sorted by backend)
+                                if (data.decisionTraces && data.decisionTraces.length > 0) {
+                                    // decisionTraces are already sorted DESC by backend, so first is most recent
+                                    const mostRecentTrace = data.decisionTraces[0];
+                                    lastDecisionTime = new Date(mostRecentTrace.timestamp);
                                 }
+                                // Fallback to recommendations
+                                else if (data.recommendations && data.recommendations.length > 0) {
+                                    // Find most recent recommendation
+                                    const timestamps = data.recommendations.map(r => new Date(r.timestamp).getTime());
+                                    const maxTime = Math.max(...timestamps);
+                                    lastDecisionTime = new Date(maxTime);
+                                }
+                                // Final fallback to systemStatus.lastEvaluation
+                                else {
+                                    lastDecisionTime = new Date(data.systemStatus.lastEvaluation);
+                                }
+
+                                // Format: MM/DD/YYYY, HH:MM:SS AM/PM UTC
+                                const formatDecisionTime = (date: Date): string => {
+                                    // Validate date
+                                    if (isNaN(date.getTime())) {
+                                        return "N/A";
+                                    }
+
+                                    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getUTCDate()).padStart(2, '0');
+                                    const year = date.getUTCFullYear();
+                                    let hours = date.getUTCHours();
+                                    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                                    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                                    hours = hours % 12;
+                                    hours = hours ? hours : 12;
+                                    const hoursStr = String(hours).padStart(2, '0');
+                                    return `${month}/${day}/${year}, ${hoursStr}:${minutes}:${seconds} ${ampm} UTC`;
+                                };
 
                                 return (
-                                    <div key={signal.id} style={{
-                                        ...styles.signalItem,
-                                        ...(signal.severity === "High" ? styles.signalItemHigh : {})
-                                    }}>
-                                        <div style={styles.signalHeader}>
-                                            <div style={styles.signalMessage}>
-                                                <span style={{ fontWeight: 500, color: "#1a1a1a" }}>
-                                                    {signal.sourceAgent.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase())}:
-                                                </span> {signal.message}
-                                            </div>
-                                            <span style={{ ...styles.severityBadge, ...severityStyle }}>
-                                                {signal.severity}
-                                            </span>
-                                        </div>
-                                        <div style={styles.signalMeta}>
-                                            <span>{formatTimestamp(signal.timestamp)}</span>
-                                            <span style={{ textTransform: "capitalize" }}>{signal.sourceAgent.replace(/-/g, " ")}</span>
-                                            <span style={{ fontSize: "10px", color: "#6b7280" }}>Impact: {impact}</span>
-                                            {signal.context.invoiceId && (
-                                                <Link 
-                                                    href={`/invoices/${signal.context.invoiceId}`}
-                                                    style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
-                                                >
-                                                    View invoice →
-                                                </Link>
-                                            )}
-                                            {signal.context.txHash && (
-                                                <a 
-                                                    href={`https://sepolia.etherscan.io/tx/${signal.context.txHash}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
-                                                >
-                                                    TX ↗
-                                                </a>
-                                            )}
-                                        </div>
-                                        {signal.context.riskScore !== null && signal.context.riskScore !== undefined && (
-                                            <div style={{ marginTop: "8px", fontSize: "11px", color: "#6b7280" }}>
-                                                Risk Score: {signal.context.riskScore}/100
-                                            </div>
-                                        )}
+                                    <div style={styles.statusItem}>
+                                        <span><strong>Last Decision:</strong> {lastDecisionTime ? formatDecisionTime(lastDecisionTime) : "N/A"}</span>
                                     </div>
                                 );
-                            })
-                        )}
+                            })()}
+
+                            {/* Active Rules */}
+                            <div style={styles.statusItem}>
+                                <span><strong>Active Rules:</strong> {
+                                    agentConfig && systemParams
+                                        ? `Risk Threshold: ${agentConfig.riskThreshold}, LTV: ${(systemParams.ltvBps / 100).toFixed(0)}%`
+                                        : "N/A"
+                                }</span>
+                            </div>
+
+                            {/* System Load */}
+                            <div style={styles.statusItem}>
+                                <span><strong>System Load:</strong> {data.systemStatus.systemLoad.toFixed(1)}%</span>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Decision Traces - AI Reasoning Pipeline */}
-                    <div style={styles.traceSection}>
-                        <div style={styles.traceTitle}>AI Reasoning Pipeline</div>
-                        <div style={styles.traceSubtitle}>
-                            Autonomous reasoning trace — generated per decision
-                        </div>
-                        {(showAllTraces ? data.decisionTraces : data.decisionTraces.slice(0, 2)).map((trace, idx) => {
-                            const hasPipeline = trace.reasoningPipeline && trace.reasoningPipeline.length > 0;
-                            
+                    {/* Agent Overview Grid */}
+                    <div style={styles.agentGrid}>
+                        {data.agents.map((agent) => {
+                            const isAlerting = agent.state === "Alerting";
+                            const stateStyle = agent.state === "Active" ? styles.agentStateActive :
+                                agent.state === "Idle" ? styles.agentStateIdle :
+                                    styles.agentStateAlerting;
+                            const dotStyle = agent.state === "Active" ? styles.statusDot :
+                                agent.state === "Alerting" ? styles.statusDotAlert :
+                                    styles.statusDotIdle;
+
+                            const isActive = agent.state === "Active";
+                            const cardStyle = isActive ? styles.agentCardActive :
+                                agent.state === "Idle" ? styles.agentCardIdle :
+                                    isAlerting ? styles.agentCardAlert : styles.agentCard;
+
                             return (
-                                <div key={trace.id} style={styles.traceItem}>
-                                    <div style={styles.traceTimeline}></div>
-                                    <div style={styles.traceDot}></div>
-                                    <div style={styles.traceTimestamp}>{formatTimestamp(trace.timestamp)}</div>
-                                    
-                                    {hasPipeline ? (
-                                        // New reasoning pipeline view with stepper
-                                        <div style={styles.traceStepper}>
-                                            {trace.reasoningPipeline!.map((step, stepIdx) => (
-                                                <div key={stepIdx} style={styles.traceStep}>
-                                                    {stepIdx < trace.reasoningPipeline!.length - 1 && (
-                                                        <div style={styles.traceConnector}></div>
+                                <div key={agent.id} style={{ ...styles.agentCard, ...cardStyle }}>
+                                    {isActive && <div style={styles.agentActivityLine}></div>}
+                                    <div style={styles.agentName}>{agent.name}</div>
+                                    <div style={styles.agentScope}>{agent.scope}</div>
+                                    <div style={{ ...styles.agentState, ...stateStyle }}>
+                                        <span style={dotStyle}></span> {agent.state}
+                                    </div>
+                                    <div style={styles.confidenceBar}>
+                                        <div style={{ ...styles.confidenceFill, width: `${agent.confidence}%` }}></div>
+                                    </div>
+                                    <div style={styles.agentMeta}>
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                            <span>Confidence: {agent.confidence}%</span>
+                                            {(agent.workload !== undefined || agent.signalCount !== undefined) && (
+                                                <div style={{ display: "flex", gap: "12px", fontSize: "10px", color: "#6b7280" }}>
+                                                    {agent.workload !== undefined && (
+                                                        <span>Workload: {agent.workload}/h</span>
                                                     )}
-                                                    <div style={styles.traceStepLabel}>
-                                                        {stepIdx + 1}. {step.label}
-                                                    </div>
-                                                    <div style={styles.traceStepContent}>
-                                                    {step.step === "inputs" && (
-                                                        <div>
-                                                            Invoice: {step.content.invoiceId ? (
-                                                                <Link href={`/invoices/${step.content.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
-                                                                    {step.content.invoiceId}
-                                                                </Link>
-                                                            ) : "N/A"}, 
-                                                            Status: {step.content.previousStatus || "N/A"}, 
-                                                            Risk Score: {step.content.riskScore || "N/A"}
-                                                            {step.content.invoiceOnChainId && (
-                                                                <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "8px" }}>
-                                                                    (On-chain: {step.content.invoiceOnChainId.slice(0, 10)}...)
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                    {agent.signalCount !== undefined && (
+                                                        <span>Signals: {agent.signalCount}</span>
                                                     )}
-                                                    {step.step === "signals" && (
-                                                        <div>
-                                                            {Array.isArray(step.content) ? (
-                                                                step.content.map((s: any, i: number) => (
-                                                                    <div key={i} style={{ marginBottom: "4px", fontSize: "12px" }}>
-                                                                        <span style={{ fontWeight: 500 }}>{s.source}:</span> {s.message} 
-                                                                        <span style={{ marginLeft: "8px", fontSize: "10px", color: s.severity === "High" ? "#dc2626" : s.severity === "Medium" ? "#f59e0b" : "#6b7280" }}>
-                                                                            [{s.severity}]
-                                                                        </span>
-                                                                    </div>
-                                                                ))
-                                                            ) : (
-                                                                <span>No signals detected</span>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {step.step === "evaluation" && (
-                                                        <div>
-                                                            <div style={{ marginBottom: "8px" }}>
-                                                                Risk Score: <strong>{step.content.riskScore}</strong> / 100
-                                                                <br />
-                                                                Threshold: {step.content.threshold} 
-                                                                <span style={{ color: step.content.passed ? "#16a34a" : "#dc2626", marginLeft: "8px" }}>
-                                                                    {step.content.passed ? "✓ Passed" : "✗ Failed"}
-                                                                </span>
-                                                            </div>
-                                                            {trace.inputs.invoiceId && (
-                                                                <RiskCompositionPanel invoiceId={trace.inputs.invoiceId} riskScore={step.content.riskScore} />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {step.step === "safety" && (
-                                                        <div>
-                                                            <div style={{ marginBottom: "4px" }}>
-                                                                Checks: {Array.isArray(step.content.checks) ? step.content.checks.join(", ") : step.content.checks}
-                                                            </div>
-                                                            <div style={{ color: "#dc2626", fontSize: "12px" }}>
-                                                                Result: {step.content.result} - {step.content.reason}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {step.step === "decision" && (
-                                                        <div>
-                                                            <div style={{ marginBottom: "4px" }}>
-                                                                Action: <strong>{step.content.actionType}</strong>
-                                                                {step.content.nextStatus && (
-                                                                    <span style={{ marginLeft: "8px" }}>
-                                                                        → {step.content.nextStatus}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                                                                {step.content.reasoning}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {step.step === "execution" && (
-                                                        <div>
-                                                            Status: <strong style={{ color: step.content.status === "SUCCESS" ? "#16a34a" : step.content.status === "BLOCKED" ? "#f59e0b" : "#dc2626" }}>
-                                                                {step.content.status}
-                                                            </strong>
-                                                            {step.content.txHash && (
-                                                                <div style={{ marginTop: "4px", fontSize: "11px" }}>
-                                                                    <a 
-                                                                        href={`https://sepolia.etherscan.io/tx/${step.content.txHash}`}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        style={{ color: "#2563eb", textDecoration: "none" }}
-                                                                    >
-                                                                        View transaction ↗
-                                                                    </a>
-                                                                </div>
-                                                            )}
-                                                            {step.content.reason && (
-                                                                <div style={{ marginTop: "4px", fontSize: "11px", color: "#6b7280" }}>
-                                                                    {step.content.reason}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    </div>
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
-                                    ) : (
-                                        // Fallback to old format if no pipeline
-                                        <>
-                                            <div style={styles.traceStep}>
-                                                <div style={styles.traceStepLabel}>Inputs</div>
-                                                <div style={styles.traceStepContent}>
-                                                    Invoice: {trace.inputs.invoiceId ? (
-                                                        <Link href={`/invoices/${trace.inputs.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
-                                                            {trace.inputs.invoiceId}
-                                                        </Link>
-                                                    ) : "N/A"}, 
-                                                    Status: {trace.inputs.previousStatus || "N/A"}, 
-                                                    Risk: {trace.inputs.riskScore || "N/A"}
-                                                </div>
-                                            </div>
-                                            <div style={styles.traceStep}>
-                                                <div style={styles.traceStepLabel}>Evaluation</div>
-                                                <div style={styles.traceStepContent}>
-                                                    {trace.evaluation.reasoning}
-                                                </div>
-                                            </div>
-                                            <div style={styles.traceStep}>
-                                                <div style={styles.traceStepLabel}>Recommendation</div>
-                                                <div style={styles.traceStepContent}>
-                                                    {trace.recommendation.action} (Confidence: {trace.recommendation.confidence}%)
-                                                </div>
-                                            </div>
-                                        </>
+                                        <span>{formatRelativeTime(agent.lastAction)}</span>
+                                    </div>
+                                    {(agent as any).lastActionSummary && (
+                                        <div style={styles.lastActionSummary}>
+                                            {(agent as any).lastActionSummary}
+                                        </div>
                                     )}
                                 </div>
                             );
                         })}
-                        {data.decisionTraces.length > 2 && !showAllTraces && (
-                            <div style={{ textAlign: "center", marginTop: "24px" }}>
-                                <button
-                                    onClick={() => setShowAllTraces(true)}
-                                    style={{
-                                        padding: "10px 24px",
-                                        background: "#ffffff",
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: "4px",
-                                        color: "#2563eb",
-                                        fontSize: "13px",
-                                        fontWeight: 500,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s",
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.background = "#f9fafb";
-                                        e.currentTarget.style.borderColor = "#2563eb";
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.background = "#ffffff";
-                                        e.currentTarget.style.borderColor = "#e5e7eb";
-                                    }}
-                                >
-                                    Load More ({data.decisionTraces.length - 2} more)
-                                </button>
-                            </div>
-                        )}
-                        {showAllTraces && data.decisionTraces.length > 2 && (
-                            <div style={{ textAlign: "center", marginTop: "24px" }}>
-                                <button
-                                    onClick={() => setShowAllTraces(false)}
-                                    style={{
-                                        padding: "10px 24px",
-                                        background: "#ffffff",
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: "4px",
-                                        color: "#6b7280",
-                                        fontSize: "13px",
-                                        fontWeight: 500,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s",
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.background = "#f9fafb";
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.background = "#ffffff";
-                                    }}
-                                >
-                                    Show Less
-                                </button>
-                            </div>
-                        )}
                     </div>
-                </div>
 
-                {/* Short-Term AI Outlook */}
-                {predictions && (
-                    <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
-                        <div style={styles.recommendationsTitle}>Short-Term AI Outlook (24h)</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Invoices at Risk</div>
-                                <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.invoicesAtRisk > 0 ? "#dc2626" : "#16a34a" }}>
-                                    {predictions.invoicesAtRisk}
-                                </div>
+                    {/* Two Column Layout: Signals & Decision Traces */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "40px" }}>
+                        {/* Real-Time AI Awareness Stream */}
+                        <div style={styles.signalsPanel}>
+                            <div style={styles.signalsTitle}>
+                                Real-Time AI Awareness Stream
+                                <span style={styles.signalsTitleLabel}>Live</span>
                             </div>
-                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Financings</div>
-                                <div style={{ fontSize: "20px", fontWeight: 600 }}>{predictions.expectedFinancings}</div>
-                            </div>
-                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Blocks</div>
-                                <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.expectedFinancingBlocks > 0 ? "#f59e0b" : "#16a34a" }}>
-                                    {predictions.expectedFinancingBlocks}
+                            {data.signals.length === 0 ? (
+                                <div style={{ padding: "20px", textAlign: "center", color: "#9ca3af", fontSize: "12px" }}>
+                                    No signals detected in the last evaluation cycle.
                                 </div>
-                            </div>
-                            <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Pool Utilization</div>
-                                <div style={{ fontSize: "20px", fontWeight: 600 }}>
-                                    {predictions.poolUtilizationProjection.current.toFixed(1)}%
-                                </div>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                                    Projected: {predictions.poolUtilizationProjection.projected.toFixed(1)}%
-                                </div>
-                            </div>
+                            ) : (
+                                data.signals.map((signal) => {
+                                    const severityStyle = signal.severity === "High" ? styles.severityHigh :
+                                        signal.severity === "Medium" ? styles.severityMedium :
+                                            styles.severityLow;
+
+                                    // Determine impact
+                                    let impact = "None";
+                                    if (signal.context.txHash) {
+                                        impact = "Executed";
+                                    } else if (signal.message.toLowerCase().includes("blocked")) {
+                                        impact = "Blocked";
+                                    } else if (signal.message.toLowerCase().includes("skipped")) {
+                                        impact = "Skipped";
+                                    }
+
+                                    return (
+                                        <div key={signal.id} style={{
+                                            ...styles.signalItem,
+                                            ...(signal.severity === "High" ? styles.signalItemHigh : {})
+                                        }}>
+                                            <div style={styles.signalHeader}>
+                                                <div style={styles.signalMessage}>
+                                                    <span style={{ fontWeight: 500, color: "#1a1a1a" }}>
+                                                        {signal.sourceAgent.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase())}:
+                                                    </span> {signal.message}
+                                                </div>
+                                                <span style={{ ...styles.severityBadge, ...severityStyle }}>
+                                                    {signal.severity}
+                                                </span>
+                                            </div>
+                                            <div style={styles.signalMeta}>
+                                                <span>{formatTimestamp(signal.timestamp)}</span>
+                                                <span style={{ textTransform: "capitalize" }}>{signal.sourceAgent.replace(/-/g, " ")}</span>
+                                                <span style={{ fontSize: "10px", color: "#6b7280" }}>Impact: {impact}</span>
+                                                {signal.context.invoiceId && (
+                                                    <Link
+                                                        href={`/invoices/${signal.context.invoiceId}`}
+                                                        style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
+                                                    >
+                                                        View invoice →
+                                                    </Link>
+                                                )}
+                                                {signal.context.txHash && (
+                                                    <a
+                                                        href={`https://sepolia.etherscan.io/tx/${signal.context.txHash}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{ color: "#2563eb", textDecoration: "none", fontSize: "11px" }}
+                                                    >
+                                                        TX ↗
+                                                    </a>
+                                                )}
+                                            </div>
+                                            {signal.context.riskScore !== null && signal.context.riskScore !== undefined && (
+                                                <div style={{ marginTop: "8px", fontSize: "11px", color: "#6b7280" }}>
+                                                    Risk Score: {signal.context.riskScore}/100
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
-                        {predictions.safetyWarnings.length > 0 && (
-                            <div style={{ padding: "12px", background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "4px", marginBottom: "16px" }}>
-                                <div style={{ fontSize: "12px", fontWeight: 600, color: "#92400e", marginBottom: "4px" }}>Safety Warnings</div>
-                                {predictions.safetyWarnings.map((warning, i) => (
-                                    <div key={i} style={{ fontSize: "11px", color: "#92400e" }}>• {warning}</div>
-                                ))}
+
+                        {/* Decision Traces - AI Reasoning Pipeline */}
+                        <div style={styles.traceSection}>
+                            <div style={styles.traceTitle}>AI Reasoning Pipeline</div>
+                            <div style={styles.traceSubtitle}>
+                                Autonomous reasoning trace — generated per decision
                             </div>
-                        )}
-                        {predictions.invoicesAtRiskDetails.length > 0 && (
-                            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px" }}>
-                                <div style={{ fontWeight: 600, marginBottom: "8px" }}>Top Risk Invoices:</div>
-                                {predictions.invoicesAtRiskDetails.slice(0, 5).map((inv, i) => (
-                                    <div key={i} style={{ marginBottom: "4px", fontSize: "11px" }}>
-                                        <Link href={`/invoices/${inv.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
-                                            {inv.externalId}
-                                        </Link>
-                                        {" "}— Risk: {inv.currentRisk}/100 ({inv.reason})
+                            {(showAllTraces ? data.decisionTraces : data.decisionTraces.slice(0, 2)).map((trace) => {
+                                const hasPipeline = trace.reasoningPipeline && trace.reasoningPipeline.length > 0;
+
+                                return (
+                                    <div key={trace.id} style={styles.traceItem}>
+                                        <div style={styles.traceTimeline}></div>
+                                        <div style={styles.traceDot}></div>
+                                        <div style={styles.traceTimestamp}>{formatTimestamp(trace.timestamp)}</div>
+
+                                        {hasPipeline ? (
+                                            // New reasoning pipeline view with stepper
+                                            <div style={styles.traceStepper}>
+                                                {trace.reasoningPipeline!.map((step, stepIdx) => (
+                                                    <div key={stepIdx} style={styles.traceStep}>
+                                                        {stepIdx < trace.reasoningPipeline!.length - 1 && (
+                                                            <div style={styles.traceConnector}></div>
+                                                        )}
+                                                        <div style={styles.traceStepLabel}>
+                                                            {stepIdx + 1}. {step.label}
+                                                        </div>
+                                                        <div style={styles.traceStepContent}>
+                                                            {step.step === "inputs" && (
+                                                                <div>
+                                                                    Invoice: {step.content.invoiceId ? (
+                                                                        <Link href={`/invoices/${step.content.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                                            {step.content.invoiceId}
+                                                                        </Link>
+                                                                    ) : "N/A"},
+                                                                    Status: {step.content.previousStatus || "N/A"},
+                                                                    Risk Score: {step.content.riskScore || "N/A"}
+                                                                    {step.content.invoiceOnChainId && (
+                                                                        <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "8px" }}>
+                                                                            (On-chain: {step.content.invoiceOnChainId.slice(0, 10)}...)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {step.step === "signals" && (
+                                                                <div>
+                                                                    {Array.isArray(step.content) ? (
+                                                                        step.content.map((s: any, i: number) => (
+                                                                            <div key={i} style={{ marginBottom: "4px", fontSize: "12px" }}>
+                                                                                <span style={{ fontWeight: 500 }}>{s.source}:</span> {s.message}
+                                                                                <span style={{ marginLeft: "8px", fontSize: "10px", color: s.severity === "High" ? "#dc2626" : s.severity === "Medium" ? "#f59e0b" : "#6b7280" }}>
+                                                                                    [{s.severity}]
+                                                                                </span>
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        <span>No signals detected</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {step.step === "evaluation" && (
+                                                                <div>
+                                                                    <div style={{ marginBottom: "8px" }}>
+                                                                        Risk Score: <strong>{step.content.riskScore}</strong> / 100
+                                                                        <br />
+                                                                        Threshold: {step.content.threshold}
+                                                                        <span style={{ color: step.content.passed ? "#16a34a" : "#dc2626", marginLeft: "8px" }}>
+                                                                            {step.content.passed ? "✓ Passed" : "✗ Failed"}
+                                                                        </span>
+                                                                    </div>
+                                                                    {trace.inputs.invoiceId && (
+                                                                        <RiskCompositionPanel invoiceId={trace.inputs.invoiceId} />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {step.step === "safety" && (
+                                                                <div>
+                                                                    <div style={{ marginBottom: "4px" }}>
+                                                                        Checks: {Array.isArray(step.content.checks) ? step.content.checks.join(", ") : step.content.checks}
+                                                                    </div>
+                                                                    <div style={{ color: "#dc2626", fontSize: "12px" }}>
+                                                                        Result: {step.content.result} - {step.content.reason}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {step.step === "decision" && (
+                                                                <div>
+                                                                    <div style={{ marginBottom: "4px" }}>
+                                                                        Action: <strong>{step.content.actionType}</strong>
+                                                                        {step.content.nextStatus && (
+                                                                            <span style={{ marginLeft: "8px" }}>
+                                                                                → {step.content.nextStatus}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                                                                        {step.content.reasoning}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {step.step === "execution" && (
+                                                                <div>
+                                                                    Status: <strong style={{ color: step.content.status === "SUCCESS" ? "#16a34a" : step.content.status === "BLOCKED" ? "#f59e0b" : "#dc2626" }}>
+                                                                        {step.content.status}
+                                                                    </strong>
+                                                                    {step.content.txHash && (
+                                                                        <div style={{ marginTop: "4px", fontSize: "11px" }}>
+                                                                            <a
+                                                                                href={`https://sepolia.etherscan.io/tx/${step.content.txHash}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                style={{ color: "#2563eb", textDecoration: "none" }}
+                                                                            >
+                                                                                View transaction ↗
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
+                                                                    {step.content.reason && (
+                                                                        <div style={{ marginTop: "4px", fontSize: "11px", color: "#6b7280" }}>
+                                                                            {step.content.reason}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            // Fallback to old format if no pipeline
+                                            <>
+                                                <div style={styles.traceStep}>
+                                                    <div style={styles.traceStepLabel}>Inputs</div>
+                                                    <div style={styles.traceStepContent}>
+                                                        Invoice: {trace.inputs.invoiceId ? (
+                                                            <Link href={`/invoices/${trace.inputs.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                                {trace.inputs.invoiceId}
+                                                            </Link>
+                                                        ) : "N/A"},
+                                                        Status: {trace.inputs.previousStatus || "N/A"},
+                                                        Risk: {trace.inputs.riskScore || "N/A"}
+                                                    </div>
+                                                </div>
+                                                <div style={styles.traceStep}>
+                                                    <div style={styles.traceStepLabel}>Evaluation</div>
+                                                    <div style={styles.traceStepContent}>
+                                                        {trace.evaluation.reasoning}
+                                                    </div>
+                                                </div>
+                                                <div style={styles.traceStep}>
+                                                    <div style={styles.traceStepLabel}>Recommendation</div>
+                                                    <div style={styles.traceStepContent}>
+                                                        {trace.recommendation.action} (Confidence: {trace.recommendation.confidence}%)
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                );
+                            })}
+                            {data.decisionTraces.length > 2 && !showAllTraces && (
+                                <div style={{ textAlign: "center", marginTop: "24px" }}>
+                                    <button
+                                        onClick={() => setShowAllTraces(true)}
+                                        style={{
+                                            padding: "10px 24px",
+                                            background: "#ffffff",
+                                            border: "1px solid #e5e7eb",
+                                            borderRadius: "4px",
+                                            color: "#2563eb",
+                                            fontSize: "13px",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.currentTarget.style.background = "#f9fafb";
+                                            e.currentTarget.style.borderColor = "#2563eb";
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.currentTarget.style.background = "#ffffff";
+                                            e.currentTarget.style.borderColor = "#e5e7eb";
+                                        }}
+                                    >
+                                        Load More ({data.decisionTraces.length - 2} more)
+                                    </button>
+                                </div>
+                            )}
+                            {showAllTraces && data.decisionTraces.length > 2 && (
+                                <div style={{ textAlign: "center", marginTop: "24px" }}>
+                                    <button
+                                        onClick={() => setShowAllTraces(false)}
+                                        style={{
+                                            padding: "10px 24px",
+                                            background: "#ffffff",
+                                            border: "1px solid #e5e7eb",
+                                            borderRadius: "4px",
+                                            color: "#6b7280",
+                                            fontSize: "13px",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.currentTarget.style.background = "#f9fafb";
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.currentTarget.style.background = "#ffffff";
+                                        }}
+                                    >
+                                        Show Less
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
 
-                {/* Active Policy Parameters */}
-                {systemParams && (
-                    <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
-                        <div style={styles.recommendationsTitle}>Active Policy Parameters</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Risk Threshold</div>
-                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.riskThreshold}</div>
+                    {/* Short-Term AI Outlook */}
+                    {predictions && (
+                        <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
+                            <div style={styles.recommendationsTitle}>Short-Term AI Outlook (24h)</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+                                <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Invoices at Risk</div>
+                                    <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.invoicesAtRisk > 0 ? "#dc2626" : "#16a34a" }}>
+                                        {predictions.invoicesAtRisk}
+                                    </div>
+                                </div>
+                                <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Financings</div>
+                                    <div style={{ fontSize: "20px", fontWeight: 600 }}>{predictions.expectedFinancings}</div>
+                                </div>
+                                <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Expected Blocks</div>
+                                    <div style={{ fontSize: "20px", fontWeight: 600, color: predictions.expectedFinancingBlocks > 0 ? "#f59e0b" : "#16a34a" }}>
+                                        {predictions.expectedFinancingBlocks}
+                                    </div>
+                                </div>
+                                <div style={{ padding: "16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Pool Utilization</div>
+                                    <div style={{ fontSize: "20px", fontWeight: 600 }}>
+                                        {predictions.poolUtilizationProjection.current.toFixed(1)}%
+                                    </div>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                        Projected: {predictions.poolUtilizationProjection.projected.toFixed(1)}%
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>LTV</div>
-                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.ltvBps / 100}%</div>
-                            </div>
-                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Utilization Threshold</div>
-                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.utilizationThresholdBps / 100}%</div>
-                            </div>
-                            <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Utilization</div>
-                                <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxUtilizationBps / 100}%</div>
-                            </div>
-                            {systemParams.maxLoanBpsOfTVL && (
+                            {predictions.safetyWarnings.length > 0 && (
+                                <div style={{ padding: "12px", background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "4px", marginBottom: "16px" }}>
+                                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#92400e", marginBottom: "4px" }}>Safety Warnings</div>
+                                    {predictions.safetyWarnings.map((warning, i) => (
+                                        <div key={i} style={{ fontSize: "11px", color: "#92400e" }}>• {warning}</div>
+                                    ))}
+                                </div>
+                            )}
+                            {predictions.invoicesAtRiskDetails.length > 0 && (
+                                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px" }}>
+                                    <div style={{ fontWeight: 600, marginBottom: "8px" }}>Top Risk Invoices:</div>
+                                    {predictions.invoicesAtRiskDetails.slice(0, 5).map((inv, i) => (
+                                        <div key={i} style={{ marginBottom: "4px", fontSize: "11px" }}>
+                                            <Link href={`/invoices/${inv.invoiceId}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                                                {inv.externalId}
+                                            </Link>
+                                            {" "}— Risk: {inv.currentRisk}/100 ({inv.reason})
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Active Policy Parameters */}
+                    {systemParams && (
+                        <div style={{ ...styles.recommendationsSection, marginBottom: "40px" }}>
+                            <div style={styles.recommendationsTitle}>Active Policy Parameters</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
                                 <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Single Loan</div>
-                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxLoanBpsOfTVL / 100}%</div>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Risk Threshold</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.riskThreshold}</div>
                                 </div>
-                            )}
-                            {systemParams.maxIssuerExposureBps && (
                                 <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
-                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Issuer Exposure</div>
-                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxIssuerExposureBps / 100}%</div>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>LTV</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.ltvBps / 100}%</div>
                                 </div>
-                            )}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "12px" }}>
-                            Last updated: {formatTimestamp(systemParams.lastUpdated)}
-                        </div>
-                    </div>
-                )}
-
-                {/* Recommendations Section */}
-                <div style={styles.recommendationsSection}>
-                    <div style={styles.recommendationsTitle}>Recommendations (Read-Only)</div>
-                    {data.recommendations.map((rec) => (
-                        <div key={rec.id} style={styles.recommendationCard}>
-                            <div style={styles.recommendationHeader}>
-                                <div style={styles.recommendationSummary}>{rec.summary}</div>
-                                <div style={styles.recommendationConfidence}>Confidence: {rec.confidence}%</div>
-                            </div>
-                            <div style={styles.recommendationReasoning}>{rec.reasoning}</div>
-                            {rec.requiresApproval && (
-                                <div style={styles.approvalBadge}>Human Approval Required</div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Human-in-the-Loop Controls */}
-                <div style={styles.controlPanel}>
-                    <div style={styles.controlPanelTitle}>Human-in-the-Loop Controls</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-                        {agentConfig?.paused ? (
-                            <button 
-                                style={{ ...styles.controlButton, background: "#10b981", color: "#fff" }}
-                                onClick={handleResume}
-                                disabled={controlLoading === "resume"}
-                            >
-                                {controlLoading === "resume" ? "Resuming..." : "Resume AI Engine"}
-                            </button>
-                        ) : (
-                            <button 
-                                style={{ ...styles.controlButton, background: "#ef4444", color: "#fff" }}
-                                onClick={handlePause}
-                                disabled={controlLoading === "pause"}
-                            >
-                                {controlLoading === "pause" ? "Pausing..." : "Pause AI Engine"}
-                            </button>
-                        )}
-                        <button 
-                            style={styles.controlButton}
-                            onClick={handleAdjustSensitivity}
-                            disabled={controlLoading !== null}
-                        >
-                            Adjust Risk Threshold
-                        </button>
-                        <button 
-                            style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
-                            disabled
-                            title="Not yet implemented"
-                        >
-                            Force Re-evaluation
-                        </button>
-                        <button 
-                            style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
-                            disabled
-                            title="Requires admin approval"
-                        >
-                            Manual Override
-                        </button>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#9ca3af" }}>
-                        {agentConfig?.paused ? (
-                            <span style={{ color: "#f59e0b" }}>⚠️ Agent engine is currently paused. All automated actions are suspended.</span>
-                        ) : (
-                            <span>Administrative controls require elevated permissions. System is operating autonomously.</span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Config Modal */}
-                {showConfigModal && (
-                    <div style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "rgba(0, 0, 0, 0.5)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 1000,
-                    }}>
-                        <div style={{
-                            background: "#fff",
-                            padding: "32px",
-                            borderRadius: "8px",
-                            maxWidth: "500px",
-                            width: "90%",
-                            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
-                        }}>
-                            <h3 style={{ marginTop: 0, marginBottom: "24px", fontSize: "18px", fontWeight: 600 }}>
-                                Adjust Agent Sensitivity
-                            </h3>
-                            <div style={{ marginBottom: "24px" }}>
-                                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
-                                    Risk Threshold: {riskThreshold}
-                                </label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={riskThreshold}
-                                    onChange={(e) => setRiskThreshold(Number(e.target.value))}
-                                    style={{ width: "100%" }}
-                                />
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                                    <span>Low Risk (0)</span>
-                                    <span>High Risk (100)</span>
+                                <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Utilization Threshold</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.utilizationThresholdBps / 100}%</div>
                                 </div>
-                                <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
-                                    Invoices with risk scores below this threshold will be automatically financed.
-                                </p>
+                                <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Utilization</div>
+                                    <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxUtilizationBps / 100}%</div>
+                                </div>
+                                {systemParams.maxLoanBpsOfTVL && (
+                                    <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                        <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Single Loan</div>
+                                        <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxLoanBpsOfTVL / 100}%</div>
+                                    </div>
+                                )}
+                                {systemParams.maxIssuerExposureBps && (
+                                    <div style={{ padding: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}>
+                                        <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Max Issuer Exposure</div>
+                                        <div style={{ fontSize: "16px", fontWeight: 600 }}>{systemParams.maxIssuerExposureBps / 100}%</div>
+                                    </div>
+                                )}
                             </div>
-                            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                                <button
-                                    onClick={() => setShowConfigModal(false)}
-                                    style={{
-                                        padding: "8px 16px",
-                                        border: "1px solid #e5e7eb",
-                                        background: "#fff",
-                                        borderRadius: "6px",
-                                        cursor: "pointer",
-                                        fontSize: "14px",
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSaveConfig}
-                                    disabled={controlLoading === "config"}
-                                    style={{
-                                        padding: "8px 16px",
-                                        border: "none",
-                                        background: "#2563eb",
-                                        color: "#fff",
-                                        borderRadius: "6px",
-                                        cursor: controlLoading === "config" ? "not-allowed" : "pointer",
-                                        fontSize: "14px",
-                                        opacity: controlLoading === "config" ? 0.6 : 1,
-                                    }}
-                                >
-                                    {controlLoading === "config" ? "Saving..." : "Save"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Model Transparency */}
-                <div style={styles.transparencySection}>
-                    <div 
-                        style={styles.transparencyTitle}
-                        onClick={() => setTransparencyExpanded(!transparencyExpanded)}
-                    >
-                        <span>Model Transparency</span>
-                        <span>{transparencyExpanded ? "−" : "+"}</span>
-                    </div>
-                    {transparencyExpanded && (
-                        <div style={styles.transparencyContent}>
-                            <div style={styles.transparencyItem}>
-                                <span style={styles.transparencyLabel}>Data Sources:</span>
-                                {data.modelTransparency.dataSources.join(", ")}
-                            </div>
-                            <div style={styles.transparencyItem}>
-                                <span style={styles.transparencyLabel}>Update Frequency:</span>
-                                {data.modelTransparency.updateFrequency}
-                            </div>
-                            <div style={styles.transparencyItem}>
-                                <span style={styles.transparencyLabel}>Model Class:</span>
-                                {data.modelTransparency.modelClass}
-                            </div>
-                            <div style={styles.transparencyItem}>
-                                <span style={styles.transparencyLabel}>Last Retraining:</span>
-                                {formatTimestamp(data.modelTransparency.lastRetraining)}
-                            </div>
-                            <div style={styles.transparencyItem}>
-                                <span style={styles.transparencyLabel}>Version:</span>
-                                {data.modelTransparency.version}
+                            <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "12px" }}>
+                                Last updated: {formatTimestamp(systemParams.lastUpdated)}
                             </div>
                         </div>
                     )}
-                </div>
 
-                {/* Audit & Logging */}
-                <div style={styles.auditSection}>
-                    <div style={styles.auditTitle}>Audit & Logging</div>
-                    <div style={styles.auditStatement}>
-                        All AI actions are logged and reviewable.
+                    {/* Recommendations Section */}
+                    <div style={styles.recommendationsSection}>
+                        <div style={styles.recommendationsTitle}>Recommendations (Read-Only)</div>
+                        {data.recommendations.map((rec) => (
+                            <div key={rec.id} style={styles.recommendationCard}>
+                                <div style={styles.recommendationHeader}>
+                                    <div style={styles.recommendationSummary}>{rec.summary}</div>
+                                    <div style={styles.recommendationConfidence}>Confidence: {rec.confidence}%</div>
+                                </div>
+                                <div style={styles.recommendationReasoning}>{rec.reasoning}</div>
+                                {rec.requiresApproval && (
+                                    <div style={styles.approvalBadge}>Human Approval Required</div>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                    <div style={styles.auditMeta}>
-                        Total Decisions: {data.auditLog.totalDecisions} | 
-                        Last Updated: {formatTimestamp(data.auditLog.lastUpdated)} | 
-                        {data.auditLog.exportable && <a href="#" style={{ color: "#2563eb", textDecoration: "none", marginLeft: "8px" }}>Export Log</a>}
+
+                    {/* Human-in-the-Loop Controls */}
+                    <div style={styles.controlPanel}>
+                        <div style={styles.controlPanelTitle}>Human-in-the-Loop Controls</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+                            {agentConfig?.paused ? (
+                                <button
+                                    style={{ ...styles.controlButton, background: "#10b981", color: "#fff" }}
+                                    onClick={handleResume}
+                                    disabled={controlLoading === "resume"}
+                                >
+                                    {controlLoading === "resume" ? "Resuming..." : "Resume AI Engine"}
+                                </button>
+                            ) : (
+                                <button
+                                    style={{ ...styles.controlButton, background: "#ef4444", color: "#fff" }}
+                                    onClick={handlePause}
+                                    disabled={controlLoading === "pause"}
+                                >
+                                    {controlLoading === "pause" ? "Pausing..." : "Pause AI Engine"}
+                                </button>
+                            )}
+                            <button
+                                style={styles.controlButton}
+                                onClick={handleAdjustSensitivity}
+                                disabled={controlLoading !== null}
+                            >
+                                Adjust Risk Threshold
+                            </button>
+                            <button
+                                style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
+                                disabled
+                                title="Not yet implemented"
+                            >
+                                Force Re-evaluation
+                            </button>
+                            <button
+                                style={{ ...styles.controlButton, opacity: 0.5, cursor: "not-allowed" }}
+                                disabled
+                                title="Requires admin approval"
+                            >
+                                Manual Override
+                            </button>
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#9ca3af" }}>
+                            {agentConfig?.paused ? (
+                                <span style={{ color: "#f59e0b" }}>⚠️ Agent engine is currently paused. All automated actions are suspended.</span>
+                            ) : (
+                                <span>Administrative controls require elevated permissions. System is operating autonomously.</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Config Modal */}
+                    {showConfigModal && (
+                        <div style={{
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: "rgba(0, 0, 0, 0.5)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            zIndex: 1000,
+                        }}>
+                            <div style={{
+                                background: "#fff",
+                                padding: "32px",
+                                borderRadius: "8px",
+                                maxWidth: "500px",
+                                width: "90%",
+                                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                            }}>
+                                <h3 style={{ marginTop: 0, marginBottom: "24px", fontSize: "18px", fontWeight: 600 }}>
+                                    Adjust Agent Sensitivity
+                                </h3>
+                                <div style={{ marginBottom: "24px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
+                                        Risk Threshold: {riskThreshold}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={riskThreshold}
+                                        onChange={(e) => setRiskThreshold(Number(e.target.value))}
+                                        style={{ width: "100%" }}
+                                    />
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                        <span>Low Risk (0)</span>
+                                        <span>High Risk (100)</span>
+                                    </div>
+                                    <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
+                                        Invoices with risk scores below this threshold will be automatically financed.
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                                    <button
+                                        onClick={() => setShowConfigModal(false)}
+                                        style={{
+                                            padding: "8px 16px",
+                                            border: "1px solid #e5e7eb",
+                                            background: "#fff",
+                                            borderRadius: "6px",
+                                            cursor: "pointer",
+                                            fontSize: "14px",
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSaveConfig}
+                                        disabled={controlLoading === "config"}
+                                        style={{
+                                            padding: "8px 16px",
+                                            border: "none",
+                                            background: "#2563eb",
+                                            color: "#fff",
+                                            borderRadius: "6px",
+                                            cursor: controlLoading === "config" ? "not-allowed" : "pointer",
+                                            fontSize: "14px",
+                                            opacity: controlLoading === "config" ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {controlLoading === "config" ? "Saving..." : "Save"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Model Transparency */}
+                    <div style={styles.transparencySection}>
+                        <div
+                            style={styles.transparencyTitle}
+                            onClick={() => setTransparencyExpanded(!transparencyExpanded)}
+                        >
+                            <span>Model Transparency</span>
+                            <span>{transparencyExpanded ? "−" : "+"}</span>
+                        </div>
+                        {transparencyExpanded && (
+                            <div style={styles.transparencyContent}>
+                                <div style={styles.transparencyItem}>
+                                    <span style={styles.transparencyLabel}>Data Sources:</span>
+                                    {data.modelTransparency.dataSources.join(", ")}
+                                </div>
+                                <div style={styles.transparencyItem}>
+                                    <span style={styles.transparencyLabel}>Update Frequency:</span>
+                                    {data.modelTransparency.updateFrequency}
+                                </div>
+                                <div style={styles.transparencyItem}>
+                                    <span style={styles.transparencyLabel}>Model Class:</span>
+                                    {data.modelTransparency.modelClass}
+                                </div>
+                                <div style={styles.transparencyItem}>
+                                    <span style={styles.transparencyLabel}>Last Retraining:</span>
+                                    {formatTimestamp(data.modelTransparency.lastRetraining)}
+                                </div>
+                                <div style={styles.transparencyItem}>
+                                    <span style={styles.transparencyLabel}>Version:</span>
+                                    {data.modelTransparency.version}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Audit & Logging */}
+                    <div style={styles.auditSection}>
+                        <div style={styles.auditTitle}>Audit & Logging</div>
+                        <div style={styles.auditStatement}>
+                            All AI actions are logged and reviewable.
+                        </div>
+                        <div style={styles.auditMeta}>
+                            Total Decisions: {data.auditLog.totalDecisions} |
+                            Last Updated: {formatTimestamp(data.auditLog.lastUpdated)} |
+                            {data.auditLog.exportable && <a href="#" style={{ color: "#2563eb", textDecoration: "none", marginLeft: "8px" }}>Export Log</a>}
+                        </div>
                     </div>
                 </div>
-            </div>
             </div>
         </div>
     );

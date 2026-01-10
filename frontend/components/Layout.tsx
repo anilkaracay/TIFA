@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 }}
             >
                 <h2 style={{ fontSize: "20px", fontWeight: 700, marginBottom: "20px" }}>
-                    TIFA Dashboard
+                    Dashboard
                 </h2>
 
                 <NavLink href="/overview">Overview</NavLink>

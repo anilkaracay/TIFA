@@ -46,3 +46,8 @@ export function createX402Error(code: X402ErrorCode, message?: string): X402Erro
   return new X402Error(code, message || defaultMessage.message, defaultMessage.statusCode);
 }
 
+
+
+
+
+

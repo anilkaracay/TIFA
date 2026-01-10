@@ -27,7 +27,7 @@ export default function RiskSpectrum({ metrics }: RiskSpectrumProps) {
   });
 
   // Position dots along the spectrum
-  const dots = filteredInvoices.map((inv, idx) => {
+  const dots = filteredInvoices.map((inv) => {
     const x = margin.left + (inv.riskScore / 100) * chartWidth;
     const y = margin.top + chartHeight / 2;
 
@@ -231,5 +231,10 @@ export default function RiskSpectrum({ metrics }: RiskSpectrumProps) {
     </div>
   );
 }
+
+
+
+
+
 
 

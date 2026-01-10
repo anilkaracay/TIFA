@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import useSWR from "swr";
 import { useAccount } from "wagmi";
 import { useToast } from "../Toast";
-import { formatAmount } from "../../lib/format";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -205,7 +204,7 @@ export default function AgentAuthorizationPanel({ companyId, onAuthorizationChan
     });
 
     // Fetch existing authorization
-    const { data: existingAuth, error, mutate } = useSWR<PaymentAuthorization>(
+    const { data: existingAuth, mutate } = useSWR<PaymentAuthorization>(
         companyId ? `payment-authorization-${companyId}` : null,
         async () => {
             const res = await fetch(`${BACKEND_URL}/payment-authorization/${companyId}`);
@@ -446,4 +445,9 @@ export default function AgentAuthorizationPanel({ companyId, onAuthorizationChan
         </div>
     );
 }
+
+
+
+
+
 

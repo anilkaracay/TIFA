@@ -38,7 +38,7 @@ class WebSocketManager {
                 console.log('[WebSocket] Connected to', room);
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
-                
+
                 // Send queued messages
                 while (this.messageQueue.length > 0) {
                     const event = this.messageQueue.shift();
@@ -51,10 +51,15 @@ class WebSocketManager {
             this.ws.onmessage = (message) => {
                 try {
                     const event: WebSocketEvent = JSON.parse(message.data);
-                    
+
                     // Handle ping/pong
                     if (event.type === 'pong') {
                         return;
+                    }
+
+                    // Log event for debugging
+                    if (event.type !== 'connected') {
+                        console.log('[WebSocket] Event received:', event.type, event.payload);
                     }
 
                     // Call all handlers for this event type
@@ -115,9 +120,9 @@ class WebSocketManager {
 
         this.reconnectAttempts++;
         const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
-        
+
         console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-        
+
         this.reconnectTimer = setTimeout(() => {
             this.connect(this.room);
         }, delay);
@@ -128,12 +133,12 @@ class WebSocketManager {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
-        
+
         if (this.ws) {
             this.ws.close();
             this.ws = null;
         }
-        
+
         this.reconnectAttempts = 0;
     }
 
@@ -239,6 +244,11 @@ export function useInvoiceWebSocket(invoiceId: string | null) {
 export function useWalletWebSocket(wallet: string | null) {
     return useWebSocket(wallet ? `wallet:${wallet.toLowerCase()}` : 'global', !!wallet);
 }
+
+
+
+
+
 
 
 

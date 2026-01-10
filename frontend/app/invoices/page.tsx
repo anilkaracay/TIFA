@@ -3,19 +3,20 @@
 import React, { useState, useMemo } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { useAccount, useWriteContract, usePublicClient, useChainId } from "wagmi";
 import Navbar from "../../components/Navbar";
 import Deployments from "../../lib/deployments.json";
 import { stringToHex } from "viem";
 import { fetchInvoices, Invoice, fetchPoolLimits, PoolLimits, fetchPoolOverview, PoolOverview, createInvoice, requestFinancing } from "../../lib/backendClient";
 import { fetchCompanies, Company } from "../../lib/companyClient";
-import { formatAmount, formatDate, statusColor } from "../../lib/format";
+import { formatAmount, formatDate } from "../../lib/format";
 import { RoleGate } from "../../components/auth/RoleGate";
 import { Role } from "../../lib/roles";
 import { useWebSocket } from "../../lib/websocketClient";
 import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
+import { Select } from "../../components/ui/Select";
+import { NumberInput } from "../../components/ui/NumberInput";
 
 // Premium light fintech styling
 const styles = {
@@ -118,29 +119,33 @@ const styles = {
         padding: "10px 20px",
         fontSize: "14px",
         fontWeight: 500,
-        background: "#ffffff",
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        color: "#1a1a1a",
+        background: "rgba(255, 255, 255, 0.98)",
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        color: "#0f172a",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         display: "flex",
         alignItems: "center",
         gap: "8px",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
     },
     buttonPrimary: {
         padding: "10px 20px",
         fontSize: "14px",
-        fontWeight: 500,
-        background: "#2563eb",
+        fontWeight: 600,
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
         border: "none",
-        borderRadius: "4px",
+        borderRadius: "8px",
         color: "#ffffff",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         display: "flex",
         alignItems: "center",
         gap: "8px",
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
+        letterSpacing: "-0.01em",
     },
     filtersBar: {
         background: "#ffffff",
@@ -163,16 +168,7 @@ const styles = {
         background: "#ffffff",
         color: "#1a1a1a",
     },
-    filterSelect: {
-        padding: "10px 16px",
-        fontSize: "14px",
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        background: "#ffffff",
-        color: "#1a1a1a",
-        cursor: "pointer",
-        minWidth: "140px",
-    },
+
     clearFilters: {
         fontSize: "13px",
         color: "#666",
@@ -305,17 +301,20 @@ const styles = {
         padding: "6px 12px",
         fontSize: "12px",
         fontWeight: 500,
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        background: "#ffffff",
-        color: "#1a1a1a",
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.98)",
+        color: "#0f172a",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
     },
     actionButtonPrimary: {
-        background: "#2563eb",
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
         color: "#ffffff",
-        borderColor: "#2563eb",
+        border: "none",
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
     },
     actionButtonDisabled: {
         opacity: 0.5,
@@ -383,8 +382,6 @@ const styles = {
         padding: "32px",
         maxWidth: "500px",
         width: "90%",
-        maxHeight: "90vh",
-        overflowY: "auto" as "auto",
         boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
     },
     modalHeader: {
@@ -417,12 +414,19 @@ const styles = {
     },
     formInput: {
         width: "100%",
-        padding: "10px 12px",
+        padding: "10px 16px",
+        boxSizing: "border-box" as const,
         fontSize: "14px",
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        background: "#ffffff",
-        color: "#1a1a1a",
+        lineHeight: "20px",
+        fontWeight: 500,
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.98)",
+        color: "#0f172a",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     },
     modalFooter: {
         display: "flex",
@@ -452,14 +456,17 @@ const styles = {
         color: "#1e40af",
         border: "1px solid #93c5fd",
     },
-};
+} as const;
+
 
 export default function InvoicesPage() {
-    const pathname = usePathname();
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
-    
+    const chainId = useChainId();
+    // Map chainId to deployment key (baseSepolia or mantleSepolia)
+    const deploymentKey = chainId === 5003 ? "mantleSepolia" : "baseSepolia";
+
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [riskFilter, setRiskFilter] = useState<string>("all");
@@ -472,9 +479,7 @@ export default function InvoicesPage() {
     const [repayAmount, setRepayAmount] = useState("");
     const [selectedPercentage, setSelectedPercentage] = useState<number | null>(null);
     const [currentDebt, setCurrentDebt] = useState<bigint>(0n);
-    const [maxCreditLine, setMaxCreditLine] = useState<bigint>(0n);
-    const [ltvBps, setLtvBps] = useState<bigint>(0n);
-    
+
     const [newInv, setNewInv] = useState({
         externalId: "INV-" + Math.floor(Math.random() * 10000),
         amount: "50000",
@@ -483,11 +488,11 @@ export default function InvoicesPage() {
         companyId: "",
         debtorId: "COMP-DEBTOR-1",
     });
-    
+
     const itemsPerPage = 10;
 
     // WebSocket connection for real-time updates
-    const { subscribe: subscribeWS, isConnected: wsConnected } = useWebSocket('global');
+    const { subscribe: subscribeWS } = useWebSocket('global');
     const { trackTransaction } = useTransactionManager();
     const { showToast } = useToast();
 
@@ -495,7 +500,7 @@ export default function InvoicesPage() {
     const { data: invoices, isLoading, error: invoicesError, mutate } = useSWR<Invoice[]>(
         "all-invoices",
         () => fetchInvoices(),
-        { 
+        {
             refreshInterval: 10000, // Reduced polling, WebSocket will handle updates
             onError: (error) => {
                 console.error('[Invoices] Failed to fetch invoices:', error);
@@ -507,10 +512,10 @@ export default function InvoicesPage() {
     );
 
     // Fetch companies for counterparty info
-    const { data: companies, error: companiesError, mutate: mutateCompanies } = useSWR<Company[]>(
+    const { data: companies, error: companiesError } = useSWR<Company[]>(
         "companies",
         () => fetchCompanies(),
-        { 
+        {
             refreshInterval: 30000, // Refresh every 30 seconds
             onError: (error) => {
                 console.error('[Invoices] Failed to fetch companies:', error);
@@ -525,8 +530,8 @@ export default function InvoicesPage() {
     const issuerCompanies = useMemo(() => {
         if (!companies || companies.length === 0) return [];
         // Filter by ID prefix or externalId prefix
-        const filtered = companies.filter(c => 
-            c.id.startsWith('COMP-ISSUER-') || 
+        const filtered = companies.filter(c =>
+            c.id.startsWith('COMP-ISSUER-') ||
             c.externalId?.startsWith('ISSUER-') ||
             c.id.includes('ISSUER')
         );
@@ -537,8 +542,8 @@ export default function InvoicesPage() {
     const debtorCompanies = useMemo(() => {
         if (!companies || companies.length === 0) return [];
         // Filter by ID prefix or externalId prefix
-        const filtered = companies.filter(c => 
-            c.id.startsWith('COMP-DEBTOR-') || 
+        const filtered = companies.filter(c =>
+            c.id.startsWith('COMP-DEBTOR-') ||
             c.externalId?.startsWith('DEBTOR-') ||
             c.id.includes('DEBTOR')
         );
@@ -628,7 +633,7 @@ export default function InvoicesPage() {
     // Filter invoices
     const filteredInvoices = useMemo(() => {
         if (!invoices) return [];
-        
+
         return invoices.filter(inv => {
             // Search filter
             if (searchQuery) {
@@ -638,12 +643,12 @@ export default function InvoicesPage() {
                 const matchesDebtor = inv.debtorId.toLowerCase().includes(query);
                 if (!matchesId && !matchesCompany && !matchesDebtor) return false;
             }
-            
+
             // Status filter
             if (statusFilter !== "all" && inv.status !== statusFilter) {
                 return false;
             }
-            
+
             return true;
         });
     }, [invoices, searchQuery, statusFilter, riskFilter]);
@@ -684,7 +689,7 @@ export default function InvoicesPage() {
     };
 
     // Helper function to check if finance is disabled and why
-    function getFinanceDisabledReason(inv: Invoice): string | null {
+    function getFinanceDisabledReason(): string | null {
         if (poolLimits?.paused) {
             return "Pool is paused (emergency stop)";
         }
@@ -709,13 +714,13 @@ export default function InvoicesPage() {
         }
         try {
             setMessage(null);
-            
+
             const invoiceData = {
                 ...newInv,
                 dueDate: new Date(newInv.dueDate).toISOString(),
                 debtorId: newInv.debtorId || "COMP-DEBTOR-1",
             };
-            
+
             await createInvoice(invoiceData, address);
             setMessage("Invoice created successfully!");
             setShowCreateModal(false);
@@ -743,7 +748,7 @@ export default function InvoicesPage() {
             setActionLoadingId(inv.id);
             setMessage(null);
 
-            const invoiceToken = Deployments.InvoiceToken;
+            const invoiceToken = (Deployments as any)[deploymentKey]?.InvoiceToken;
             const dueDateUnix = new Date(inv.dueDate).getTime() / 1000;
 
             const coreData = {
@@ -756,7 +761,7 @@ export default function InvoicesPage() {
             };
 
             const txHash = await writeContractAsync({
-                address: invoiceToken.address as `0x${string}`,
+                address: invoiceToken.address,
                 abi: invoiceToken.abi,
                 functionName: "mintInvoice",
                 args: [coreData, "http://meta.uri"]
@@ -765,24 +770,24 @@ export default function InvoicesPage() {
             // Track transaction
             trackTransaction(txHash);
             showToast('info', `Tokenization transaction submitted: ${txHash.slice(0, 10)}...`);
-            
+
             const receipt = await publicClient!.waitForTransactionReceipt({ hash: txHash });
-            
+
             if (receipt.status !== "success") {
                 showToast('error', 'Tokenization transaction reverted');
                 return;
             }
-            
+
             // Optimistic update - WebSocket will also trigger refresh
             if (invoices) {
-                const updatedData = invoices.map(item => 
-                    item.id === inv.id 
+                const updatedData = invoices.map(item =>
+                    item.id === inv.id
                         ? { ...item, status: 'TOKENIZED' as const }
                         : item
                 );
                 mutate(updatedData, { revalidate: false });
             }
-            
+
             showToast('success', `Invoice ${inv.externalId} tokenized successfully`);
             await mutate();
         } catch (e: any) {
@@ -803,8 +808,8 @@ export default function InvoicesPage() {
             setActionLoadingId(inv.id);
             setMessage(null);
 
-            const pool = Deployments.FinancingPool;
-            const token = Deployments.InvoiceToken;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            const token = (Deployments as any)[deploymentKey]?.InvoiceToken;
 
             // Check approval
             let isApproved = await publicClient.readContract({
@@ -875,7 +880,7 @@ export default function InvoicesPage() {
             // Draw credit
             if (owner === poolAddress) {
                 setMessage("Step 3/3: Drawing Credit...");
-                
+
                 const position = await publicClient.readContract({
                     address: poolAddress,
                     abi: pool.abi,
@@ -886,7 +891,7 @@ export default function InvoicesPage() {
                 const maxCreditLine = position.maxCreditLine as bigint;
                 const currentUsedCredit = position.usedCredit as bigint;
                 const availableCredit = maxCreditLine - currentUsedCredit;
-                
+
                 if (availableCredit <= 0n) {
                     setMessage("No available credit.");
                     return;
@@ -919,8 +924,8 @@ export default function InvoicesPage() {
                 setMessage("Step 4/4: Notifying backend...");
                 try {
                     await requestFinancing(
-                        inv.id, 
-                        address, 
+                        inv.id,
+                        address,
                         receipt.transactionHash,
                         availableCredit.toString()
                     );
@@ -950,7 +955,7 @@ export default function InvoicesPage() {
             return;
         }
         try {
-            const pool = Deployments.FinancingPool;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
             if (!inv.invoiceIdOnChain) {
                 setMessage("Error: Missing on-chain Invoice ID.");
                 return;
@@ -964,8 +969,7 @@ export default function InvoicesPage() {
             }) as any;
 
             const debt = position.usedCredit as bigint;
-            const maxCredit = position.maxCreditLine as bigint;
-            const ltv = position.ltvBps as bigint;
+
 
             if (debt === 0n) {
                 setMessage("Invoice has no outstanding debt!");
@@ -973,8 +977,7 @@ export default function InvoicesPage() {
             }
 
             setCurrentDebt(debt);
-            setMaxCreditLine(maxCredit);
-            setLtvBps(ltv);
+
             setSelectedInvoiceForRepay(inv);
             setRepayAmount("");
             setSelectedPercentage(null);
@@ -990,8 +993,8 @@ export default function InvoicesPage() {
         if (!selectedInvoiceForRepay || !repayAmount || !publicClient) return;
 
         try {
-            const pool = Deployments.FinancingPool;
-            const token = Deployments.TestToken;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            const token = (Deployments as any)[deploymentKey]?.TestToken;
 
             let amountToRepay = BigInt(Math.floor(parseFloat(repayAmount) * 100));
 
@@ -1039,7 +1042,7 @@ export default function InvoicesPage() {
             await publicClient.waitForTransactionReceipt({ hash: tx });
 
             setMessage(`Repayment successful! Amount: ${formatAmount(repayAmount, selectedInvoiceForRepay.currency || "TRY")}`);
-            
+
             setTimeout(async () => {
                 await mutate();
             }, 2000);
@@ -1054,7 +1057,7 @@ export default function InvoicesPage() {
     // Export CSV handler
     const handleExportCSV = () => {
         if (!filteredInvoices.length) return;
-        
+
         const headers = ["Invoice ID", "Counterparty", "Face Value", "Risk Type", "Status", "Due Date", "Created"];
         const rows = filteredInvoices.map(inv => [
             inv.externalId,
@@ -1065,12 +1068,12 @@ export default function InvoicesPage() {
             inv.dueDate,
             inv.createdAt,
         ]);
-        
+
         const csvContent = [
             headers.join(","),
             ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
         ].join("\n");
-        
+
         const blob = new Blob([csvContent], { type: "text/csv" });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1100,7 +1103,7 @@ export default function InvoicesPage() {
                         ...styles.message,
                         ...(typeof message === "string" && (message.includes("successful") || message.includes("success")) ? styles.messageSuccess :
                             typeof message === "string" && message.includes("Error") ? styles.messageError :
-                            styles.messageInfo)
+                                styles.messageInfo)
                     }}>
                         {message}
                     </div>
@@ -1126,8 +1129,8 @@ export default function InvoicesPage() {
                             style={styles.buttonPrimary}
                             onClick={() => {
                                 if (issuerCompanies && issuerCompanies.length > 0) {
-                                    setNewInv({ 
-                                        ...newInv, 
+                                    setNewInv({
+                                        ...newInv,
                                         companyId: issuerCompanies[0].id,
                                         debtorId: debtorCompanies && debtorCompanies.length > 0 ? debtorCompanies[0].id : "",
                                     });
@@ -1155,31 +1158,35 @@ export default function InvoicesPage() {
                         }}
                         style={styles.searchInput}
                     />
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => {
-                            setStatusFilter(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                        style={styles.filterSelect}
-                    >
-                        <option value="all">Status: All</option>
-                        {uniqueStatuses.map(status => (
-                            <option key={status} value={status}>{status}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={riskFilter}
-                        onChange={(e) => {
-                            setRiskFilter(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                        style={styles.filterSelect}
-                    >
-                        <option value="all">Risk: All Types</option>
-                        <option value="recourse">Recourse</option>
-                        <option value="non-recourse">Non-recourse</option>
-                    </select>
+                    <div style={{ minWidth: "200px" }}>
+                        <Select
+                            value={statusFilter}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setCurrentPage(1);
+                            }}
+                            options={[
+                                { value: "all", label: "Status: All" },
+                                ...uniqueStatuses.map(status => ({ value: status, label: status }))
+                            ]}
+                            placeholder="Status: All"
+                        />
+                    </div>
+                    <div style={{ minWidth: "200px" }}>
+                        <Select
+                            value={riskFilter}
+                            onChange={(value) => {
+                                setRiskFilter(value);
+                                setCurrentPage(1);
+                            }}
+                            options={[
+                                { value: "all", label: "Risk: All Types" },
+                                { value: "recourse", label: "Recourse" },
+                                { value: "non-recourse", label: "Non-recourse" }
+                            ]}
+                            placeholder="Risk: All Types"
+                        />
+                    </div>
                     {(searchQuery || statusFilter !== "all" || riskFilter !== "all") && (
                         <a
                             onClick={handleClearFilters}
@@ -1230,18 +1237,12 @@ export default function InvoicesPage() {
                                 </tr>
                             ) : (
                                 paginatedInvoices.map((inv) => {
-                                    const statusStyle = 
-                                        inv.status === "ISSUED" ? styles.statusIssued :
-                                        inv.status === "TOKENIZED" ? styles.statusTokenized :
-                                        inv.status === "FINANCED" || inv.isFinanced ? styles.statusFinanced :
-                                        inv.status === "PAID" ? styles.statusRepaid :
-                                        inv.status === "DEFAULTED" ? styles.statusDefaulted :
-                                        styles.statusDraft;
+
 
                                     const canTokenize = inv.status === "ISSUED";
                                     const canFinance = inv.status === "TOKENIZED" && !inv.isFinanced && poolLimits && !poolLimits.paused;
                                     const canRepay = inv.isFinanced;
-                                    const financeDisabledReason = getFinanceDisabledReason(inv);
+                                    const financeDisabledReason = getFinanceDisabledReason();
 
                                     return (
                                         <tr key={inv.id} style={styles.tableRow}>
@@ -1278,17 +1279,81 @@ export default function InvoicesPage() {
                                             </td>
 
                                             {/* Risk Type */}
+                                            {/* Risk Type */}
                                             <td style={styles.tableCell}>
-                                                <span style={styles.riskType}>
-                                                    N/A
-                                                </span>
+                                                {inv.riskScore !== undefined && inv.riskScore !== null ? (() => {
+                                                    let label = "Low";
+                                                    let color = "#15803d"; // Green
+                                                    let bg = "#f0fdf4";
+
+                                                    if (inv.riskScore > 70) {
+                                                        label = "High";
+                                                        color = "#dc2626"; // Red
+                                                        bg = "#fee2e2";
+                                                    } else if (inv.riskScore > 30) {
+                                                        label = "Medium";
+                                                        color = "#b45309"; // Orange
+                                                        bg = "#ffedd5";
+                                                    }
+
+                                                    return (
+                                                        <span style={{
+                                                            ...styles.statusBadge,
+                                                            background: bg,
+                                                            color: color,
+                                                            border: `1px solid ${color}30`
+                                                        }}>
+                                                            {label} ({inv.riskScore})
+                                                        </span>
+                                                    );
+                                                })() : (
+                                                    <span style={styles.riskType}>
+                                                        N/A
+                                                    </span>
+                                                )}
                                             </td>
 
                                             {/* Status */}
                                             <td style={styles.tableCell}>
-                                                <span style={{ ...styles.statusBadge, ...statusStyle }}>
-                                                    {inv.status}
-                                                </span>
+                                                {(() => {
+                                                    let displayStatus = inv.status;
+                                                    let customStyle = {};
+
+                                                    // Calculate dynamic status for financed invoices
+                                                    if (inv.isFinanced && inv.usedCredit && inv.maxCreditLine) {
+                                                        const used = BigInt(inv.usedCredit);
+                                                        const max = BigInt(inv.maxCreditLine);
+
+                                                        if (used === 0n) {
+                                                            displayStatus = "PAID";
+                                                            customStyle = styles.statusRepaid; // Green
+                                                        } else if (used < max) {
+                                                            displayStatus = "PARTIALLY PAID";
+                                                            // Custom style for partially paid (can reuse tokenized or create new)
+                                                            customStyle = {
+                                                                background: "#eff6ff",
+                                                                color: "#2563eb",
+                                                                border: "1px solid #bfdbfe"
+                                                            };
+                                                        }
+                                                    }
+
+                                                    // Fallback to default styles if not overridden
+                                                    if (Object.keys(customStyle).length === 0) {
+                                                        if (displayStatus === "PAID") customStyle = styles.statusRepaid;
+                                                        else if (displayStatus === "ISSUED") customStyle = styles.statusIssued;
+                                                        else if (displayStatus === "TOKENIZED") customStyle = styles.statusTokenized;
+                                                        else if (displayStatus === "FINANCED") customStyle = styles.statusFinanced;
+                                                        else if (displayStatus === "DEFAULTED") customStyle = styles.statusDefaulted;
+                                                        else customStyle = styles.statusDraft;
+                                                    }
+
+                                                    return (
+                                                        <span style={{ ...styles.statusBadge, ...customStyle }}>
+                                                            {displayStatus as string}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
 
                                             {/* Actions */}
@@ -1375,7 +1440,7 @@ export default function InvoicesPage() {
                                 } else {
                                     pageNum = currentPage - 2 + i;
                                 }
-                                
+
                                 return (
                                     <button
                                         key={pageNum}
@@ -1438,26 +1503,23 @@ export default function InvoicesPage() {
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.formLabel}>Company (Issuer)</label>
-                                <select
+                                <Select
                                     value={newInv.companyId}
-                                    onChange={(e) => setNewInv({ ...newInv, companyId: e.target.value })}
-                                    style={styles.formInput}
-                                >
-                                    <option value="">Select issuer company...</option>
-                                    {companiesError ? (
-                                        <option value="" disabled style={{ color: "#dc2626" }}>
-                                            Error loading companies. Please refresh.
-                                        </option>
-                                    ) : companies && companies.length > 0 ? (
-                                        companies.map(c => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.name || c.externalId || c.id}
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <option value="" disabled>Loading companies...</option>
-                                    )}
-                                </select>
+                                    onChange={(value) => setNewInv({ ...newInv, companyId: value })}
+                                    placeholder="Select issuer company..."
+                                    options={
+                                        companiesError
+                                            ? [{ value: "", label: "Error loading companies. Please refresh.", disabled: true }]
+                                            : companies && companies.length > 0
+                                                ? companies.map(c => ({
+                                                    value: c.id,
+                                                    label: c.name || c.externalId || c.id,
+                                                }))
+                                                : [{ value: "", label: "Loading companies...", disabled: true }]
+                                    }
+                                    error={!!companiesError}
+                                    disabled={companiesError || !companies || companies.length === 0}
+                                />
                                 {companiesError && (
                                     <div style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>
                                         Failed to load companies. Check backend connection.
@@ -1471,24 +1533,26 @@ export default function InvoicesPage() {
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.formLabel}>Amount</label>
-                                <input
-                                    type="number"
+                                <NumberInput
                                     value={newInv.amount}
-                                    onChange={(e) => setNewInv({ ...newInv, amount: e.target.value })}
-                                    style={styles.formInput}
+                                    onChange={(value) => setNewInv({ ...newInv, amount: value })}
+                                    placeholder="0"
+                                    min={0}
+                                    step={100}
                                 />
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.formLabel}>Currency</label>
-                                <select
+                                <Select
                                     value={newInv.currency}
-                                    onChange={(e) => setNewInv({ ...newInv, currency: e.target.value })}
-                                    style={styles.formInput}
-                                >
-                                    <option value="TRY">TRY</option>
-                                    <option value="USD">USD</option>
-                                    <option value="EUR">EUR</option>
-                                </select>
+                                    onChange={(value) => setNewInv({ ...newInv, currency: value })}
+                                    placeholder="Select currency..."
+                                    options={[
+                                        { value: "TRY", label: "TRY" },
+                                        { value: "USD", label: "USD" },
+                                        { value: "EUR", label: "EUR" },
+                                    ]}
+                                />
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.formLabel}>Due Date</label>
@@ -1501,26 +1565,23 @@ export default function InvoicesPage() {
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.formLabel}>Debtor</label>
-                                <select
+                                <Select
                                     value={newInv.debtorId}
-                                    onChange={(e) => setNewInv({ ...newInv, debtorId: e.target.value })}
-                                    style={styles.formInput}
-                                >
-                                    <option value="">Select debtor company...</option>
-                                    {companiesError ? (
-                                        <option value="" disabled style={{ color: "#dc2626" }}>
-                                            Error loading companies. Please refresh.
-                                        </option>
-                                    ) : companies && companies.length > 0 ? (
-                                        companies.map(c => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.name || c.externalId || c.id}
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <option value="" disabled>Loading companies...</option>
-                                    )}
-                                </select>
+                                    onChange={(value) => setNewInv({ ...newInv, debtorId: value })}
+                                    placeholder="Select debtor company..."
+                                    options={
+                                        companiesError
+                                            ? [{ value: "", label: "Error loading companies. Please refresh.", disabled: true }]
+                                            : companies && companies.length > 0
+                                                ? companies.map(c => ({
+                                                    value: c.id,
+                                                    label: c.name || c.externalId || c.id,
+                                                }))
+                                                : [{ value: "", label: "Loading companies...", disabled: true }]
+                                    }
+                                    error={!!companiesError}
+                                    disabled={companiesError || !companies || companies.length === 0}
+                                />
                                 {companiesError && (
                                     <div style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>
                                         Failed to load companies. Check backend connection.

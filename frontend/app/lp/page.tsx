@@ -2,9 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import useSWR from "swr";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { useAccount, useWriteContract, usePublicClient, useChainId } from "wagmi";
 import Navbar from "../../components/Navbar";
 import Deployments from "../../lib/deployments.json";
 import { fetchPoolOverview, fetchLPPosition, fetchPoolMetrics, fetchLPTransactions, PoolOverview, LPPosition, PoolMetrics, LPTransaction } from "../../lib/backendClient";
@@ -110,6 +108,10 @@ const styles = {
         border: "1px solid #e0e0e0",
         borderRadius: "4px",
         padding: "24px",
+        minHeight: "140px",
+        display: "flex",
+        flexDirection: "column" as const,
+        justifyContent: "space-between",
     },
     cardLabel: {
         fontSize: "12px",
@@ -187,10 +189,14 @@ const styles = {
         width: "100%",
         padding: "12px 16px",
         fontSize: "16px",
-        border: "1px solid #e0e0e0",
-        borderRadius: "4px",
-        background: "#ffffff",
-        color: "#1a1a1a",
+        fontWeight: 500,
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.98)",
+        color: "#0f172a",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        letterSpacing: "-0.01em",
     },
     noticeBox: {
         padding: "12px 16px",
@@ -211,14 +217,30 @@ const styles = {
     buttonPrimary: {
         padding: "12px 24px",
         fontSize: "14px",
-        fontWeight: 500,
-        background: "#2563eb",
+        fontWeight: 600,
+        background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
         border: "none",
-        borderRadius: "4px",
+        borderRadius: "8px",
         color: "#ffffff",
         cursor: "pointer",
-        transition: "0.2s",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         width: "100%",
+        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2), 0 1px 2px rgba(37, 99, 235, 0.1)",
+        letterSpacing: "-0.01em",
+    },
+    buttonSecondary: {
+        padding: "12px 24px",
+        fontSize: "14px",
+        fontWeight: 600,
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        color: "#4b5563",
+        cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        width: "100%",
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+        letterSpacing: "-0.01em",
     },
     buttonDisabled: {
         opacity: 0.5,
@@ -398,16 +420,17 @@ const styles = {
         color: "#1e40af",
         border: "1px solid #93c5fd",
     },
-};
+} as const;
 
 // Transaction interface is now imported from backendClient as LPTransaction
 
 export default function LPDashboardPage() {
-    const pathname = usePathname();
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
-    
+    const chainId = useChainId();
+    const deploymentKey = chainId === 84532 ? "baseSepolia" : chainId === 5003 ? "mantleSepolia" : "baseSepolia";
+
     const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawShares, setWithdrawShares] = useState("");
@@ -420,7 +443,7 @@ export default function LPDashboardPage() {
     const itemsPerPage = 10;
 
     // WebSocket connection for real-time updates
-    const { subscribe: subscribeWS, isConnected: wsConnected } = useWalletWebSocket(address);
+    const { subscribe: subscribeWS } = useWalletWebSocket(address || null);
     const { trackTransaction } = useTransactionManager();
     const { showToast } = useToast();
 
@@ -517,7 +540,7 @@ export default function LPDashboardPage() {
 
     // Use real transactions from backend
     const transactions = transactionsData?.transactions || [];
-    
+
     // Debug: Log transactions
     React.useEffect(() => {
         console.log('[LP Transactions] Current transactions:', transactions);
@@ -529,7 +552,7 @@ export default function LPDashboardPage() {
     const filteredTransactions = useMemo(() => {
         if (!searchQuery) return transactions;
         const query = searchQuery.toLowerCase();
-        return transactions.filter(tx => 
+        return transactions.filter(tx =>
             tx.id.toLowerCase().includes(query) ||
             tx.type.toLowerCase().includes(query) ||
             tx.txHash?.toLowerCase().includes(query)
@@ -556,8 +579,8 @@ export default function LPDashboardPage() {
             setLoadingType("deposit");
             setMessage(null);
 
-            const TestToken = Deployments.TestToken;
-            const FinancingPool = Deployments.FinancingPool;
+            const TestToken = (Deployments as any)[deploymentKey]?.TestToken;
+            const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
             // TestToken uses 18 decimals
             // Convert user input (e.g., 1000) to wei: multiply by 10^18
             const amountWei = BigInt(Math.floor(parseFloat(depositAmount) * 1e18));
@@ -597,18 +620,17 @@ export default function LPDashboardPage() {
             // Notify backend about the deposit so it can record the transaction
             try {
                 console.log('[Deposit] Recording transaction in backend...', { depositTx, address, depositAmount });
-                
-                const FinancingPool = Deployments.FinancingPool;
+
+                const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
                 const lpPositionResult = await publicClient!.readContract({
                     address: FinancingPool.address as `0x${string}`,
                     abi: FinancingPool.abi,
                     functionName: "getLPPosition",
                     args: [address],
                 }) as [bigint, bigint, bigint]; // [lpShares, underlyingValue, sharePrice]
-                
+
                 // getLPPosition returns a tuple: [lpShares, underlyingValue, sharePrice]
                 const lpShares = lpPositionResult[0];
-                const underlyingValue = lpPositionResult[1];
                 const sharePrice = lpPositionResult[2];
 
                 console.log('[Deposit] LP Position data:', {
@@ -636,9 +658,9 @@ export default function LPDashboardPage() {
                     },
                     body: JSON.stringify(requestBody),
                 });
-                
+
                 console.log('[Deposit] Backend response status:', recordRes.status);
-                
+
                 if (!recordRes.ok) {
                     const errorText = await recordRes.text();
                     console.error('[Deposit] ❌ Failed to record transaction:', recordRes.status, errorText);
@@ -661,7 +683,7 @@ export default function LPDashboardPage() {
             showToast('success', 'Deposit successful! LP shares minted.');
             setDepositAmount("");
             setMessage(null); // Clear the "Step 2/2: Depositing liquidity..." message
-            
+
             // Refresh all data
             await Promise.all([
                 mutatePool(undefined, { revalidate: true }),
@@ -689,7 +711,7 @@ export default function LPDashboardPage() {
             setLoadingType("mint");
             setMessage(null);
 
-            const TestToken = Deployments.TestToken;
+            const TestToken = (Deployments as any)[deploymentKey]?.TestToken;
             // TestToken uses 18 decimals
             const amountWei = BigInt(Math.floor(parseFloat(mintAmount) * 1e18));
 
@@ -737,7 +759,7 @@ export default function LPDashboardPage() {
                 return;
             }
 
-            const FinancingPool = Deployments.FinancingPool;
+            const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
             // LP shares use 18 decimals (same as ERC20 standard)
             // Convert user input (e.g., 1000) to wei: multiply by 10^18
             const sharesWei = BigInt(Math.floor(parseFloat(withdrawShares) * 1e18));
@@ -765,14 +787,14 @@ export default function LPDashboardPage() {
 
             // Notify backend about the withdrawal so it can record the transaction
             try {
-                const FinancingPool = Deployments.FinancingPool;
+                const FinancingPool = (Deployments as any)[deploymentKey]?.FinancingPool;
                 const lpPositionResult = await publicClient!.readContract({
                     address: FinancingPool.address as `0x${string}`,
                     abi: FinancingPool.abi,
                     functionName: "getLPPosition",
                     args: [address],
                 }) as [bigint, bigint, bigint]; // [lpShares, underlyingValue, sharePrice]
-                
+
                 // getLPPosition returns a tuple: [lpShares, underlyingValue, sharePrice]
                 const sharePrice = lpPositionResult[2];
                 const withdrawalAmount = await publicClient!.readContract({
@@ -807,7 +829,7 @@ export default function LPDashboardPage() {
             showToast('success', 'Withdrawal successful!');
             setWithdrawShares("");
             setMessage(null); // Clear the "Withdrawing liquidity..." message
-            
+
             // Force immediate refresh
             await Promise.all([
                 mutatePool(undefined, { revalidate: true }),
@@ -815,7 +837,7 @@ export default function LPDashboardPage() {
                 mutateMetrics(undefined, { revalidate: true }),
                 mutateTransactions(undefined, { revalidate: true }),
             ]);
-            
+
             // Also trigger a second refresh after a short delay to ensure backend has synced
             setTimeout(async () => {
                 await Promise.all([
@@ -857,7 +879,7 @@ export default function LPDashboardPage() {
                         ...styles.message,
                         ...(typeof message === "string" && message.includes("successful") ? styles.messageSuccess :
                             typeof message === "string" && message.includes("failed") || typeof message === "string" && message.includes("disabled") ? styles.messageError :
-                            styles.messageInfo)
+                                styles.messageInfo)
                     }}>
                         {message}
                     </div>
@@ -937,130 +959,130 @@ export default function LPDashboardPage() {
                         </div>
 
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
-                        {activeTab === "deposit" ? (
-                            <>
-                                {/* TestToken Mint Section */}
-                                <div style={styles.formGroup}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                        <label style={styles.formLabel}>Get TestToken</label>
-                                        <span style={{ fontSize: "12px", color: "#999", fontWeight: 400 }}>Required for deposit</span>
+                            {activeTab === "deposit" ? (
+                                <>
+                                    {/* TestToken Mint Section */}
+                                    <div style={styles.formGroup}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                            <label style={styles.formLabel}>Get TestToken</label>
+                                            <span style={{ fontSize: "12px", color: "#999", fontWeight: 400 }}>Required for deposit</span>
+                                        </div>
+                                        <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={mintAmount}
+                                                onChange={(e) => setMintAmount(e.target.value)}
+                                                style={{ ...styles.formInput, flex: 1 }}
+                                                placeholder="0.00"
+                                                disabled={loading || !address}
+                                            />
+                                            <button
+                                                style={{
+                                                    ...styles.buttonSecondary,
+                                                    padding: "10px 20px",
+                                                    whiteSpace: "nowrap",
+                                                    ...((loading && loadingType !== "mint") || !address || !mintAmount || parseFloat(mintAmount) <= 0 ? styles.buttonDisabled : {}),
+                                                }}
+                                                onClick={handleMintTestToken}
+                                                disabled={loading || !address || !mintAmount || parseFloat(mintAmount) <= 0}
+                                            >
+                                                {loading && loadingType === "mint" ? "Minting..." : "Mint"}
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
+
+                                    <div style={{ ...styles.formGroup, marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #e0e0e0" }}>
+                                        <label style={styles.formLabel}>Deposit Amount (TestToken)</label>
                                         <input
                                             type="number"
                                             step="0.01"
                                             min="0"
-                                            value={mintAmount}
-                                            onChange={(e) => setMintAmount(e.target.value)}
-                                            style={{ ...styles.formInput, flex: 1 }}
+                                            value={depositAmount}
+                                            onChange={(e) => setDepositAmount(e.target.value)}
+                                            style={styles.formInput}
                                             placeholder="0.00"
                                             disabled={loading || !address}
                                         />
-                                        <button
-                                            style={{
-                                                ...styles.buttonSecondary,
-                                                padding: "10px 20px",
-                                                whiteSpace: "nowrap",
-                                                ...((loading && loadingType !== "mint") || !address || !mintAmount || parseFloat(mintAmount) <= 0 ? styles.buttonDisabled : {}),
-                                            }}
-                                            onClick={handleMintTestToken}
-                                            disabled={loading || !address || !mintAmount || parseFloat(mintAmount) <= 0}
-                                        >
-                                            {loading && loadingType === "mint" ? "Minting..." : "Mint"}
-                                        </button>
+                                        {expectedLPShares !== null && depositAmount && parseFloat(depositAmount) > 0 && (
+                                            <div style={styles.cardMeta}>
+                                                Expected LP Shares: {expectedLPShares.toFixed(4)} TIFA-LP
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-
-                                <div style={{ ...styles.formGroup, marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #e0e0e0" }}>
-                                    <label style={styles.formLabel}>Deposit Amount (TestToken)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={depositAmount}
-                                        onChange={(e) => setDepositAmount(e.target.value)}
-                                        style={styles.formInput}
-                                        placeholder="0.00"
-                                        disabled={loading || !address}
-                                    />
-                                    {expectedLPShares !== null && depositAmount && parseFloat(depositAmount) > 0 && (
-                                        <div style={styles.cardMeta}>
-                                            Expected LP Shares: {expectedLPShares.toFixed(4)} TIFA-LP
+                                    <button
+                                        style={{
+                                            ...styles.buttonPrimary,
+                                            marginTop: "auto",
+                                            ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? styles.buttonDisabled : {}),
+                                        }}
+                                        onClick={handleDeposit}
+                                        disabled={loading || !address || !depositAmount || parseFloat(depositAmount) <= 0}
+                                    >
+                                        {loading && loadingType === "deposit" ? "Processing..." : "Initiate Transfer"}
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    {isWithdrawDisabled && (
+                                        <div style={{
+                                            ...styles.noticeBox,
+                                            background: "#fee2e2",
+                                            borderColor: "#fca5a5",
+                                            color: "#dc2626",
+                                        }}>
+                                            <span style={styles.noticeIcon}>WARNING</span>
+                                            <div>
+                                                <strong>Withdrawals disabled:</strong> Utilization is {poolOverview?.utilizationPercent}% (max: {poolOverview?.maxUtilizationPercent}%)
+                                            </div>
                                         </div>
                                     )}
-                                </div>
-                                <button
-                                    style={{
-                                        ...styles.buttonPrimary,
-                                        marginTop: "auto",
-                                        ...((loading && loadingType !== "deposit") || !address || !depositAmount || parseFloat(depositAmount) <= 0 ? styles.buttonDisabled : {}),
-                                    }}
-                                    onClick={handleDeposit}
-                                    disabled={loading || !address || !depositAmount || parseFloat(depositAmount) <= 0}
-                                >
-                                    {loading && loadingType === "deposit" ? "Processing..." : "Initiate Transfer"}
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                {isWithdrawDisabled && (
-                                    <div style={{
-                                        ...styles.noticeBox,
-                                        background: "#fee2e2",
-                                        borderColor: "#fca5a5",
-                                        color: "#dc2626",
-                                    }}>
-                                        <span style={styles.noticeIcon}>WARNING</span>
-                                        <div>
-                                            <strong>Withdrawals disabled:</strong> Utilization is {poolOverview?.utilizationPercent}% (max: {poolOverview?.maxUtilizationPercent}%)
-                                        </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.formLabel}>LP Shares to Burn</label>
+                                        <input
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            max={lpPosition?.lpSharesFormatted ? parseFloat(lpPosition.lpSharesFormatted) : undefined}
+                                            value={withdrawShares}
+                                            onChange={(e) => setWithdrawShares(e.target.value)}
+                                            style={styles.formInput}
+                                            placeholder="0.0000"
+                                            disabled={loading || !address || isWithdrawDisabled}
+                                        />
+                                        {lpPosition?.lpSharesFormatted && (
+                                            <div style={styles.cardMeta}>
+                                                Available: {formatAmount(lpPosition.lpSharesFormatted, "TIFA-LP")}
+                                            </div>
+                                        )}
+                                        {expectedWithdrawal !== null && withdrawShares && parseFloat(withdrawShares) > 0 && (
+                                            <div style={styles.cardMeta}>
+                                                Expected withdrawal: {formatAmount(expectedWithdrawal.toFixed(2), "TRY")}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                                <div style={styles.formGroup}>
-                                    <label style={styles.formLabel}>LP Shares to Burn</label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        min="0"
-                                        max={lpPosition?.lpSharesFormatted ? parseFloat(lpPosition.lpSharesFormatted) : undefined}
-                                        value={withdrawShares}
-                                        onChange={(e) => setWithdrawShares(e.target.value)}
-                                        style={styles.formInput}
-                                        placeholder="0.0000"
-                                        disabled={loading || !address || isWithdrawDisabled}
-                                    />
-                                    {lpPosition?.lpSharesFormatted && (
-                                        <div style={styles.cardMeta}>
-                                            Available: {formatAmount(lpPosition.lpSharesFormatted, "TIFA-LP")}
+                                    {lpPosition && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
+                                        <div style={styles.noticeBox}>
+                                            <span style={styles.noticeIcon}>INFO</span>
+                                            <div>
+                                                Withdrawals are subject to pool utilization limits. If utilization exceeds {poolOverview?.maxUtilizationPercent}%, withdrawals may be temporarily disabled.
+                                            </div>
                                         </div>
                                     )}
-                                    {expectedWithdrawal !== null && withdrawShares && parseFloat(withdrawShares) > 0 && (
-                                        <div style={styles.cardMeta}>
-                                            Expected withdrawal: {formatAmount(expectedWithdrawal.toFixed(2), "TRY")}
-                                        </div>
-                                    )}
-                                </div>
-                                {lpPosition && parseFloat(lpPosition.lpSharesFormatted) > 0 && (
-                                    <div style={styles.noticeBox}>
-                                        <span style={styles.noticeIcon}>INFO</span>
-                                        <div>
-                                            Withdrawals are subject to pool utilization limits. If utilization exceeds {poolOverview?.maxUtilizationPercent}%, withdrawals may be temporarily disabled.
-                                        </div>
-                                    </div>
-                                )}
-                                <button
-                                    style={{
-                                        ...styles.buttonPrimary,
-                                        marginTop: "auto",
-                                        ...((loading && loadingType !== "withdraw") || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled ? styles.buttonDisabled : {}),
-                                    }}
-                                    onClick={handleWithdraw}
-                                    disabled={loading || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled}
-                                >
-                                    {loading && loadingType === "withdraw" ? "Processing..." : "Initiate Withdrawal"}
-                                </button>
-                            </>
-                        )}
+                                    <button
+                                        style={{
+                                            ...styles.buttonPrimary,
+                                            marginTop: "auto",
+                                            ...((loading && loadingType !== "withdraw") || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled ? styles.buttonDisabled : {}),
+                                        }}
+                                        onClick={handleWithdraw}
+                                        disabled={loading || !address || !withdrawShares || parseFloat(withdrawShares) <= 0 || isWithdrawDisabled}
+                                    >
+                                        {loading && loadingType === "withdraw" ? "Processing..." : "Initiate Withdrawal"}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -1164,7 +1186,7 @@ export default function LPDashboardPage() {
                                     } else {
                                         pageNum = currentPage - 2 + i;
                                     }
-                                    
+
                                     return (
                                         <button
                                             key={pageNum}

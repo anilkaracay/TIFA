@@ -32,13 +32,13 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             const FinancingPool = loadContract('FinancingPool');
             const tx = await FinancingPool.pause();
             await tx.wait();
-            
+
             // Emit WebSocket event
             emitPoolEvent({
                 type: 'pool.paused',
                 payload: { txHash: tx.hash },
             });
-            
+
             return { success: true, txHash: tx.hash };
         } catch (e: any) {
             reply.code(500);
@@ -52,13 +52,13 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             const FinancingPool = loadContract('FinancingPool');
             const tx = await FinancingPool.unpause();
             await tx.wait();
-            
+
             // Emit WebSocket event
             emitPoolEvent({
                 type: 'pool.unpaused',
                 payload: { txHash: tx.hash },
             });
-            
+
             return { success: true, txHash: tx.hash };
         } catch (e: any) {
             reply.code(500);
@@ -92,16 +92,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             }
 
             await Promise.all(txs.map(tx => tx.wait()));
-            
+
             // Emit WebSocket event
             emitPoolEvent({
                 type: 'pool.params_updated',
-                payload: { 
+                payload: {
                     params: body,
-                    txHashes: txs.map(tx => tx.hash) 
+                    txHashes: txs.map(tx => tx.hash)
                 },
             });
-            
+
             return { success: true, txHashes: txs.map(tx => tx.hash) };
         } catch (e: any) {
             reply.code(500);
@@ -120,16 +120,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             const amount = ethers.utils.parseUnits(body.amount, 18);
             const tx = await FinancingPool.fundReserve(amount);
             await tx.wait();
-            
+
             // Emit WebSocket event
             emitPoolEvent({
                 type: 'pool.reserve_funded',
-                payload: { 
+                payload: {
                     amount: body.amount,
-                    txHash: tx.hash 
+                    txHash: tx.hash
                 },
             });
-            
+
             return { success: true, txHash: tx.hash };
         } catch (e: any) {
             reply.code(500);
@@ -142,7 +142,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         try {
             const FinancingPool = loadContract('FinancingPool');
             const [paused, maxUtilization, maxLoanBps, maxIssuerExposureBps, reserveBalance, reserveTargetBps] = await Promise.all([
-                FinancingPool.paused(),
+                (typeof FinancingPool.paused === 'function' ? FinancingPool.paused() : Promise.resolve(false)).catch(() => false),
                 FinancingPool.maxUtilizationBps(),
                 FinancingPool.maxLoanBpsOfTVL(),
                 FinancingPool.maxIssuerExposureBps(),

@@ -125,3 +125,8 @@ export async function registerTruthRoutes(app: FastifyInstance) {
 
 
 
+
+
+
+
+

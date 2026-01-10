@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract, useChainId } from "wagmi";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -29,7 +29,9 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
     const { address } = useAccount();
     const publicClient = usePublicClient();
     const { writeContractAsync } = useWriteContract();
-    
+    const chainId = useChainId();
+    const deploymentKey = chainId === 31337 ? "31337" : (chainId?.toString() || "31337");
+
     const [positionData, setPositionData] = useState<PositionData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -41,13 +43,15 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
 
         async function fetchPosition() {
             try {
-                const pool = Deployments.FinancingPool;
+                const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+                if (!pool) return;
+
                 // invoiceIdOnChain is a hex string (bytes32), use it directly
-                const invoiceIdHex = invoice.invoiceIdOnChain.startsWith("0x")
-                    ? invoice.invoiceIdOnChain as `0x${string}`
-                    : `0x${invoice.invoiceIdOnChain}` as `0x${string}`;
-                
-                const position = await publicClient.readContract({
+                const invoiceIdHex = invoice.invoiceIdOnChain!.startsWith("0x")
+                    ? invoice.invoiceIdOnChain! as `0x${string}`
+                    : `0x${invoice.invoiceIdOnChain!}` as `0x${string}`;
+
+                const position = await publicClient!.readContract({
                     address: pool.address as `0x${string}`,
                     abi: pool.abi,
                     functionName: "getPosition",
@@ -68,7 +72,7 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                     });
 
                     // Fetch reserve balance
-                    const reserve = await publicClient.readContract({
+                    const reserve = await publicClient!.readContract({
                         address: pool.address as `0x${string}`,
                         abi: pool.abi,
                         functionName: "reserveBalance",
@@ -82,7 +86,7 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
         }
 
         fetchPosition();
-    }, [invoice.invoiceIdOnChain, publicClient]);
+    }, [invoice.invoiceIdOnChain, publicClient, deploymentKey]);
 
     // Calculate timeline status
     const timelineStatus = useMemo(() => {
@@ -112,12 +116,8 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
         if (!positionData || !reserveBalance) return null;
 
         // Safely convert to BigInt for calculations
-        const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
-            ? positionData.usedCredit 
-            : BigInt(positionData.usedCredit?.toString() || '0');
-        const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
-            ? positionData.interestAccrued
-            : BigInt(positionData.interestAccrued?.toString() || '0');
+        const usedCreditBigInt = positionData.usedCredit;
+        const interestAccruedBigInt = positionData.interestAccrued;
         const totalDebtBigInt = usedCreditBigInt + interestAccruedBigInt;
         const isRecourse = positionData.recourseMode === 0;
 
@@ -148,20 +148,18 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
 
         try {
             setLoading(true);
-            const pool = Deployments.FinancingPool;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            if (!pool) throw new Error("Pool deployment not found");
+
             // Safely convert to BigInt for contract call
-            const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
-                ? positionData.usedCredit 
-                : BigInt(positionData.usedCredit?.toString() || '0');
-            const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
-                ? positionData.interestAccrued
-                : BigInt(positionData.interestAccrued?.toString() || '0');
+            const usedCreditBigInt = positionData.usedCredit;
+            const interestAccruedBigInt = positionData.interestAccrued;
             const totalDebt = usedCreditBigInt + interestAccruedBigInt;
 
-            const invoiceIdHex = invoice.invoiceIdOnChain.startsWith("0x")
-                ? invoice.invoiceIdOnChain as `0x${string}`
-                : `0x${invoice.invoiceIdOnChain}` as `0x${string}`;
-            
+            const invoiceIdHex = invoice.invoiceIdOnChain!.startsWith("0x")
+                ? invoice.invoiceIdOnChain! as `0x${string}`
+                : `0x${invoice.invoiceIdOnChain!}` as `0x${string}`;
+
             const tx = await writeContractAsync({
                 address: pool.address as `0x${string}`,
                 abi: pool.abi,
@@ -169,8 +167,8 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                 args: [invoiceIdHex, totalDebt],
             });
 
-            await publicClient.waitForTransactionReceipt({ hash: tx });
-            
+            await publicClient!.waitForTransactionReceipt({ hash: tx });
+
             // Refresh position data
             window.location.reload();
         } catch (e: any) {
@@ -186,12 +184,13 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
 
         try {
             setLoading(true);
-            const pool = Deployments.FinancingPool;
+            const pool = (Deployments as any)[deploymentKey]?.FinancingPool;
+            if (!pool) throw new Error("Pool deployment not found");
 
-            const invoiceIdHex = invoice.invoiceIdOnChain.startsWith("0x")
-                ? invoice.invoiceIdOnChain as `0x${string}`
-                : `0x${invoice.invoiceIdOnChain}` as `0x${string}`;
-            
+            const invoiceIdHex = invoice.invoiceIdOnChain!.startsWith("0x")
+                ? invoice.invoiceIdOnChain! as `0x${string}`
+                : `0x${invoice.invoiceIdOnChain!}` as `0x${string}`;
+
             const tx = await writeContractAsync({
                 address: pool.address as `0x${string}`,
                 abi: pool.abi,
@@ -199,8 +198,8 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                 args: [invoiceIdHex],
             });
 
-            await publicClient.waitForTransactionReceipt({ hash: tx });
-            
+            await publicClient!.waitForTransactionReceipt({ hash: tx });
+
             // Refresh position data
             window.location.reload();
         } catch (e: any) {
@@ -235,14 +234,9 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
     // For now, we'll show actions if wallet is connected (can be improved with backend check)
     const isIssuer = address !== undefined; // Simplified: show to connected wallet
     // Safely convert to BigInt for addition - ensure both are BigInt
-    const usedCreditBigInt = typeof positionData.usedCredit === 'bigint' 
-        ? positionData.usedCredit 
-        : BigInt(positionData.usedCredit?.toString() || '0');
-    const interestAccruedBigInt = typeof positionData.interestAccrued === 'bigint'
-        ? positionData.interestAccrued
-        : BigInt(positionData.interestAccrued?.toString() || '0');
+    const usedCreditBigInt = positionData.usedCredit;
+    const interestAccruedBigInt = positionData.interestAccrued;
     const totalDebtBigInt = usedCreditBigInt + interestAccruedBigInt;
-    const totalDebt = Number(totalDebtBigInt);
 
     return (
         <Card style={{ padding: "24px" }}>
@@ -371,18 +365,18 @@ export function InvoiceRiskPanel({ invoice }: InvoiceRiskPanelProps) {
                     </Button>
                 )}
                 {/* TODO: Add admin check for declare default */}
-                {positionData.graceEndsAt > 0n && 
-                 BigInt(Math.floor(Date.now() / 1000)) >= positionData.graceEndsAt && 
-                 !positionData.isInDefault && (
-                    <Button
-                        variant="warning"
-                        onClick={handleDeclareDefault}
-                        disabled={loading}
-                        style={{ width: "100%", marginTop: "8px" }}
-                    >
-                        {loading ? "Processing..." : "Declare Default"}
-                    </Button>
-                )}
+                {positionData.graceEndsAt > 0n &&
+                    BigInt(Math.floor(Date.now() / 1000)) >= positionData.graceEndsAt &&
+                    !positionData.isInDefault && (
+                        <Button
+                            variant="warning"
+                            onClick={handleDeclareDefault}
+                            disabled={loading}
+                            style={{ width: "100%", marginTop: "8px" }}
+                        >
+                            {loading ? "Processing..." : "Declare Default"}
+                        </Button>
+                    )}
                 {!isIssuer && !positionData.isInDefault && (
                     <p style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", margin: 0 }}>
                         No actions available

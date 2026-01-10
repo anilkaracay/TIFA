@@ -4,8 +4,7 @@ import { createSession } from '../x402/sessionStore';
 import { x402Config } from '../x402/config';
 import { getVerifier } from '../x402/verifier';
 import { confirmSession } from '../x402/sessionStore';
-import { loadContract } from '../onchain/provider';
-import { provider, signer } from '../onchain/provider';
+import { loadContract, getProvider, getSigner } from '../onchain/provider';
 import { ethers } from 'ethers';
 
 const STATUS_MAP: Record<string, number> = {
@@ -42,10 +41,10 @@ export class AutoPaymentAgent {
         }
 
         console.log('[AutoPaymentAgent] Starting auto-payment agent (polling every 60s)');
-        
+
         // Run immediately, then on interval
         this.executeCycle();
-        
+
         this.intervalId = setInterval(() => {
             this.executeCycle();
         }, this.POLL_INTERVAL_MS);
@@ -112,9 +111,9 @@ export class AutoPaymentAgent {
     private static async processCompanyInvoices(authorization: any) {
         try {
             const allowedStatuses = JSON.parse(authorization.allowedInvoiceStatuses || '[]') as string[];
-            
+
             console.log(`[AutoPaymentAgent] Allowed statuses for company ${authorization.companyId}:`, allowedStatuses);
-            
+
             if (allowedStatuses.length === 0) {
                 console.log(`[AutoPaymentAgent] No allowed statuses for company ${authorization.companyId}`);
                 return; // No allowed statuses
@@ -157,7 +156,7 @@ export class AutoPaymentAgent {
     private static async processInvoice(invoice: any, authorization: any) {
         try {
             console.log(`[AutoPaymentAgent] Starting processInvoice for ${invoice.externalId || invoice.id}`);
-            
+
             // Calculate remaining amount
             const totalAmount = BigInt(invoice.amount);
             const paid = BigInt(invoice.cumulativePaid || '0');
@@ -201,7 +200,7 @@ export class AutoPaymentAgent {
 
             if (!checkResult.allowed) {
                 console.log(`[AutoPaymentAgent] Payment BLOCKED for invoice ${invoice.externalId || invoice.id}: ${checkResult.reason}`);
-                
+
                 // Log blocked execution
                 await prisma.agentPaymentExecution.create({
                     data: {
@@ -234,7 +233,7 @@ export class AutoPaymentAgent {
             await this.executePayment(invoice, authorization, remaining.toString());
         } catch (error: any) {
             console.error(`[AutoPaymentAgent] Error processing invoice ${invoice.id}:`, error);
-            
+
             // Log failed execution
             await prisma.agentPaymentExecution.create({
                 data: {

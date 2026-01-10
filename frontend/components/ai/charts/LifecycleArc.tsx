@@ -90,7 +90,7 @@ export default function LifecycleArc({ statusCounts, totalActive }: LifecycleArc
         />
         
         {/* Segments */}
-        {segments.map((seg, idx) => {
+        {segments.map((seg) => {
           if (seg.count === 0) return null;
           
           const isHovered = hoveredSegment === seg.status;
@@ -112,7 +112,7 @@ export default function LifecycleArc({ statusCounts, totalActive }: LifecycleArc
         })}
         
         {/* Node ring (subtle dots) */}
-        {segments.map((seg, idx) => {
+        {segments.map((seg) => {
           if (seg.count === 0) return null;
           const midAngle = (seg.startAngle + seg.endAngle) / 2;
           const nodePos = angleToCoord(midAngle, radius + 8);
@@ -181,5 +181,10 @@ export default function LifecycleArc({ statusCounts, totalActive }: LifecycleArc
     </div>
   );
 }
+
+
+
+
+
 
 
