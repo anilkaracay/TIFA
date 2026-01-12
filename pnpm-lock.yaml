@@ -78,6 +78,9 @@ importers:
       fastify:
         specifier: ^4.26.1
         version: 4.29.1
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.19.28)(typescript@5.9.3)
       zod:
         specifier: ^3.22.4
         version: 3.25.76
