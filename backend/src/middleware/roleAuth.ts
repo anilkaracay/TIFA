@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { resolveUserRole } from '../auth/roles';
 import { Role } from '../auth/roles';
 import { env } from '../env';
-import { env } from '../env';
+
 
 declare module 'fastify' {
     interface FastifyRequest {
@@ -61,7 +61,7 @@ export async function roleResolutionMiddleware(
     }
 
     const walletAddress = extractWalletAddress(req);
-    
+
     if (walletAddress) {
         req.wallet = walletAddress;
         try {

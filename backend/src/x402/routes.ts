@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { x402Config } from './config';
-import { X402Error, X402ErrorCode } from './errors';
+import { X402Error, X402ErrorCode, createX402Error } from './errors';
 import { createSession, findSessionBySessionId, findSessionByTxHash, confirmSession, X402Session } from './sessionStore';
 import { buildX402Response } from './responseBuilder';
 import { getVerifier, PaymentDetails } from './verifier';
@@ -48,11 +48,11 @@ function isInvoicePayable(status: string): boolean {
 function calculatePaymentAmount(invoice: { amount: string; cumulativePaid: string; status: string }): string {
     const totalAmount = BigInt(invoice.amount);
     const paid = BigInt(invoice.cumulativePaid || '0');
-    
+
     if (invoice.status === 'PARTIALLY_PAID') {
         return (totalAmount - paid).toString();
     }
-    
+
     return totalAmount.toString();
 }
 
