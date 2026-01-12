@@ -1,32 +1,32 @@
 {
-    "name": "@tifa/frontend",
-    "version": "0.1.0",
-    "private": true,
-    "scripts": {
-        "dev": "next dev -p 3001",
-        "build": "next build",
-        "start": "next start",
-        "lint": "next lint"
-    },
-    "dependencies": {
-        "@rainbow-me/rainbowkit": "^2.2.10",
-        "@tanstack/react-query": "^5.90.12",
-        "chart.js": "^4.5.1",
-        "graphql-request": "^7.3.5",
-        "next": "14.0.0",
-        "qrcode.react": "^4.2.0",
-        "react": "^18.2.0",
-        "react-chartjs-2": "^5.3.1",
-        "react-dom": "^18.2.0",
-        "swr": "^2.3.7",
-        "viem": "^2.41.2",
-        "wagmi": "^2.19.5",
-        "@tifa/config": "workspace:*"
-    },
-    "devDependencies": {
-        "@types/node": "^20.10.0",
-        "@types/react": "^18.2.0",
-        "@types/react-dom": "^18.2.0",
-        "typescript": "^5.3.2"
-    }
+  "name": "@tifa/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.10",
+    "@tanstack/react-query": "^5.90.12",
+    "chart.js": "^4.5.1",
+    "graphql-request": "^7.3.5",
+    "next": "14.2.35",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^18.2.0",
+    "swr": "^2.3.7",
+    "viem": "^2.41.2",
+    "wagmi": "^2.19.5",
+    "@tifa/config": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.3.2"
+  }
 }
