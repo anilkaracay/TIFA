@@ -9,7 +9,7 @@
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev --name init",
         "prisma:studio": "prisma studio",
-        "deploy": "prisma migrate deploy && ts-node prisma/seed.ts"
+        "db:setup": "prisma migrate deploy && ts-node prisma/seed.ts"
     },
     "dependencies": {
         "@fastify/cors": "^9.0.1",
