@@ -1328,7 +1328,7 @@ export default function InvoicesPage() {
                                                             displayStatus = "PAID";
                                                             customStyle = styles.statusRepaid; // Green
                                                         } else if (used < max) {
-                                                            displayStatus = "PARTIALLY PAID";
+                                                            displayStatus = "PARTIALLY_PAID";
                                                             // Custom style for partially paid (can reuse tokenized or create new)
                                                             customStyle = {
                                                                 background: "#eff6ff",

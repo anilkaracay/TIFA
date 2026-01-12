@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import useSWR from "swr";
 import Navbar from "../../../components/Navbar";
-import { fetchPendingKycProfiles, approveKycProfile, rejectKycProfile, KycProfile } from "../../../lib/backendClient";
+import { fetchPendingKycProfiles, approveKycProfile, rejectKycProfile } from "../../../lib/backendClient";
 import { useToast } from "../../../components/Toast";
 import { useAccount } from "wagmi";
 
