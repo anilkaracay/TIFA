@@ -470,6 +470,8 @@ const styles = {
         fontSize: "13px",
         color: "#374151",
         lineHeight: "1.5",
+        wordBreak: "break-word",
+        overflowWrap: "anywhere",
     },
     recommendationsSection: {
         background: "#ffffff",
