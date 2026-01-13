@@ -12,6 +12,9 @@ import { useWalletWebSocket } from "../../lib/websocketClient";
 import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
 import { RiskExposureCard } from "../../components/lp/RiskExposureCard";
+import { useKyc } from "../../hooks/useKyc";
+import { KycStatusBanner } from "../../components/compliance/KycStatusBanner";
+import { KycSubmissionModal } from "../../components/compliance/KycSubmissionModal";
 
 // Premium institutional fintech styling
 const styles = {
@@ -477,10 +480,8 @@ export default function LPDashboardPage() {
     );
 
     // Compliance & Yield Data
-    const { data: kycProfile } = useSWR<KycProfile | null>(
-        address ? "kyc-profile" : null,
-        () => fetchKycProfile('LP')
-    );
+    const { profile: kycProfile, refreshKyc } = useKyc('LP');
+    const [showKycModal, setShowKycModal] = useState(false);
     const { data: yieldSummary, mutate: mutateYield } = useSWR<YieldSummary>(
         address ? "yield-summary" : null,
         () => fetchYieldSummary(),
@@ -911,22 +912,20 @@ export default function LPDashboardPage() {
                 </div>
 
                 {/* KYC Banner */}
-                {!isKycApproved && address && (
-                    <div style={{
-                        padding: '16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', marginBottom: '24px', color: '#c2410c', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div>
-                            <strong>Compliance Check Required</strong>
-                            <div style={{ fontSize: '13px', marginTop: '4px' }}>
-                                You must complete KYC verification to deposit liquidity and claim yields. Current Status: <strong>{kycProfile?.status || 'NOT_STARTED'}</strong>
-                            </div>
-                        </div>
-                        <Link href="/kyc" style={{
-                            background: '#ea580c', color: 'white', padding: '8px 16px', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600
-                        }}>
-                            Verify Identity →
-                        </Link>
-                    </div>
+                {address && (
+                    <>
+                        <KycStatusBanner
+                            status={kycProfile?.status}
+                            rejectionReason={kycProfile?.rejectionReason}
+                            onStartVerification={() => setShowKycModal(true)}
+                        />
+                        <KycSubmissionModal
+                            isOpen={showKycModal}
+                            onClose={() => setShowKycModal(false)}
+                            onSuccess={refreshKyc}
+                            subjectType="LP"
+                        />
+                    </>
                 )}
 
                 {/* Message Display */}

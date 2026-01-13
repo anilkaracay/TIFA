@@ -14,9 +14,26 @@ export class KycService {
         let profile = await prisma.kycProfile.findFirst({ where });
 
         if (!profile) {
-            // Return a stub if strictly needed or just null. 
-            // Better to return structure matching UI expectations.
-            return null;
+            // Return a stub for UI consistency
+            return {
+                id: 'stub_' + subjectId,
+                subjectType,
+                status: 'NOT_STARTED',
+                companyId: subjectType === 'ISSUER' ? subjectId : null,
+                wallet: subjectType === 'LP' ? subjectId : null,
+                // Empty fields
+                legalName: null,
+                registrationNumber: null,
+                country: null,
+                contactName: null,
+                contactEmail: null,
+                submittedAt: null,
+                reviewedAt: null,
+                reviewerId: null,
+                rejectionReason: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as any; // Cast as partial mock
         }
         return profile;
     }
@@ -31,9 +48,15 @@ export class KycService {
 
         const existing = await prisma.kycProfile.findFirst({ where });
 
+        // Auto-Approver Logic (Mock)
+        // If country includes "Sanctioned", reject. Else approve immediately for demo flow.
+        const isSanctioned = data.country && ['North Korea', 'Iran', 'Syria', 'Cuba', 'Russia'].some(c => data.country.includes(c));
+        const autoStatus = isSanctioned ? 'REJECTED' : 'APPROVED';
+        const rejectionReason = isSanctioned ? 'Sanctioned Country Policy' : undefined;
+
         const payload = {
             subjectType,
-            status: 'PENDING',
+            status: autoStatus, // AUTO VERDICT
             legalName: data.legalName,
             registrationNumber: data.registrationNumber,
             country: data.country,
@@ -41,6 +64,9 @@ export class KycService {
             contactEmail: data.contactEmail,
             metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
             submittedAt: new Date(),
+            reviewedAt: new Date(), // Auto-reviewed
+            reviewerId: 'SYSTEM_AUTO_VERIFIER',
+            rejectionReason,
             // Link fields
             companyId: subjectType === 'ISSUER' ? subjectId : undefined,
             wallet: subjectType === 'LP' ? subjectId : undefined,
@@ -61,11 +87,11 @@ export class KycService {
         // Audit Log
         await prisma.complianceAuditLog.create({
             data: {
-                action: 'KYC_SUBMITTED',
-                actorType: 'USER',
-                actorId: subjectId,
+                action: isSanctioned ? 'KYC_REJECTED' : 'KYC_APPROVED',
+                actorType: 'SYSTEM',
+                actorId: 'AUTO_VERIFIER',
                 targetId: profile.id,
-                metadata: JSON.stringify({ status: 'PENDING' })
+                metadata: JSON.stringify({ reason: 'Auto-Verdict applied', inputs: { country: data.country } })
             }
         });
 
