@@ -1054,15 +1054,19 @@ export default function LPDashboardPage() {
                                                 min="0"
                                                 value={mintAmount}
                                                 onChange={(e) => setMintAmount(e.target.value)}
-                                                style={{ ...styles.formInput, flex: 1 }}
+                                                style={{ ...styles.formInput, flex: 2, padding: "12px 16px", height: "48px" }}
                                                 placeholder="0.00"
                                                 disabled={loading || !address}
                                             />
                                             <button
                                                 style={{
                                                     ...styles.buttonSecondary,
-                                                    padding: "10px 20px",
+                                                    padding: "0 16px",
+                                                    height: "48px",
+                                                    fontSize: "13px",
+                                                    width: "auto",
                                                     whiteSpace: "nowrap",
+                                                    flex: 0,
                                                     ...((loading && loadingType !== "mint") || !address || !mintAmount || parseFloat(mintAmount) <= 0 ? styles.buttonDisabled : {}),
                                                 }}
                                                 onClick={handleMintTestToken}

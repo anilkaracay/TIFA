@@ -833,6 +833,38 @@ export default function AgentConsolePage() {
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [riskThreshold, setRiskThreshold] = useState(50);
     const [showAllTraces, setShowAllTraces] = useState(false);
+
+    // Format Agent Messages Helper
+    const formatAgentMessage = (message: string) => {
+        if (!message) return "";
+
+        // User Rejection
+        if (message.includes("User rejected") || message.includes("Action rejected")) {
+            return "Transaction rejected by user";
+        }
+
+        // Gas / Revert
+        if (message.includes("cannot estimate gas") || message.includes("UNPREDICTABLE_GAS_LIMIT")) {
+            return "Gas estimation failed (Transaction likely to revert)";
+        }
+        if (message.includes("execution reverted")) {
+            // Try to extract reason if possible
+            const match = message.match(/reason="([^"]+)"/);
+            return match ? `Transaction reverted: ${match[1]}` : "Transaction reverted on-chain";
+        }
+
+        // Token errors
+        if (message.includes("transfer amount exceeds balance")) {
+            return "Insufficient token balance";
+        }
+
+        // Long technical errors (truncate)
+        if (message.length > 150 && (message.includes("{") || message.includes("0x"))) {
+            return message.substring(0, 147) + "...";
+        }
+
+        return message;
+    };
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     // WebSocket integration for real-time updates
@@ -1340,7 +1372,7 @@ export default function AgentConsolePage() {
                                                 <div style={styles.signalMessage}>
                                                     <span style={{ fontWeight: 500, color: "#1a1a1a" }}>
                                                         {signal.sourceAgent.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase())}:
-                                                    </span> {signal.message}
+                                                    </span> {formatAgentMessage(signal.message)}
                                                 </div>
                                                 <span style={{ ...styles.severityBadge, ...severityStyle }}>
                                                     {signal.severity}
@@ -1498,7 +1530,7 @@ export default function AgentConsolePage() {
                                                                     )}
                                                                     {step.content.reason && (
                                                                         <div style={{ marginTop: "4px", fontSize: "11px", color: "#6b7280" }}>
-                                                                            {step.content.reason}
+                                                                            {formatAgentMessage(step.content.reason)}
                                                                         </div>
                                                                     )}
                                                                 </div>
