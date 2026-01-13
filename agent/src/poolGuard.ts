@@ -22,13 +22,13 @@ export interface PoolState {
 export async function getPoolState(): Promise<PoolState> {
     try {
         const Pool = loadContract("FinancingPool");
-        
+
         const totalLiquidity = await Pool.totalLiquidity();
         const totalBorrowed = await Pool.totalBorrowed();
         const availableLiquidity = await Pool.availableLiquidity();
         const utilization = await Pool.utilization();
         const maxUtilization = await Pool.maxUtilizationBps();
-        
+
         // Check if pool is paused
         let paused = false;
         try {
@@ -37,7 +37,7 @@ export async function getPoolState(): Promise<PoolState> {
             // If paused() doesn't exist in ABI, assume not paused
             console.warn("[PoolGuard] paused() not available in ABI");
         }
-        
+
         // Get NAV and safety limits
         let nav = 0n;
         let maxSingleLoan = 0n;
@@ -51,7 +51,7 @@ export async function getPoolState(): Promise<PoolState> {
         } catch (e) {
             console.warn("[PoolGuard] Safety limits not available:", e);
         }
-        
+
         return {
             totalLiquidity: BigInt(totalLiquidity.toString()),
             totalBorrowed: BigInt(totalBorrowed.toString()),
@@ -68,7 +68,7 @@ export async function getPoolState(): Promise<PoolState> {
         console.error("[PoolGuard] Failed to fetch pool state:", e.message);
         // Return safe defaults if contract call fails
         // Don't assume paused on network errors - let agent continue but log warning
-        const isNetworkError = e.message?.includes("network") || e.message?.includes("NETWORK_ERROR");
+        // const isNetworkError = e.message?.includes("network") || e.message?.includes("NETWORK_ERROR");
         return {
             totalLiquidity: 0n,
             totalBorrowed: 0n,
@@ -95,7 +95,7 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
     poolState?: PoolState;
 }> {
     const poolState = await getPoolState();
-    
+
     // SAFETY CHECK 0: Pool paused
     if (poolState.paused) {
         return {
@@ -104,7 +104,7 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             poolState,
         };
     }
-    
+
     // Check 1: Available liquidity
     if (poolState.availableLiquidity < requestedAmount) {
         return {
@@ -113,7 +113,7 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             poolState,
         };
     }
-    
+
     // Check 2: Utilization threshold (75%)
     if (poolState.utilization >= UTILIZATION_THRESHOLD_BPS) {
         return {
@@ -122,13 +122,13 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             poolState,
         };
     }
-    
+
     // Check 3: Would exceed max utilization after this loan?
     const newBorrowed = poolState.totalBorrowed + requestedAmount;
     const newUtilization = poolState.totalLiquidity > 0n
         ? (Number(newBorrowed) * 10000) / Number(poolState.totalLiquidity)
         : 0;
-    
+
     if (newUtilization >= poolState.maxUtilization) {
         return {
             canFinance: false,
@@ -136,7 +136,7 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             poolState,
         };
     }
-    
+
     // Check 4: Max single loan size
     if (poolState.maxSingleLoan > 0n && requestedAmount > poolState.maxSingleLoan) {
         return {
@@ -145,14 +145,14 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             poolState,
         };
     }
-    
+
     // Check 5: Issuer exposure limit (if issuer address provided)
     if (issuerAddress && poolState.maxIssuerExposure > 0n) {
         try {
             const Pool = loadContract("FinancingPool");
             const currentExposure = BigInt((await Pool.totalIssuerOutstanding(issuerAddress)).toString());
             const newExposure = currentExposure + requestedAmount;
-            
+
             if (newExposure > poolState.maxIssuerExposure) {
                 return {
                     canFinance: false,
@@ -164,7 +164,7 @@ export async function canFinance(requestedAmount: bigint, issuerAddress?: string
             console.warn("[PoolGuard] Could not check issuer exposure:", e);
         }
     }
-    
+
     return {
         canFinance: true,
         poolState,

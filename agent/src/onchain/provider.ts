@@ -19,8 +19,11 @@ if (!env.PRIVATE_KEY) {
 }
 
 // Helper to load contract instances
-export function loadContract(name: keyof typeof deployments) {
-    // @ts-ignore
-    const { address, abi } = deployments[name];
-    return new ethers.Contract(address, abi, signer);
+// Helper to load contract instances
+export function loadContract(name: keyof typeof deployments.baseSepolia) {
+    const deployment = deployments.baseSepolia[name];
+    if (!deployment) {
+        throw new Error(`Contract ${name} not found in deployments`);
+    }
+    return new ethers.Contract(deployment.address, deployment.abi, signer);
 }
