@@ -1425,7 +1425,7 @@ export default function AgentConsolePage() {
                                                                 <div>
                                                                     {Array.isArray(step.content) ? (
                                                                         step.content.map((s: any, i: number) => (
-                                                                            <div key={i} style={{ marginBottom: "4px", fontSize: "12px" }}>
+                                                                            <div key={i} style={{ marginBottom: "4px", fontSize: "12px", wordBreak: "break-word", overflowWrap: "anywhere", lineHeight: "1.5" }}>
                                                                                 <span style={{ fontWeight: 500 }}>{s.source}:</span> {s.message}
                                                                                 <span style={{ marginLeft: "8px", fontSize: "10px", color: s.severity === "High" ? "#dc2626" : s.severity === "Medium" ? "#f59e0b" : "#6b7280" }}>
                                                                                     [{s.severity}]
