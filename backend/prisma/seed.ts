@@ -71,7 +71,7 @@ async function main() {
             dueDate = getRandomDate(now, futureDate); // Usually in future
         }
 
-        const isFinanced = (status === 'FINANCED' || RP status === 'PARTIALLY_PAID' || status === 'DEFAULTED');
+        const isFinanced = (status === 'FINANCED' || status === 'PARTIALLY_PAID' || status === 'DEFAULTED');
         const invoiceIdOnChain = isFinanced || status === 'TOKENIZED' ? `0x${Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('')}` : null;
 
         await prisma.invoice.create({
