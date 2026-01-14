@@ -108,7 +108,7 @@ export async function fetchInvoicesForCompany(companyId: string): Promise<Invoic
     if (companyId && companyId !== 'all') {
         url.searchParams.set("companyId", companyId);
     }
-    const res = await fetch(url.toString(), { cache: "no-store" });
+    const res = await fetch(url.toString(), { next: { revalidate: 3 } });
     if (!res.ok) throw new Error("Failed to fetch invoices");
     return res.json();
 }
@@ -193,7 +193,7 @@ export async function fetchInvoices(params?: { status?: string; companyId?: stri
     if (params?.companyId) url.searchParams.set("companyId", params.companyId);
 
     try {
-        const res = await fetch(url.toString(), { cache: "no-store" });
+        const res = await fetch(url.toString(), { next: { revalidate: 3 } });
         if (!res.ok) throw new Error(`Failed to fetch invoices: ${res.statusText}`);
         const data = await res.json();
         return data as Invoice[];
@@ -370,7 +370,7 @@ export interface IssuerExposure {
 
 export async function fetchPoolLimits(): Promise<PoolLimits> {
     const res = await fetch(`${BACKEND_URL}/pool/limits`, {
-        cache: "no-store"
+        next: { revalidate: 3 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -619,7 +619,7 @@ export interface LPPosition {
 
 export async function fetchPoolOverview(): Promise<PoolOverview> {
     const res = await fetch(`${BACKEND_URL}/pool/overview`, {
-        cache: "no-store"
+        next: { revalidate: 3 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));

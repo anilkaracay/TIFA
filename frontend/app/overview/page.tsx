@@ -313,21 +313,21 @@ export default function OverviewPage() {
     const { data: invoices, isLoading: invoicesLoading, mutate: mutateInvoices } = useSWR<Invoice[]>(
         ["all-invoices", chainId],
         () => fetchInvoices(),
-        { refreshInterval: 0 } // Disabled polling, WebSocket will handle updates
+        { refreshInterval: 0, keepPreviousData: true } // Disabled polling, WebSocket will handle updates
     );
 
     // Fetch pool overview
     const { data: poolOverview, isLoading: poolLoading, mutate: mutatePoolOverview } = useSWR<PoolOverview>(
         ["pool-overview", chainId],
         () => fetchPoolOverview(),
-        { refreshInterval: 0 }
+        { refreshInterval: 0, keepPreviousData: true }
     );
 
     // Fetch pool limits
     const { data: poolLimits, isLoading: limitsLoading } = useSWR<PoolLimits>(
         ["pool-limits", chainId],
         () => fetchPoolLimits(),
-        { refreshInterval: 0 }
+        { refreshInterval: 0, keepPreviousData: true }
     );
 
     // Subscribe to WebSocket events

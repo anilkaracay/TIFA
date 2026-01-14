@@ -511,6 +511,7 @@ export default function InvoicesPage() {
         () => fetchInvoices(),
         {
             refreshInterval: 10000, // Reduced polling, WebSocket will handle updates
+            keepPreviousData: true,
             onError: (error) => {
                 console.error('[Invoices] Failed to fetch invoices:', error);
             },
@@ -526,6 +527,7 @@ export default function InvoicesPage() {
         () => fetchCompanies(),
         {
             refreshInterval: 30000, // Refresh every 30 seconds
+            keepPreviousData: true,
             onError: (error) => {
                 console.error('[Invoices] Failed to fetch companies:', error);
             },
@@ -573,12 +575,14 @@ export default function InvoicesPage() {
     const { data: poolLimits } = useSWR<PoolLimits>(
         "pool-limits",
         () => fetchPoolLimits(),
+        { keepPreviousData: true }
     );
 
     // Fetch pool overview
     const { data: poolOverview, mutate: mutatePoolOverview } = useSWR<PoolOverview>(
         "pool-overview",
         () => fetchPoolOverview(),
+        { keepPreviousData: true }
     );
 
     // Subscribe to WebSocket events
