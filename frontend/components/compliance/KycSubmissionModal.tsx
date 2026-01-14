@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { submitKycProfile } from '@/lib/backendClient';
-import { useToast } from '@/components/Toast';
+import { submitKycProfile } from '../../lib/backendClient';
+import { useToast } from '../Toast';
 
 interface KycSubmissionModalProps {
     isOpen: boolean;

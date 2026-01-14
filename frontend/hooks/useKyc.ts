@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { fetchKycProfile, KycProfile } from '@/lib/backendClient';
+import { fetchKycProfile } from '../lib/backendClient';
 import { useAccount } from 'wagmi';
 
 export function useKyc(subjectType: 'LP' | 'ISSUER' = 'LP') {

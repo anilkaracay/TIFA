@@ -932,11 +932,8 @@ export default function OverviewPage() {
                         </tbody>
                     </table>
                 </div>
-            </>
-            )
-}
-        </div >
-        </div >
+            </div>
+        </div>
     );
 }
 

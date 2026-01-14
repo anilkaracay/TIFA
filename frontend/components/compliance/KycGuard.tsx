@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useKyc } from '@/hooks/useKyc';
+import { useKyc } from '../../hooks/useKyc';
 import { KycStatusBanner } from './KycStatusBanner';
 import { KycSubmissionModal } from './KycSubmissionModal';
 
