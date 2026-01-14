@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
+
 
 export interface X402PaymentRequest {
   x402: true;
@@ -49,6 +49,7 @@ export interface X402PaymentConfirmResponse {
  * Returns 200 if x402 is disabled or invoice already paid
  */
 export async function requestX402Payment(invoiceId: string): Promise<X402PaymentRequest | { message: string; invoice?: any }> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
   const response = await fetch(`${BACKEND_URL}/invoices/${invoiceId}/pay`, {
     method: 'POST',
     headers: {},
@@ -74,6 +75,7 @@ export async function confirmX402Payment(
   invoiceId: string,
   request: X402PaymentConfirmRequest
 ): Promise<X402PaymentConfirmResponse> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
   const response = await fetch(`${BACKEND_URL}/invoices/${invoiceId}/pay/confirm`, {
     method: 'POST',
     headers: {
@@ -129,6 +131,7 @@ export interface X402Stats {
  * Fetch active x402 payment sessions
  */
 export async function fetchX402Sessions(): Promise<X402Session[]> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
   const response = await fetch(`${BACKEND_URL}/x402/sessions`, {
     cache: 'no-store',
   });
@@ -144,6 +147,7 @@ export async function fetchX402Sessions(): Promise<X402Session[]> {
  * Fetch x402 payment history
  */
 export async function fetchX402History(limit?: number): Promise<X402PaymentHistoryItem[]> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
   const url = new URL(`${BACKEND_URL}/x402/history`);
   if (limit) {
     url.searchParams.set('limit', limit.toString());
@@ -164,6 +168,7 @@ export async function fetchX402History(limit?: number): Promise<X402PaymentHisto
  * Fetch x402 statistics
  */
 export async function fetchX402Stats(): Promise<X402Stats> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
   const response = await fetch(`${BACKEND_URL}/x402/stats`, {
     cache: 'no-store',
   });

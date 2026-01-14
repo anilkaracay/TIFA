@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
 
 export type AgentDecision = {
     id: string;
@@ -15,6 +15,7 @@ export type AgentDecision = {
 };
 
 export async function fetchAgentDecisions(limit = 50): Promise<AgentDecision[]> {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
     const url = new URL("/agent/decisions", BACKEND_URL);
     url.searchParams.set("limit", String(limit));
 

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-const WS_URL = BACKEND_URL.replace(/^http/, 'ws') + '/ws';
+const getBackendUrl = () => process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export interface WebSocketEvent {
     type: string;
@@ -31,6 +30,8 @@ class WebSocketManager {
         this.isConnecting = true;
 
         try {
+            const BACKEND_URL = getBackendUrl();
+            const WS_URL = BACKEND_URL.replace(/^http/, 'ws') + '/ws';
             const url = `${WS_URL}?room=${encodeURIComponent(room)}`;
             this.ws = new WebSocket(url);
 

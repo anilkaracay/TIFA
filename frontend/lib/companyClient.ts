@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const getBackendUrl = () => process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export type Company = {
     id: string;
@@ -10,6 +10,7 @@ export type Company = {
 
 export async function fetchCompanies(): Promise<Company[]> {
     try {
+        const BACKEND_URL = getBackendUrl();
         const res = await fetch(`${BACKEND_URL}/companies`, { cache: "no-store" });
         if (!res.ok) {
             const errorText = await res.text();
@@ -44,6 +45,7 @@ export type CashflowResponse = {
 };
 
 export async function fetchCashflow(companyId: string): Promise<CashflowResponse> {
+    const BACKEND_URL = getBackendUrl();
     const res = await fetch(`${BACKEND_URL}/companies/${companyId}/cashflow`, {
         cache: "no-store",
     });

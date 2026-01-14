@@ -1,10 +1,12 @@
-const rawUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-// Extract URL using regex to handle malformed env vars (newlines, literal \n, etc.)
-const match = rawUrl.match(/^(https?:\/\/[^\s\\]+)/);
-const BACKEND_URL = match ? match[1] : "http://localhost:4000";
+function getBackendUrl() {
+  const rawUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  const match = rawUrl.match(/^(https?:\/\/[^\s\\]+)/);
+  return match ? match[1] : "http://localhost:4000";
+}
 
 export async function fetchAnalytics() {
   try {
+    const BACKEND_URL = getBackendUrl();
     console.log("Fetching analytics from:", `${BACKEND_URL}/analytics`);
     const res = await fetch(`${BACKEND_URL}/analytics`);
     if (!res.ok) throw new Error(`Status: ${res.status}`);
