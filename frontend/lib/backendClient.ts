@@ -1,7 +1,7 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
-
 import { getChainId } from '@wagmi/core';
 import { config } from './wagmi';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:4000";
 
 function getAuthHeaders(walletAddress?: string): Record<string, string> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
