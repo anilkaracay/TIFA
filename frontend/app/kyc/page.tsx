@@ -189,7 +189,7 @@ export default function KycPage() {
 
     const { data: profile, mutate } = useSWR<KycProfile | null>(
         address ? "kyc-profile" : null,
-        () => fetchKycProfile('LP')
+        () => fetchKycProfile('LP', address)
     );
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -199,7 +199,7 @@ export default function KycPage() {
             await submitKycProfile({
                 subjectType: 'LP',
                 ...formData
-            });
+            }, address);
             showToast('success', "Verification submitted successfully");
             mutate();
         } catch (err: any) {

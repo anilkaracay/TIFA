@@ -841,7 +841,7 @@ export default function InvoiceDetailPage() {
     const [showFinanceModal, setShowFinanceModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
         amount: "",
-        currency: "TRY",
+        currency: "MNT",
         paidAt: new Date().toISOString().split("T")[0],
         psp: "",
         transactionId: "",
@@ -997,7 +997,7 @@ export default function InvoiceDetailPage() {
             setShowPaymentModal(false);
             setPaymentForm({
                 amount: "",
-                currency: "TRY",
+                currency: "MNT",
                 paidAt: new Date().toISOString().split("T")[0],
                 psp: "",
                 transactionId: "",
@@ -1050,12 +1050,12 @@ export default function InvoiceDetailPage() {
 
         // Validate amount
         if (amountToDraw > availableCredit) {
-            showToast('error', `Amount exceeds available credit. Max: ${formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}`);
+            showToast('error', `Amount exceeds available credit. Max: ${formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "MNT")}`);
             return;
         }
 
         if (amountToDraw > poolAvailableLiquidity) {
-            showToast('error', `Amount exceeds pool liquidity. Max: ${formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}`);
+            showToast('error', `Amount exceeds pool liquidity. Max: ${formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "MNT")}`);
             return;
         }
 
@@ -1153,7 +1153,7 @@ export default function InvoiceDetailPage() {
 
                 // Validate amountToDraw against current position
                 if (amountToDraw > availableCreditAfterLock) {
-                    showToast('error', `Amount exceeds available credit line. Max: ${formatAmount((Number(availableCreditAfterLock) / 100).toString(), inv.currency || "TRY")}`);
+                    showToast('error', `Amount exceeds available credit line. Max: ${formatAmount((Number(availableCreditAfterLock) / 100).toString(), inv.currency || "MNT")}`);
                     setLoading(false);
                     return;
                 }
@@ -1166,7 +1166,7 @@ export default function InvoiceDetailPage() {
                 }) as bigint;
 
                 if (amountToDraw > currentPoolLiquidity) {
-                    showToast('error', `Amount exceeds pool liquidity. Available: ${formatAmount((Number(currentPoolLiquidity) / 100).toString(), inv.currency || "TRY")}`);
+                    showToast('error', `Amount exceeds pool liquidity. Available: ${formatAmount((Number(currentPoolLiquidity) / 100).toString(), inv.currency || "MNT")}`);
                     setLoading(false);
                     return;
                 }
@@ -1206,7 +1206,7 @@ export default function InvoiceDetailPage() {
 
                     // Check if backend successfully processed the notification
                     if (backendResponse && (backendResponse.approved || backendResponse.invoiceId)) {
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "MNT")}`);
                         setFinanceAmount("");
                         setSelectedFinancePercentage(null);
                         await mutateInvoice();
@@ -1214,7 +1214,7 @@ export default function InvoiceDetailPage() {
                     } else {
                         // Backend returned unexpected response, but transaction was successful
                         console.warn('[Finance] Backend returned unexpected response:', backendResponse);
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "MNT")}`);
                         setFinanceAmount("");
                         setSelectedFinancePercentage(null);
                         // Still refresh to get latest state
@@ -1227,7 +1227,7 @@ export default function InvoiceDetailPage() {
                     // Check if error is "Already financed" - this means backend already has the state
                     if (backendError.message && backendError.message.includes('Already financed')) {
                         console.log('[Finance] Invoice already financed in backend, refreshing state...');
-                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "TRY")}`);
+                        showToast('success', `Credit drawn successfully! Amount: ${formatAmount(financeAmount, inv.currency || "MNT")}`);
                         setFinanceAmount("");
                         setSelectedFinancePercentage(null);
                         await mutateInvoice();
@@ -1235,7 +1235,7 @@ export default function InvoiceDetailPage() {
                     } else {
                         // Real error - show warning but don't block user
                         console.warn('[Finance] Backend sync may have failed, but on-chain transaction was successful');
-                        showToast('warning', `Credit drawn on-chain (${formatAmount(financeAmount, inv.currency || "TRY")}). Backend sync may be delayed.`);
+                        showToast('warning', `Credit drawn on-chain (${formatAmount(financeAmount, inv.currency || "MNT")}). Backend sync may be delayed.`);
                         setFinanceAmount("");
                         setSelectedFinancePercentage(null);
                         // Still refresh to get latest state
@@ -1448,7 +1448,7 @@ export default function InvoiceDetailPage() {
                 // Don't show error to user, on-chain transaction succeeded
             }
 
-            showToast('success', `Repayment successful! Amount: ${formatAmount(repayAmount, inv.currency || "TRY")}`);
+            showToast('success', `Repayment successful! Amount: ${formatAmount(repayAmount, inv.currency || "MNT")}`);
             setRepayAmount("");
             setSelectedPercentage(null);
 
@@ -1701,7 +1701,7 @@ export default function InvoiceDetailPage() {
         repayments.forEach((repayment) => {
             trail.push({
                 event: "Credit Repayment",
-                description: `Credit repayment of ${formatAmount(repayment.amount, inv.currency || "TRY")} processed on-chain.`,
+                description: `Credit repayment of ${formatAmount(repayment.amount, inv.currency || "MNT")} processed on-chain.`,
                 timestamp: repayment.timestamp,
                 order: 6,
                 link: `https://sepolia.basescan.org/tx/${repayment.txHash}`,
@@ -1889,7 +1889,7 @@ export default function InvoiceDetailPage() {
                         <div style={styles.summaryCard}>
                             <div style={styles.summaryCardLabel}>Face Value</div>
                             <div style={styles.summaryCardValue}>
-                                {formatAmount(inv.amount, inv.currency || "TRY")}
+                                {formatAmount(inv.amount, inv.currency || "MNT")}
                             </div>
                         </div>
                         <div style={styles.summaryCard}>
@@ -1920,20 +1920,20 @@ export default function InvoiceDetailPage() {
                                     <div style={styles.financialLabel}>Principal Outstanding</div>
                                     <div style={styles.financialValue}>
                                         {inv.isFinanced && creditLineInfo && creditLineInfo.usedCredit > 0
-                                            ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                            ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "MNT")
                                             : inv.isFinanced && inv.usedCredit
                                                 ? (() => {
                                                     // Safely convert BigInt or number to number, then divide by 100
                                                     const usedCreditNum = typeof inv.usedCredit === 'bigint'
                                                         ? Number(inv.usedCredit)
                                                         : Number(inv.usedCredit || 0);
-                                                    return formatAmount(usedCreditNum / 100, inv.currency || "TRY");
+                                                    return formatAmount(usedCreditNum / 100, inv.currency || "MNT");
                                                 })()
-                                                : formatAmount(inv.amount, inv.currency || "TRY")}
+                                                : formatAmount(inv.amount, inv.currency || "MNT")}
                                     </div>
                                     {inv.payments && inv.payments.length > 0 && (
                                         <div style={styles.financialNote}>
-                                            ↓ {formatAmount(inv.payments[inv.payments.length - 1].amount, inv.currency || "TRY")} paid recently
+                                            ↓ {formatAmount(inv.payments[inv.payments.length - 1].amount, inv.currency || "MNT")} paid recently
                                         </div>
                                     )}
                                 </div>
@@ -1942,7 +1942,7 @@ export default function InvoiceDetailPage() {
                                         <div style={styles.financialLabel}>Accrued Interest</div>
                                         <div style={{ ...styles.financialValue, color: "#f97316" }}>
                                             {creditLineInfo.interestAccrued > 0
-                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "MNT")
                                                 : "—"}
                                         </div>
                                         {creditLineInfo.interestAccrued > 0 && (
@@ -1958,9 +1958,9 @@ export default function InvoiceDetailPage() {
                                         <div style={{ ...styles.progressFill, width: `${repaymentProgress.percentage}%` }}></div>
                                     </div>
                                     <div style={styles.progressText}>
-                                        {formatAmount(repaymentProgress.paid, inv.currency || "TRY")} Repaid
+                                        {formatAmount(repaymentProgress.paid, inv.currency || "MNT")} Repaid
                                         {" / "}
-                                        {formatAmount(repaymentProgress.total, inv.currency || "TRY")} Total
+                                        {formatAmount(repaymentProgress.total, inv.currency || "MNT")} Total
                                     </div>
                                 </div>
                             </div>
@@ -1998,7 +1998,7 @@ export default function InvoiceDetailPage() {
                                         <div style={styles.healthFactor}>
                                             <div style={styles.healthFactorLabel}>Current Valuation</div>
                                             <div style={styles.healthFactorValue}>
-                                                {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
+                                                {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "MNT")}
                                             </div>
                                             <div style={styles.healthFactorLabel}>Health Factor</div>
                                             <div style={styles.healthFactorValue}>
@@ -2033,19 +2033,19 @@ export default function InvoiceDetailPage() {
                                     <div style={styles.creditLineItem}>
                                         <div style={styles.creditLineLabel}>Max Credit Line</div>
                                         <div style={styles.creditLineValue}>
-                                            {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "TRY")}
+                                            {formatAmount(Number(creditLineInfo.maxCreditLine), inv.currency || "MNT")}
                                         </div>
                                     </div>
                                     <div style={styles.creditLineItem}>
                                         <div style={styles.creditLineLabel}>Used Credit</div>
                                         <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
-                                            {formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")}
+                                            {formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "MNT")}
                                         </div>
                                     </div>
                                     <div style={styles.creditLineItem}>
                                         <div style={styles.creditLineLabel}>Available Credit</div>
                                         <div style={{ ...styles.creditLineValue, color: "#16a34a" }}>
-                                            {formatAmount(Math.max(0, Number(creditLineInfo.availableCredit)), inv.currency || "TRY")}
+                                            {formatAmount(Math.max(0, Number(creditLineInfo.availableCredit)), inv.currency || "MNT")}
                                         </div>
                                     </div>
                                     <div style={styles.creditLineItem}>
@@ -2059,14 +2059,14 @@ export default function InvoiceDetailPage() {
                                     <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
                                         <div style={styles.creditLineLabel}>Accrued Interest</div>
                                         <div style={{ ...styles.creditLineValue, color: "#f97316" }}>
-                                            {formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")}
+                                            {formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "MNT")}
                                         </div>
                                     </div>
                                 )}
                                 <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
                                     <div style={styles.creditLineLabel}>Total Debt</div>
                                     <div style={{ ...styles.creditLineValue, color: "#dc2626" }}>
-                                        {formatAmount(Number(creditLineInfo.totalDebt), inv.currency || "TRY")}
+                                        {formatAmount(Number(creditLineInfo.totalDebt), inv.currency || "MNT")}
                                     </div>
                                 </div>
                             </div>
@@ -2129,7 +2129,7 @@ export default function InvoiceDetailPage() {
                                         <div style={styles.fcsMetricLabel}>OUTSTANDING PRINCIPAL</div>
                                         <div style={styles.fcsMetricValue}>
                                             {creditLineInfo.usedCredit > 0
-                                                ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "TRY")
+                                                ? formatAmount(Number(creditLineInfo.usedCredit), inv.currency || "MNT")
                                                 : "—"}
                                         </div>
                                     </div>
@@ -2137,7 +2137,7 @@ export default function InvoiceDetailPage() {
                                         <div style={styles.fcsMetricLabel}>ACCRUED INTEREST</div>
                                         <div style={{ ...styles.fcsMetricValue, color: "#f97316" }}>
                                             {creditLineInfo.interestAccrued > 0
-                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "TRY")
+                                                ? formatAmount(Number(creditLineInfo.interestAccrued), inv.currency || "MNT")
                                                 : "—"}
                                         </div>
                                     </div>
@@ -2305,7 +2305,7 @@ export default function InvoiceDetailPage() {
                                     onChange={(value) => setPaymentForm({ ...paymentForm, currency: value })}
                                     placeholder="Select currency..."
                                     options={[
-                                        { value: "TRY", label: "TRY" },
+                                        { value: "MNT", label: "MNT" },
                                         { value: "USD", label: "USD" },
                                         { value: "EUR", label: "EUR" },
                                     ]}
@@ -2369,7 +2369,7 @@ export default function InvoiceDetailPage() {
                                 You are required to pay the recourse obligation for this invoice.
                                 {recourseObligation && (
                                     <div style={{ marginTop: "8px", fontWeight: 600 }}>
-                                        Total Obligation: {formatAmount(recourseObligation, inv.currency || "TRY")}
+                                        Total Obligation: {formatAmount(recourseObligation, inv.currency || "MNT")}
                                     </div>
                                 )}
                             </div>
@@ -2412,7 +2412,7 @@ export default function InvoiceDetailPage() {
                                 This action will mark the invoice as defaulted. This cannot be undone.
                                 {creditLineInfo && (
                                     <div style={{ marginTop: "8px" }}>
-                                        Total Debt: {formatAmount(creditLineInfo.totalDebt, inv.currency || "TRY")}
+                                        Total Debt: {formatAmount(creditLineInfo.totalDebt, inv.currency || "MNT")}
                                     </div>
                                 )}
                             </div>
@@ -2459,12 +2459,12 @@ export default function InvoiceDetailPage() {
                                 <div style={{ marginBottom: "12px" }}>
                                     <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Available Credit</div>
                                     <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                        {formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "TRY")}
+                                        {formatAmount((Number(availableCredit) / 100).toString(), inv.currency || "MNT")}
                                     </div>
                                 </div>
                                 {poolAvailableLiquidity > 0n && (
                                     <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
-                                        Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "TRY")}
+                                        Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), inv.currency || "MNT")}
                                     </div>
                                 )}
                             </div>
@@ -2526,7 +2526,7 @@ export default function InvoiceDetailPage() {
                                 />
                                 {financeAmount && parseFloat(financeAmount) > 0 && (
                                     <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                        Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), inv.currency || "TRY")}
+                                        Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), inv.currency || "MNT")}
                                     </div>
                                 )}
                             </div>
@@ -2572,7 +2572,7 @@ export default function InvoiceDetailPage() {
                                 <div style={{ marginBottom: "12px" }}>
                                     <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Outstanding Debt</div>
                                     <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                        {formatAmount((Number(currentDebt) / 100).toString(), inv.currency || "TRY")}
+                                        {formatAmount((Number(currentDebt) / 100).toString(), inv.currency || "MNT")}
                                     </div>
                                 </div>
                             </div>
@@ -2634,7 +2634,7 @@ export default function InvoiceDetailPage() {
                                 />
                                 {repayAmount && parseFloat(repayAmount) > 0 && (
                                     <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                        Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), inv.currency || "TRY")}
+                                        Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), inv.currency || "MNT")}
                                     </div>
                                 )}
                             </div>

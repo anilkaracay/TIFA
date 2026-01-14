@@ -60,7 +60,7 @@ export function RiskExposurePanel({ poolMetrics }: RiskExposurePanelProps) {
                 // TODO: Fetch all positions and aggregate
                 // For now, we'll use a simplified approach
                 // In production, this should come from subgraph or backend aggregation endpoint
-                // totalPrincipalOutstandingFormatted is in TRY (already formatted), convert to wei
+                // totalPrincipalOutstandingFormatted is in MNT (already formatted), convert to wei
                 const totalPrincipal = poolMetrics?.totalPrincipalOutstandingFormatted
                     ? BigInt(Math.floor(parseFloat(poolMetrics.totalPrincipalOutstandingFormatted) * 1e18))
                     : 0n;
@@ -100,7 +100,7 @@ export function RiskExposurePanel({ poolMetrics }: RiskExposurePanelProps) {
     const stressImpact = useMemo(() => {
         if (!exposureData || !reserveBalance || !poolMetrics) return null;
 
-        // NAV is already in formatted string (TRY), convert to wei for calculation
+        // NAV is already in formatted string (MNT), convert to wei for calculation
         const navWei = BigInt(Math.floor(parseFloat(poolMetrics.navFormatted || "0") * 1e18));
         if (navWei === 0n) return null;
 
@@ -192,7 +192,7 @@ export function RiskExposurePanel({ poolMetrics }: RiskExposurePanelProps) {
                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Reserve Balance</span>
                         <p style={{ margin: "4px 0 0 0", fontSize: "18px", fontWeight: 700, color: "#3b82f6" }}>
                             {reserveBalance !== null
-                                ? formatAmount((Number(reserveBalance) / 1e18).toFixed(2), "TRY")
+                                ? formatAmount((Number(reserveBalance) / 1e18).toFixed(2), "MNT")
                                 : "N/A"}
                         </p>
                     </div>

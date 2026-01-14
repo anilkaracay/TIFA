@@ -1,4 +1,4 @@
-export function formatAmount(amount: string | number | bigint, currency = "TRY") {
+export function formatAmount(amount: string | number | bigint, currency = "MNT") {
     try {
         // Safely convert BigInt, number, or string to number
         let num: number;
@@ -9,9 +9,9 @@ export function formatAmount(amount: string | number | bigint, currency = "TRY")
         } else {
             num = Number(amount);
         }
-        
+
         if (Number.isNaN(num)) return String(amount);
-        
+
         // Format with appropriate decimal places
         // For currency, use 2 decimals, but preserve significant digits
         const formatted = new Intl.NumberFormat("tr-TR", {
@@ -20,7 +20,7 @@ export function formatAmount(amount: string | number | bigint, currency = "TRY")
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(num);
-        
+
         return formatted;
     } catch {
         return String(amount);

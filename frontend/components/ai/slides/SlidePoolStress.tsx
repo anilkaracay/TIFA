@@ -37,7 +37,7 @@ export default function SlidePoolStress({ metrics }: SlidePoolStressProps) {
       value: metrics.defaultBuffer
         ? new Intl.NumberFormat('en-US', {
           style: 'currency',
-          currency: 'USD',
+          currency: 'MNT',
           notation: 'compact',
           maximumFractionDigits: 1
         }).format(metrics.defaultBuffer)

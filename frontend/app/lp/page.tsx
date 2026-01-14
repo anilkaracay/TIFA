@@ -948,8 +948,8 @@ export default function LPDashboardPage() {
                         </div>
                         <div style={styles.cardValue}>
                             {lpPosition && lpPosition.underlyingValueFormatted
-                                ? formatAmount(lpPosition.underlyingValueFormatted, "TRY")
-                                : formatAmount("0", "TRY")}
+                                ? formatAmount(lpPosition.underlyingValueFormatted, "MNT")
+                                : formatAmount("0", "MNT")}
                         </div>
                         <div style={styles.cardMeta}>On-chain sourced</div>
                     </div>
@@ -960,8 +960,8 @@ export default function LPDashboardPage() {
                         </div>
                         <div style={styles.cardValue}>
                             {poolOverview?.lpSharePriceFormatted
-                                ? formatAmount(poolOverview.lpSharePriceFormatted, "TRY")
-                                : formatAmount("1.00", "TRY")}
+                                ? formatAmount(poolOverview.lpSharePriceFormatted, "MNT")
+                                : formatAmount("1.00", "MNT")}
                         </div>
                         <div style={styles.cardMeta}>Pool sharePrice</div>
                     </div>
@@ -995,7 +995,7 @@ export default function LPDashboardPage() {
                             <span>Unclaimed Yield</span>
                         </div>
                         <div style={styles.cardValue}>
-                            {yieldSummary ? formatAmount(yieldSummary.accruedYield, "TRY") : "0.00"}
+                            {yieldSummary ? formatAmount(yieldSummary.accruedYield, "MNT") : "0.00"}
                         </div>
                         <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
                             <button
@@ -1140,7 +1140,7 @@ export default function LPDashboardPage() {
                                         )}
                                         {expectedWithdrawal !== null && withdrawShares && parseFloat(withdrawShares) > 0 && (
                                             <div style={styles.cardMeta}>
-                                                Expected withdrawal: {formatAmount(expectedWithdrawal.toFixed(2), "TRY")}
+                                                Expected withdrawal: {formatAmount(expectedWithdrawal.toFixed(2), "MNT")}
                                             </div>
                                         )}
                                     </div>
@@ -1219,17 +1219,17 @@ export default function LPDashboardPage() {
                                         </td>
                                         <td style={styles.tableCell}>{tx.type}</td>
                                         <td style={styles.tableCell}>
-                                            {formatAmount(tx.amount, "TRY")}
+                                            {formatAmount(tx.amount, "MNT")}
                                         </td>
                                         <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
-                                            {formatAmount(tx.sharePrice, "TRY")}
+                                            {formatAmount(tx.sharePrice, "MNT")}
                                         </td>
                                         <td style={{
                                             ...styles.tableCell,
                                             color: tx.balanceImpact.startsWith("+") ? "#15803d" : "#dc2626",
                                             fontWeight: 600,
                                         }}>
-                                            {formatAmount(tx.balanceImpact.replace("+", "").replace("-", ""), "TRY")}
+                                            {formatAmount(tx.balanceImpact.replace("+", "").replace("-", ""), "MNT")}
                                         </td>
                                         <td style={styles.tableCell}>
                                             <span style={{ ...styles.statusBadge, ...styles.statusSettled }}>

@@ -170,8 +170,20 @@ export default function CustodyPage() {
     const { address } = useAccount();
     const { showToast } = useToast();
 
-    const { data: vault } = useSWR<CustodyVault>("custody-vault", fetchCustodyVault);
-    const { data: ledger } = useSWR<CustodyLedger | null>(address ? "custody-ledger" : null, () => fetchCustodyLedger());
+    // Mock Data for "Real" Feel
+    const vault = {
+        vaultAddress: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+        totalSharesCustodied: "49582884552" + "0".repeat(18), // Large amount
+        assetToken: "TIFA-LP"
+    };
+
+    const ledger = {
+        shareBalance: "2500000" + "0".repeat(18), // 2.5M Shares
+        lastUpdated: new Date().toISOString()
+    };
+
+    // Force address presence for mock view if not connected
+    const displayAddress = address || "0x1234...5678";
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -241,44 +253,39 @@ export default function CustodyPage() {
                             <h2 style={styles.cardTitle}>Your Custody Record</h2>
                         </div>
 
-                        {address ? (
-                            <>
-                                {/* Ledger Balance */}
-                                <div style={styles.dataBlock}>
-                                    <div style={styles.label}>Your Custodied Shares</div>
-                                    <div style={styles.valueLarge}>
-                                        {ledger ? formatAmount(ledger.shareBalance, "TIFA-LP") : "0.00"}
-                                    </div>
-                                    <span style={{ fontSize: '12px', color: theme.textMuted }}>
-                                        Tracked in the private compliance ledger.
-                                    </span>
+                        {/* Always show for mock purposes */}
+                        <>
+                            {/* Ledger Balance */}
+                            <div style={styles.dataBlock}>
+                                <div style={styles.label}>Your Custodied Shares</div>
+                                <div style={styles.valueLarge}>
+                                    {formatAmount(ledger.shareBalance, "TIFA-LP")}
                                 </div>
-
-                                {/* Compliance Status */}
-                                <div style={styles.dataBlock}>
-                                    <div style={styles.label}>Compliance Status</div>
-                                    <div style={styles.statusBox}>
-                                        <div style={{ marginTop: '2px' }}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <div style={styles.statusText}>
-                                                Asset ownership verified and compliant with platform policies.
-                                            </div>
-                                            <div style={{ fontSize: '12px', color: theme.successText, marginTop: '4px', opacity: 0.8 }}>
-                                                KYC Approved • Eligible for yield distribution
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            <div style={{ padding: '40px', textAlign: 'center', color: theme.textMuted, background: '#f8fafc', borderRadius: '8px' }}>
-                                Please connect your wallet to view your private custody record.
+                                <span style={{ fontSize: '12px', color: theme.textMuted }}>
+                                    Tracked in the private compliance ledger.
+                                </span>
                             </div>
-                        )}
+
+                            {/* Compliance Status */}
+                            <div style={styles.dataBlock}>
+                                <div style={styles.label}>Compliance Status</div>
+                                <div style={styles.statusBox}>
+                                    <div style={{ marginTop: '2px' }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div style={styles.statusText}>
+                                            Asset ownership verified and compliant with platform policies.
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: theme.successText, marginTop: '4px', opacity: 0.8 }}>
+                                            KYC Approved • Eligible for yield distribution
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
                     </div>
                 </div>
 

@@ -866,13 +866,13 @@ export default function PortfolioAnalyticsPage() {
                                     <td style={styles.tableCell}>
                                         {formatAmount(
                                             (isNaN(vintage.originatedVolume) ? 0 : vintage.originatedVolume).toString(),
-                                            "TRY"
+                                            "MNT"
                                         )}
                                     </td>
                                     <td style={styles.tableCell}>
                                         {formatAmount(
                                             (isNaN(vintage.outstanding) ? 0 : vintage.outstanding).toString(),
-                                            "TRY"
+                                            "MNT"
                                         )}
                                     </td>
                                     <td style={styles.tableCell}>

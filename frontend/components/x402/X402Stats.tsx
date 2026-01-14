@@ -97,8 +97,8 @@ export default function X402Stats() {
         ...(typeof window !== "undefined" && window.innerWidth <= 640
             ? { gridTemplateColumns: "1fr" }
             : isMobile
-            ? { gridTemplateColumns: "repeat(2, 1fr)" }
-            : {}),
+                ? { gridTemplateColumns: "repeat(2, 1fr)" }
+                : {}),
     };
 
     return (
@@ -130,7 +130,7 @@ export default function X402Stats() {
             <div style={styles.statCard}>
                 <div style={styles.statLabel}>Total Volume</div>
                 <div style={styles.statValue}>
-                    {stats.totalVolume ? formatAmount(stats.totalVolume, "USDC") : "$0"}
+                    {stats.totalVolume ? formatAmount(stats.totalVolume, "MNT") : "$0"}
                 </div>
                 <div style={styles.statHelper}>All payments</div>
             </div>

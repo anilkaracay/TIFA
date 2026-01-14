@@ -7,7 +7,7 @@ export function useKyc(subjectType: 'LP' | 'ISSUER' = 'LP') {
 
     const { data: profile, error, mutate, isLoading } = useSWR(
         address ? `kyc-profile-${subjectType}-${address}` : null,
-        () => fetchKycProfile(subjectType),
+        () => fetchKycProfile(subjectType, address),
         {
             refreshInterval: 30000, // Refresh every 30s
             shouldRetryOnError: false

@@ -50,12 +50,13 @@ export async function registerComplianceRoutes(app: FastifyInstance) {
             contactName: z.string(),
             contactEmail: z.string().email(),
             registrationNumber: z.string().optional(),
-            metadata: z.record(z.any()).optional()
+            metadata: z.record(z.any()).optional(),
+            wallet: z.string().optional() // Allow wallet in body
         }).parse(req.body);
 
-        let subjectId = req.wallet;
+        let subjectId = req.wallet || body.wallet; // Fallback to body wallet
         if (body.subjectType === 'ISSUER') {
-            subjectId = body.companyId || req.wallet;
+            subjectId = body.companyId || req.wallet || body.wallet;
         }
 
         if (!subjectId) {

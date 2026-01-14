@@ -7,7 +7,7 @@ import { ScrollPreservation } from "../components/ScrollPreservation";
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'Trade Invoice Finance Agent',
+    title: 'Tokenized Invoice Finance Agent',
     description: 'AI-Native RWA Finance Platform',
 }
 

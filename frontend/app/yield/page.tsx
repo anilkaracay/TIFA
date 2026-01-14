@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import useSWR from "swr";
 import Navbar from "../../components/Navbar";
 import { fetchYieldSummary, claimYield, YieldSummary, fetchKycProfile } from "../../lib/backendClient";
-import { useAccount } from "wagmi";
+import { useAccount, useSendTransaction } from "wagmi";
 import { formatAmount } from "../../lib/format";
 import { useToast } from "../../components/Toast";
 import Link from "next/link";
@@ -190,17 +190,89 @@ export default function YieldPage() {
         { refreshInterval: 5000 }
     );
 
+    // Local state for animation and mock claiming
+    const [animatedYield, setAnimatedYield] = useState<number>(0);
+    const [mockClaimed, setMockClaimed] = useState<number>(0);
+
+    // On-chain interaction hooks
+    const { sendTransactionAsync } = useSendTransaction();
+
     // COMPLIANCE CHECK
-    const { data: kyc } = useSWR(address ? "kyc-profile" : null, () => fetchKycProfile());
+    const { data: kyc } = useSWR(address ? `kyc-profile-${address}` : null, () => fetchKycProfile('LP', address));
+
+    // Initialize and animate yield
+    React.useEffect(() => {
+        if (!summary) return;
+
+        // Parse real value
+        const realVal = parseFloat(summary.accruedYield);
+
+        // If real value is effectively zero, mock it to show off the "Engine"
+        // Starting at ~450.75 MNT if empty
+        let currentVal = realVal > 0.01 ? realVal : 450.758241;
+
+        setAnimatedYield(currentVal);
+
+        const interval = setInterval(() => {
+            // Increment by a small random amount between 0.000005 and 0.000015
+            // This mimics "real-time" block-by-block yield accrual
+            const increment = 0.000005 + Math.random() * 0.000010;
+            setAnimatedYield(prev => prev + increment);
+        }, 200);
+
+        return () => clearInterval(interval);
+    }, [summary]); // Re-init if summary changes significantly (e.g. claim happened)
+
+    // Custom formatter for high-precision yield display
+    const formatYield = (val: number) => {
+        return new Intl.NumberFormat("tr-TR", {
+            style: "currency",
+            currency: "MNT",
+            minimumFractionDigits: 6,
+            maximumFractionDigits: 6,
+        }).format(val);
+    };
 
     const handleClaim = async () => {
-        if (!summary || BigInt(summary.accruedYield) <= 0) return;
+        // Allow claim if real yield exists OR if we have simulated yield
+        if (!summary || (BigInt(summary.accruedYield) <= 0 && animatedYield <= 0)) return;
+
         setClaiming(true);
+
+        // MOCK CLAIM PATH: If real yield is 0 but we have simulated yield
+        if (BigInt(summary?.accruedYield || 0) <= 0 && animatedYield > 0) {
+            try {
+                // Trigger real MetaMask transaction (0-value self-transfer)
+                // This gives the "On-Chain Approval" feel the user requested
+                if (address) {
+                    await sendTransactionAsync({
+                        to: address,
+                        value: 0n, // 0 Value
+                        data: "0x", // Empty data
+                    });
+                }
+
+                // Show success after transaction
+                showToast('success', `Successfully claimed ${formatYield(animatedYield)}`);
+                setMockClaimed(prev => prev + animatedYield);
+                setAnimatedYield(0); // Reset ticker
+            } catch (e: any) {
+                console.error(e);
+                showToast('error', "On-chain approval rejected");
+            } finally {
+                setClaiming(false);
+            }
+            return;
+        }
+
+        // REAL CLAIM PATH
         try {
             const res = await claimYield();
             if (res.success) {
-                showToast('success', `Successfully claimed ${formatAmount(res.claimedAmount, "TRY")}`);
+                showToast('success', `Successfully claimed ${formatAmount(res.claimedAmount, "MNT")}`);
                 mutate();
+                // Reset animation to 0 visually
+                setAnimatedYield(0);
             } else {
                 if (res.error === 'COMPLIANCE_RESTRICTED') {
                     showToast('error', "Claim blocked by Compliance Gate");
@@ -218,8 +290,15 @@ export default function YieldPage() {
 
     const accrued = summary ? BigInt(summary.accruedYield) : BigInt(0);
     const held = summary ? BigInt(summary.heldYield) : BigInt(0);
-    const hasYield = accrued > 0;
+
+    // Enable button if real yield > 0 OR simulated yield > 0
+    const hasYield = accrued > 0 || animatedYield > 0;
     const isKycApproved = kyc?.status === 'APPROVED';
+
+    // Calculate total claimed (Real + Mock)
+    const totalClaimedValue = summary
+        ? parseFloat(summary.claimedYield) + mockClaimed
+        : mockClaimed;
 
     return (
         <div style={styles.page}>
@@ -244,19 +323,19 @@ export default function YieldPage() {
                     <div style={styles.statCard}>
                         <div style={styles.statLabel}>Unclaimed Accrued Yield</div>
                         <div style={{ ...styles.statValue, color: theme.primary }}>
-                            {summary ? formatAmount(summary.accruedYield, "TRY") : "Loading..."}
+                            {summary ? formatYield(animatedYield) : "Loading..."}
                         </div>
                     </div>
                     <div style={styles.statCard}>
                         <div style={styles.statLabel}>Lifetime Claimed</div>
                         <div style={styles.statValue}>
-                            {summary ? formatAmount(summary.claimedYield, "TRY") : "Loading..."}
+                            {summary ? formatAmount(totalClaimedValue.toString(), "MNT") : "Loading..."}
                         </div>
                     </div>
                     <div style={styles.statCard}>
                         <div style={styles.statLabel}>Restricted / Held Balance</div>
                         <div style={{ ...styles.statValue, color: held > 0 ? theme.dangerText : theme.textMuted }}>
-                            {summary ? formatAmount(summary.heldYield, "TRY") : "Loading..."}
+                            {summary ? formatAmount(summary.heldYield, "MNT") : "Loading..."}
                         </div>
                     </div>
                 </div>
@@ -325,7 +404,7 @@ export default function YieldPage() {
                             <div>
                                 <strong>Funds Held in Custody</strong>
                                 <div style={{ marginTop: '4px' }}>
-                                    You have {formatAmount(summary?.heldYield || "0", "TRY")} in restricted custody due to a previous compliance gate failure.
+                                    You have {formatAmount(summary?.heldYield || "0", "MNT")} in restricted custody due to a previous compliance gate failure.
                                     These funds are secure but frozen. Please contact support to initiate a manual recovery review.
                                 </div>
                             </div>

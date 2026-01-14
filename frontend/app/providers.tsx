@@ -6,6 +6,7 @@ import {
     lightTheme,
 } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
+import { mantleSepoliaTestnet } from 'wagmi/chains';
 import {
     QueryClientProvider,
     QueryClient,
@@ -30,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ErrorBoundary>
             <WagmiProvider config={config}>
                 <QueryClientProvider client={queryClient}>
-                    <RainbowKitProvider theme={customTheme}>
+                    <RainbowKitProvider theme={customTheme} initialChain={mantleSepoliaTestnet}>
                         <ToastProvider>
                             {children}
                         </ToastProvider>

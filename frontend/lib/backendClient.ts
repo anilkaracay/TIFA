@@ -147,7 +147,7 @@ export async function payRecourse(id: string, payload: { amount: string; currenc
         headers,
         body: JSON.stringify({
             amount: payload.amount,
-            currency: payload.currency || 'TRY',
+            currency: payload.currency || 'MNT',
             paidAt: payload.paidAt || new Date().toISOString(),
             txHash: payload.txHash,
         }),
@@ -646,10 +646,10 @@ export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
     return data;
 }
 
-export async function depositLiquidity(amount: string): Promise<{ success: boolean; txHash: string; lpShares: string }> {
+export async function depositLiquidity(amount: string, wallet?: string): Promise<{ success: boolean; txHash: string; lpShares: string }> {
     const res = await fetch(`${BACKEND_URL}/lp/deposit`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(wallet),
         body: JSON.stringify({ amount }),
     });
     if (!res.ok) {
@@ -659,10 +659,10 @@ export async function depositLiquidity(amount: string): Promise<{ success: boole
     return res.json();
 }
 
-export async function withdrawLiquidity(lpShares: string): Promise<{ success: boolean; txHash: string }> {
+export async function withdrawLiquidity(lpShares: string, wallet?: string): Promise<{ success: boolean; txHash: string }> {
     const res = await fetch(`${BACKEND_URL}/lp/withdraw`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(wallet),
         body: JSON.stringify({ lpShares }),
     });
     if (!res.ok) {
@@ -1083,10 +1083,10 @@ export async function fetchRiskProjection(poolId?: string, horizon: string = "7d
 }
 
 // Compliance API
-export async function fetchKycProfile(subjectType: 'LP' | 'ISSUER' = 'LP'): Promise<KycProfile | null> {
+export async function fetchKycProfile(subjectType: 'LP' | 'ISSUER' = 'LP', wallet?: string): Promise<KycProfile | null> {
     try {
         const res = await fetch(`${BACKEND_URL}/compliance/kyc/me?subjectType=${subjectType}`, {
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(wallet)
         } as any);
         if (!res.ok) return null;
         const data = await res.json();
@@ -1100,10 +1100,11 @@ function getHeadersWithWallet(wallet?: string) {
 
 export async function submitKycProfile(data: any, wallet?: string): Promise<KycProfile> {
     const headers = getAuthHeaders(wallet);
+    const payload = { ...data, wallet }; // Add wallet to body
     const res = await fetch(`${BACKEND_URL}/compliance/kyc/submit`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await res.text());
     const json = await res.json();

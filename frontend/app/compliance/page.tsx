@@ -176,7 +176,7 @@ const styles = {
 
 export default function ComplianceHubPage() {
     const { address } = useAccount();
-    const { data: profile } = useSWR(address ? "kyc-profile" : null, () => fetchKycProfile());
+    const { data: profile } = useSWR(address ? "kyc-profile" : null, () => fetchKycProfile('LP', address));
 
     const status = profile?.status || 'NOT_STARTED';
     const isApproved = status === 'APPROVED';
@@ -213,7 +213,7 @@ export default function ComplianceHubPage() {
                                 </span>
                             ) : (
                                 <span style={styles.badge(theme.textMuted, "#f3f4f6")}>
-                                    ● NOT UTARTED
+                                    ● NOT STARTED
                                 </span>
                             )}
                         </div>
@@ -246,8 +246,13 @@ export default function ComplianceHubPage() {
                 {/* Modules Grid */}
                 <div style={styles.grid}>
                     {/* KYC Module */}
-                    <Link href="/kyc" style={styles.card} className="module-card">
-                        <div style={{ ...styles.iconBox, background: '#eff6ff', color: theme.primary }}>
+                    <Link href="/kyc" style={{
+                        ...styles.card,
+                        background: `linear-gradient(to bottom right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7)), url('/assets/compliance/kyc_bg.png')`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }} className="module-card">
+                        <div style={{ ...styles.iconBox, background: 'rgba(239, 246, 255, 0.8)', backdropFilter: 'blur(4px)', color: theme.primary }}>
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="12" cy="7" r="4"></circle>
@@ -263,8 +268,13 @@ export default function ComplianceHubPage() {
                     </Link>
 
                     {/* Custody Module */}
-                    <Link href="/custody" style={styles.card} className="module-card">
-                        <div style={{ ...styles.iconBox, background: '#f0fdf4', color: '#16a34a' }}>
+                    <Link href="/custody" style={{
+                        ...styles.card,
+                        background: `linear-gradient(to bottom right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7)), url('/assets/compliance/custody_bg.png')`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }} className="module-card">
+                        <div style={{ ...styles.iconBox, background: 'rgba(240, 253, 244, 0.8)', backdropFilter: 'blur(4px)', color: '#16a34a' }}>
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -280,8 +290,13 @@ export default function ComplianceHubPage() {
                     </Link>
 
                     {/* Yield Module */}
-                    <Link href="/yield" style={styles.card} className="module-card">
-                        <div style={{ ...styles.iconBox, background: '#fffbeb', color: '#d97706' }}>
+                    <Link href="/yield" style={{
+                        ...styles.card,
+                        background: `linear-gradient(to bottom right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7)), url('/assets/compliance/yield_bg.png')`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }} className="module-card">
+                        <div style={{ ...styles.iconBox, background: 'rgba(255, 251, 235, 0.8)', backdropFilter: 'blur(4px)', color: '#d97706' }}>
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="1" x2="12" y2="23"></line>
                                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>

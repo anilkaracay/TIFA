@@ -569,14 +569,14 @@ export default function OverviewPage() {
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Total Financed Amount</div>
                         <div style={styles.kpiValue}>
-                            {metrics ? formatAmount(metrics.totalFinanced.toString(), "TRY") : (invoicesLoading ? <Skeleton width="120px" height="38px" /> : "₺0")}
+                            {metrics ? formatAmount(metrics.totalFinanced.toString(), "MNT") : (invoicesLoading ? <Skeleton width="120px" height="38px" /> : "MNT 0")}
                         </div>
                         <div style={styles.kpiDelta}>Outstanding principal</div>
                     </div>
                     <div style={styles.kpiCard}>
                         <div style={styles.kpiTitle}>Liquidity Available</div>
                         <div style={styles.kpiValue}>
-                            {metrics ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : (poolLoading ? <Skeleton width="120px" height="38px" /> : "₺0")}
+                            {metrics ? formatAmount(metrics.liquidityAvailable.toString(), "MNT") : (poolLoading ? <Skeleton width="120px" height="38px" /> : "MNT 0")}
                         </div>
                         <div style={styles.kpiDelta}>Pool capacity</div>
                     </div>

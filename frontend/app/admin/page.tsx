@@ -313,7 +313,7 @@ export default function AdminPanelPage() {
                         <div style={{ padding: "16px", background: "var(--bg-panel)", borderRadius: "8px" }}>
                             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Reserve Balance</p>
                             <p style={{ fontSize: "18px", fontWeight: 700 }}>
-                                {formatUnits(BigInt(poolStatus.reserveBalance || '0'), 18)} TRY
+                                {formatUnits(BigInt(poolStatus.reserveBalance || '0'), 18)} MNT
                             </p>
                         </div>
                         <div style={{ padding: "16px", background: "var(--bg-panel)", borderRadius: "8px" }}>

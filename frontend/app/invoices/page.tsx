@@ -521,7 +521,7 @@ function ActualInvoicesPageContent() {
     const [newInv, setNewInv] = useState({
         externalId: "INV-" + Math.floor(Math.random() * 10000),
         amount: "50000",
-        currency: "TRY",
+        currency: "MNT",
         dueDate: new Date().toISOString().split("T")[0],
         companyId: "",
         debtorId: "COMP-DEBTOR-1",
@@ -769,7 +769,7 @@ function ActualInvoicesPageContent() {
             setNewInv({
                 externalId: "INV-" + Math.floor(Math.random() * 10000),
                 amount: "50000",
-                currency: "TRY",
+                currency: "MNT",
                 dueDate: new Date().toISOString().split("T")[0],
                 companyId: "",
                 debtorId: "COMP-DEBTOR-1",
@@ -1065,7 +1065,7 @@ function ActualInvoicesPageContent() {
                         receipt.transactionHash,
                         amountToDraw.toString()
                     );
-                    showToast('success', `Credit drawn successfully! Amount: ${formatAmount((Number(amountToDraw) / 100).toString(), inv.currency || "TRY")}`);
+                    showToast('success', `Credit drawn successfully! Amount: ${formatAmount((Number(amountToDraw) / 100).toString(), inv.currency || "MNT")}`);
                 } catch (backendError: any) {
                     console.error('[Finance] Backend notification failed:', backendError);
                     showToast('warning', 'Credit drawn on-chain, but backend sync failed. Please refresh.');
@@ -1179,7 +1179,7 @@ function ActualInvoicesPageContent() {
 
             await publicClient.waitForTransactionReceipt({ hash: tx });
 
-            setMessage(`Repayment successful! Amount: ${formatAmount(repayAmount, selectedInvoiceForRepay.currency || "TRY")}`);
+            setMessage(`Repayment successful! Amount: ${formatAmount(repayAmount, selectedInvoiceForRepay.currency || "MNT")}`);
 
             setTimeout(async () => {
                 await mutate();
@@ -1426,7 +1426,7 @@ function ActualInvoicesPageContent() {
 
                                             {/* Face Value */}
                                             <td style={{ ...styles.tableCell, ...styles.faceValue }}>
-                                                {formatAmount(inv.amount, inv.currency || "TRY")}
+                                                {formatAmount(inv.amount, inv.currency || "MNT")}
                                             </td>
 
                                             {/* Risk Type */}
@@ -1478,7 +1478,7 @@ function ActualInvoicesPageContent() {
                                                         if (used === 0n) {
                                                             displayStatus = "PAID";
                                                             customStyle = styles.statusRepaid; // Green
-                                                        } else if (used < max) {
+                                                        } else if (used < max && inv.cumulativePaid && BigInt(inv.cumulativePaid) > 0n) {
                                                             displayStatus = "PARTIALLY_PAID";
                                                             // Custom style for partially paid (can reuse tokenized or create new)
                                                             customStyle = {
@@ -1699,7 +1699,7 @@ function ActualInvoicesPageContent() {
                                     onChange={(value) => setNewInv({ ...newInv, currency: value })}
                                     placeholder="Select currency..."
                                     options={[
-                                        { value: "TRY", label: "TRY" },
+                                        { value: "MNT", label: "MNT" },
                                         { value: "USD", label: "USD" },
                                         { value: "EUR", label: "EUR" },
                                     ]}
@@ -1784,7 +1784,7 @@ function ActualInvoicesPageContent() {
                                 <div style={{ marginBottom: "12px" }}>
                                     <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Outstanding Debt</div>
                                     <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                        {formatAmount((Number(currentDebt) / 100).toString(), selectedInvoiceForRepay.currency || "TRY")}
+                                        {formatAmount((Number(currentDebt) / 100).toString(), selectedInvoiceForRepay.currency || "MNT")}
                                     </div>
                                 </div>
                             </div>
@@ -1849,7 +1849,7 @@ function ActualInvoicesPageContent() {
                                 />
                                 {repayAmount && parseFloat(repayAmount) > 0 && (
                                     <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                        Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), selectedInvoiceForRepay.currency || "TRY")}
+                                        Remaining: {formatAmount(((Number(currentDebt) / 100) - parseFloat(repayAmount)).toFixed(2), selectedInvoiceForRepay.currency || "MNT")}
                                     </div>
                                 )}
                             </div>
@@ -1894,12 +1894,12 @@ function ActualInvoicesPageContent() {
                             <div style={{ marginBottom: "12px" }}>
                                 <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Available Credit</div>
                                 <div style={{ fontSize: "28px", fontWeight: 700, color: "#1a1a1a" }}>
-                                    {formatAmount((Number(availableCredit) / 100).toString(), selectedInvoiceForFinance.currency || "TRY")}
+                                    {formatAmount((Number(availableCredit) / 100).toString(), selectedInvoiceForFinance.currency || "MNT")}
                                 </div>
                             </div>
                             {poolAvailableLiquidity > 0n && (
                                 <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
-                                    Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), selectedInvoiceForFinance.currency || "TRY")}
+                                    Pool Liquidity: {formatAmount((Number(poolAvailableLiquidity) / 100).toString(), selectedInvoiceForFinance.currency || "MNT")}
                                 </div>
                             )}
                         </div>
@@ -1961,7 +1961,7 @@ function ActualInvoicesPageContent() {
                             />
                             {financeAmount && parseFloat(financeAmount) > 0 && (
                                 <div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
-                                    Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), selectedInvoiceForFinance.currency || "TRY")}
+                                    Remaining Available: {formatAmount(((Number(availableCredit) / 100) - parseFloat(financeAmount)).toFixed(2), selectedInvoiceForFinance.currency || "MNT")}
                                 </div>
                             )}
                         </div>
