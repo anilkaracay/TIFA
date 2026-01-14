@@ -108,20 +108,9 @@ export async function fetchInvoicesForCompany(companyId: string): Promise<Invoic
     if (companyId && companyId !== 'all') {
         url.searchParams.set("companyId", companyId);
     }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-    try {
-        const res = await fetch(url.toString(), {
-            next: { revalidate: 3 },
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!res.ok) throw new Error("Failed to fetch invoices");
-        return res.json();
-    } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
-    }
+    const res = await fetch(url.toString(), { next: { revalidate: 3 } });
+    if (!res.ok) throw new Error("Failed to fetch invoices");
+    return res.json();
 }
 
 export async function fetchInvoiceDetail(id: string): Promise<InvoiceDetail> {
@@ -203,20 +192,12 @@ export async function fetchInvoices(params?: { status?: string; companyId?: stri
     if (params?.status) url.searchParams.set("status", params.status);
     if (params?.companyId) url.searchParams.set("companyId", params.companyId);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-
     try {
-        const res = await fetch(url.toString(), {
-            next: { revalidate: 3 },
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
+        const res = await fetch(url.toString(), { next: { revalidate: 3 } });
         if (!res.ok) throw new Error(`Failed to fetch invoices: ${res.statusText}`);
         const data = await res.json();
         return data as Invoice[];
     } catch (err) {
-        clearTimeout(timeoutId);
         console.error("Fetch error:", err);
         return []; // Return empty on error to avoid crashing UI immediately, or rethrow handled by SWR
     }
@@ -400,7 +381,7 @@ export async function fetchPoolLimits(): Promise<PoolLimits> {
 
 export async function fetchIssuerExposure(issuerAddress: string): Promise<IssuerExposure> {
     const res = await fetch(`${BACKEND_URL}/pool/issuer/${issuerAddress}/exposure`, {
-        next: { revalidate: 10 }
+        cache: "no-store"
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -637,24 +618,14 @@ export interface LPPosition {
 }
 
 export async function fetchPoolOverview(): Promise<PoolOverview> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-        const res = await fetch(`${BACKEND_URL}/pool/overview`, {
-            next: { revalidate: 3 },
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.error || "Failed to fetch pool overview");
-        }
-        return res.json();
-    } catch (e) {
-        clearTimeout(timeoutId);
-        throw e;
+    const res = await fetch(`${BACKEND_URL}/pool/overview`, {
+        next: { revalidate: 3 }
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to fetch pool overview");
     }
+    return res.json();
 }
 
 export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
@@ -663,7 +634,7 @@ export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
         url.searchParams.set("wallet", wallet);
     }
     const res = await fetch(url.toString(), {
-        next: { revalidate: 10 }
+        cache: "no-store"
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -736,7 +707,7 @@ export async function fetchLPTransactions(wallet?: string, limit = 50, offset = 
 
 export async function fetchPoolMetrics(): Promise<PoolMetrics> {
     const res = await fetch(`${BACKEND_URL}/pool/metrics`, {
-        next: { revalidate: 10 }
+        cache: "no-store"
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -798,26 +769,16 @@ export interface PortfolioAnalytics {
 }
 
 export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s for analytics (heavier)
-
-    try {
-        const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, {
-            next: { revalidate: 60 },
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            const errorMessage = error.error || "Failed to fetch portfolio analytics";
-            const errorDetails = error.details ? `: ${error.details}` : "";
-            throw new Error(`${errorMessage}${errorDetails}`);
-        }
-        return res.json();
-    } catch (e) {
-        clearTimeout(timeoutId);
-        throw e;
+    const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, {
+        cache: "no-store"
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        const errorMessage = error.error || "Failed to fetch portfolio analytics";
+        const errorDetails = error.details ? `: ${error.details}` : "";
+        throw new Error(`${errorMessage}${errorDetails}`);
     }
+    return res.json();
 }
 
 export interface AgentConsoleData {
