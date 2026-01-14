@@ -17,6 +17,7 @@ import { useTransactionManager } from "../../lib/transactionManager";
 import { useToast } from "../../components/Toast";
 import { Select } from "../../components/ui/Select";
 import { NumberInput } from "../../components/ui/NumberInput";
+import { useKyc } from "../../hooks/useKyc";
 
 // Premium light fintech styling
 const styles = {
@@ -458,8 +459,33 @@ const styles = {
     },
 } as const;
 
+// Skeleton Component
+const Skeleton = ({ width, height, style }: { width?: string; height?: string; style?: React.CSSProperties }) => (
+    <div style={{
+        width: width || "100%",
+        height: height || "20px",
+        background: "#f0f0f0",
+        borderRadius: "4px",
+        animation: "pulse 1.5s infinite ease-in-out",
+        ...style
+    }} />
+);
 
 export default function InvoicesPage() {
+    return (
+        <div style={styles.page}>
+            <style jsx global>{`
+                @keyframes pulse {
+                    0% { background-position: 100% 50%; }
+                    100% { background-position: 0 50%; }
+                }
+            `}</style>
+            <ActualInvoicesPageContent />
+        </div>
+    );
+}
+
+function ActualInvoicesPageContent() {
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
@@ -476,6 +502,9 @@ export default function InvoicesPage() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showRepayModal, setShowRepayModal] = useState(false);
     const [showFinanceModal, setShowFinanceModal] = useState(false); // [NEW] Finance Modal State
+
+    // KYC Check
+    const { isApproved } = useKyc();
 
     const [selectedInvoiceForRepay, setSelectedInvoiceForRepay] = useState<Invoice | null>(null);
     const [selectedInvoiceForFinance, setSelectedInvoiceForFinance] = useState<Invoice | null>(null); // [NEW] Finance Action State
@@ -757,6 +786,10 @@ export default function InvoicesPage() {
             setMessage("Please connect your wallet first");
             return;
         }
+        if (!isApproved) {
+            showToast('error', 'Please complete KYC verification to perform this action');
+            return;
+        }
         try {
             setActionLoadingId(inv.id);
             setMessage(null);
@@ -819,6 +852,10 @@ export default function InvoicesPage() {
     async function openFinanceModal(inv: Invoice) {
         if (!address || !publicClient) {
             setMessage("Please connect your wallet first");
+            return;
+        }
+        if (!isApproved) {
+            showToast('error', 'Please complete KYC verification to perform this action');
             return;
         }
         if (!inv.tokenId || !inv.invoiceIdOnChain) {
@@ -1313,11 +1350,24 @@ export default function InvoicesPage() {
                         </thead>
                         <tbody>
                             {isLoading ? (
-                                <tr>
-                                    <td colSpan={6} style={{ ...styles.tableCell, textAlign: "center", padding: "60px", color: "#666" }}>
-                                        Loading invoices...
-                                    </td>
-                                </tr>
+                                Array.from({ length: 5 }).map((_, idx) => (
+                                    <tr key={`skeleton-${idx}`} style={styles.tableRow}>
+                                        <td style={styles.tableCell}><Skeleton width="120px" /></td>
+                                        <td style={styles.tableCell}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                                <Skeleton width="32px" height="32px" style={{ borderRadius: "50%" }} />
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                                    <Skeleton width="100px" height="14px" />
+                                                    <Skeleton width="80px" height="12px" />
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style={{ ...styles.tableCell, ...styles.faceValue }}><Skeleton width="80px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="60px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="70px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="90px" /></td>
+                                    </tr>
+                                ))
                             ) : invoicesError ? (
                                 <tr>
                                     <td colSpan={6} style={{ ...styles.tableCell, textAlign: "center", padding: "60px", color: "#dc2626" }}>

@@ -379,6 +379,19 @@ export default function OverviewPage() {
         };
     }, [subscribeWS, mutateInvoices, mutatePoolOverview]);
 
+    // Skeleton Component
+    const Skeleton = ({ width, height, style }: { width?: string; height?: string; style?: React.CSSProperties }) => (
+        <div style={{
+            width: width || "100%",
+            height: height || "20px",
+            background: "linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%)",
+            backgroundSize: "200% 100%",
+            animation: "pulse 1.5s ease-in-out infinite",
+            borderRadius: "4px",
+            ...style
+        }} />
+    );
+
     // Calculate metrics
     const metrics = useMemo(() => {
         if (!invoices || !poolOverview) return null;
@@ -516,453 +529,414 @@ export default function OverviewPage() {
 
     return (
         <div style={styles.page}>
+            <style jsx global>{`
+                @keyframes pulse {
+                    0% { background-position: 100% 50%; }
+                    100% { background-position: 0 50%; }
+                }
+            `}</style>
             <Navbar />
 
             {/* Main Content */}
             <div style={styles.container}>
-                {(!invoices && invoicesLoading) || (!poolOverview && poolLoading) || (!poolLimits && limitsLoading) ? (
-                    <div style={{ textAlign: "center", padding: "60px", color: "#666" }}>
-                        Loading system overview...
+                {/* 1. Top System Status Bar */}
+                <div style={styles.statusBar}>
+                    <div style={styles.statusItem}>
+                        <span style={styles.statusDot}></span>
+                        <span><strong>Engine Status:</strong> Running-Nominal</span>
                     </div>
-                ) : (
-                    <>
-                        {/* 1. Top System Status Bar */}
-                        <div style={styles.statusBar}>
-                            <div style={styles.statusItem}>
-                                <span style={styles.statusDot}></span>
-                                <span><strong>Engine Status:</strong> Running-Nominal</span>
-                            </div>
-                            <div style={styles.statusItem}>
-                                <span><strong>Last Decision:</strong> {recentEvents[0] ? new Date(recentEvents[0].timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC" : "N/A"}</span>
-                            </div>
-                            <div style={styles.statusItem}>
-                                <span><strong>Active Rules:</strong> {poolLimits ? "Production" : "N/A"}</span>
-                            </div>
-                            <div style={styles.statusItem}>
-                                <span><strong>System Load:</strong> {metrics ? `${metrics.utilization.toFixed(1)}%` : "N/A"}</span>
-                            </div>
+                    <div style={styles.statusItem}>
+                        <span><strong>Last Decision:</strong> {recentEvents[0] ? new Date(recentEvents[0].timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC" : (invoicesLoading ? <Skeleton width="180px" /> : "N/A")}</span>
+                    </div>
+                    <div style={styles.statusItem}>
+                        <span><strong>Active Rules:</strong> {limitsLoading ? <Skeleton width="100px" /> : (poolLimits ? "Production" : "N/A")}</span>
+                    </div>
+                    <div style={styles.statusItem}>
+                        <span><strong>System Load:</strong> {metrics ? `${metrics.utilization.toFixed(1)}%` : (poolLoading ? <Skeleton width="50px" /> : "N/A")}</span>
+                    </div>
+                </div>
+
+                {/* 2. Key System Metrics */}
+                <div style={styles.kpiGrid}>
+                    <div style={styles.kpiCard}>
+                        <div style={styles.kpiTitle}>Total Active Invoices</div>
+                        <div style={styles.kpiValue}>
+                            {metrics ? metrics.activeInvoices : (invoicesLoading ? <Skeleton width="60px" height="38px" /> : 0)}
                         </div>
-
-                        {/* 2. Key System Metrics */}
-                        <div style={styles.kpiGrid}>
-                            <div style={styles.kpiCard}>
-                                <div style={styles.kpiTitle}>Total Active Invoices</div>
-                                <div style={styles.kpiValue}>{metrics?.activeInvoices || 0}</div>
-                                <div style={styles.kpiDelta}>Current period</div>
-                                <div style={styles.kpiIcon}>📄</div>
-                            </div>
-                            <div style={styles.kpiCard}>
-                                <div style={styles.kpiTitle}>Total Financed Amount</div>
-                                <div style={styles.kpiValue}>
-                                    {metrics?.totalFinanced ? formatAmount(metrics.totalFinanced.toString(), "TRY") : "₺0"}
-                                </div>
-                                <div style={styles.kpiDelta}>Outstanding principal</div>
-                            </div>
-                            <div style={styles.kpiCard}>
-                                <div style={styles.kpiTitle}>Liquidity Available</div>
-                                <div style={styles.kpiValue}>
-                                    {metrics?.liquidityAvailable ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : "₺0"}
-                                </div>
-                                <div style={styles.kpiDelta}>Pool capacity</div>
-                            </div>
-                            <div style={styles.kpiCard}>
-                                <div style={styles.kpiTitle}>Utilization Ratio</div>
-                                <div style={styles.kpiValue}>
-                                    {metrics?.utilization.toFixed(1) || "0.0"}%
-                                    {metrics && metrics.maxUtilization && (
-                                        <span style={{ fontSize: "14px", color: "#666", fontWeight: 400, marginLeft: "8px" }}>
-                                            / {metrics.maxUtilization.toFixed(0)}% max
-                                        </span>
-                                    )}
-                                </div>
-                                <div style={styles.progressBar}>
-                                    <div style={{
-                                        ...styles.progressFill,
-                                        width: `${Math.min(metrics?.utilization || 0, 100)}%`,
-                                        background: metrics?.utilization
-                                            ? (metrics.utilization < 50 ? "#22c55e" : metrics.utilization < 75 ? "#f59e0b" : "#ef4444")
-                                            : "#2563eb"
-                                    }}></div>
-                                </div>
-                                {metrics && metrics.utilization > 0 && (
-                                    <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>
-                                        Total Borrowed / Total Liquidity
-                                    </div>
-                                )}
-                            </div>
+                        <div style={styles.kpiDelta}>Current period</div>
+                        <div style={styles.kpiIcon}>📄</div>
+                    </div>
+                    <div style={styles.kpiCard}>
+                        <div style={styles.kpiTitle}>Total Financed Amount</div>
+                        <div style={styles.kpiValue}>
+                            {metrics ? formatAmount(metrics.totalFinanced.toString(), "TRY") : (invoicesLoading ? <Skeleton width="120px" height="38px" /> : "₺0")}
                         </div>
-
-                        {/* 3. System Distribution & Alerts */}
-                        <div style={styles.sectionGrid}>
-                            {/* Left: AI Lifecycle Intelligence Slider */}
-                            <div style={{ ...styles.sectionCard, position: "relative", overflow: "hidden" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", position: "relative", zIndex: 2 }}>
-                                    <div>
-                                        <div style={styles.sectionTitle}>AI Lifecycle Intelligence</div>
-                                        <div style={styles.sectionSubtitle}>Autonomous monitoring and decision analytics</div>
-                                    </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-
-                                        <LiveBadge isLive={isConnected} lastUpdated={new Date()} />
-                                    </div>
-                                </div>
-
-                                {/* AI Lifecycle Slider */}
-                                <AILifecycleSlider activeAgents={0} />
+                        <div style={styles.kpiDelta}>Outstanding principal</div>
+                    </div>
+                    <div style={styles.kpiCard}>
+                        <div style={styles.kpiTitle}>Liquidity Available</div>
+                        <div style={styles.kpiValue}>
+                            {metrics ? formatAmount(metrics.liquidityAvailable.toString(), "TRY") : (poolLoading ? <Skeleton width="120px" height="38px" /> : "₺0")}
+                        </div>
+                        <div style={styles.kpiDelta}>Pool capacity</div>
+                    </div>
+                    <div style={styles.kpiCard}>
+                        <div style={styles.kpiTitle}>Utilization Ratio</div>
+                        <div style={styles.kpiValue}>
+                            {metrics ? `${metrics.utilization.toFixed(1)}%` : (poolLoading ? <Skeleton width="80px" height="38px" /> : "0.0%")}
+                            {metrics && metrics.maxUtilization && (
+                                <span style={{ fontSize: "14px", color: "#666", fontWeight: 400, marginLeft: "8px" }}>
+                                    / {metrics.maxUtilization.toFixed(0)}% max
+                                </span>
+                            )}
+                        </div>
+                        <div style={styles.progressBar}>
+                            <div style={{
+                                ...styles.progressFill,
+                                width: `${Math.min(metrics?.utilization || 0, 100)}%`,
+                                background: metrics?.utilization
+                                    ? (metrics.utilization < 50 ? "#22c55e" : metrics.utilization < 75 ? "#f59e0b" : "#ef4444")
+                                    : "#2563eb"
+                            }}></div>
+                        </div>
+                        {metrics && metrics.utilization > 0 && (
+                            <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>
+                                Total Borrowed / Total Liquidity
                             </div>
+                        )}
+                    </div>
+                </div>
 
-                            {/* Right: System Alerts & Allocation */}
+                {/* 3. System Distribution & Alerts */}
+                <div style={styles.sectionGrid}>
+                    {/* Left: AI Lifecycle Intelligence Slider */}
+                    <div style={{ ...styles.sectionCard, position: "relative", overflow: "hidden" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", position: "relative", zIndex: 2 }}>
                             <div>
-                                {/* Upcoming Maturities */}
-                                <div style={styles.sectionCard}>
-                                    <div style={{ marginBottom: "20px" }}>
-                                        <div style={{
-                                            fontSize: "18px",
-                                            fontWeight: 600,
-                                            color: "#0f172a",
-                                            marginBottom: "4px",
-                                            letterSpacing: "-0.01em"
-                                        }}>
-                                            Upcoming Maturity
-                                        </div>
-                                        <div style={{
-                                            fontSize: "13px",
-                                            color: "#64748b"
-                                        }}>
-                                            {metrics?.upcomingMaturities || 0} invoices maturing within 7 days
-                                        </div>
-                                    </div>
-                                    {metrics && metrics.upcomingMaturitiesList && metrics.upcomingMaturitiesList.length > 0 ? (
-                                        <div style={{ marginTop: "16px" }}>
-                                            {metrics.upcomingMaturitiesList.slice(0, 5).map((inv, idx) => {
-                                                const isUrgent = inv.daysUntilDue <= 3;
-                                                const statusColors: Record<string, string> = {
-                                                    FINANCED: "#16a34a",
-                                                    TOKENIZED: "#2563eb",
-                                                    ISSUED: "#64748b",
-                                                    REPAID: "#22c55e",
-                                                    DEFAULTED: "#ef4444"
-                                                };
-                                                const statusBgColors: Record<string, string> = {
-                                                    FINANCED: "rgba(22, 163, 74, 0.1)",
-                                                    TOKENIZED: "rgba(37, 99, 235, 0.1)",
-                                                    ISSUED: "rgba(100, 116, 139, 0.1)",
-                                                    REPAID: "rgba(34, 197, 94, 0.1)",
-                                                    DEFAULTED: "rgba(239, 68, 68, 0.1)"
-                                                };
-                                                const statusColor = statusColors[inv.status] || "#64748b";
-                                                const statusBgColor = statusBgColors[inv.status] || "rgba(100, 116, 139, 0.1)";
+                                <div style={styles.sectionTitle}>AI Lifecycle Intelligence</div>
+                                <div style={styles.sectionSubtitle}>Autonomous monitoring and decision analytics</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <LiveBadge isLive={isConnected} lastUpdated={new Date()} />
+                            </div>
+                        </div>
 
-                                                return (
-                                                    <Link
-                                                        key={inv.id}
-                                                        href={`/invoices/${inv.id}`}
-                                                        style={{
-                                                            display: "block",
-                                                            padding: "12px 0",
-                                                            borderBottom: idx < 4 ? "1px solid #f0f0f0" : "none",
-                                                            textDecoration: "none",
+                        {/* AI Lifecycle Slider */}
+                        <AILifecycleSlider activeAgents={0} />
+                    </div>
+
+                    {/* Right: System Alerts & Allocation */}
+                    <div>
+                        {/* Upcoming Maturities */}
+                        <div style={styles.sectionCard}>
+                            <div style={{ marginBottom: "20px" }}>
+                                <div style={{
+                                    fontSize: "18px",
+                                    fontWeight: 600,
+                                    color: "#0f172a",
+                                    marginBottom: "4px",
+                                    letterSpacing: "-0.01em"
+                                }}>
+                                    Upcoming Maturity
+                                </div>
+                                <div style={{
+                                    fontSize: "13px",
+                                    color: "#64748b"
+                                }}>
+                                    {metrics ? `${metrics.upcomingMaturities} invoices maturing within 7 days` : (invoicesLoading ? <Skeleton width="200px" /> : "0 invoices maturing")}
+                                </div>
+                            </div>
+                            {invoicesLoading && !metrics ? (
+                                <div style={{ marginTop: "16px" }}>
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} style={{ padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                <div>
+                                                    <Skeleton width="100px" height="16px" style={{ marginBottom: "8px" }} />
+                                                    <Skeleton width="140px" height="12px" />
+                                                </div>
+                                                <div>
+                                                    <Skeleton width="60px" height="16px" style={{ marginBottom: "8px" }} />
+                                                    <Skeleton width="80px" height="12px" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (metrics && metrics.upcomingMaturitiesList && metrics.upcomingMaturitiesList.length > 0 ? (
+                                <div style={{ marginTop: "16px" }}>
+                                    {metrics.upcomingMaturitiesList.slice(0, 5).map((inv, idx) => {
+                                        const isUrgent = inv.daysUntilDue <= 3;
+                                        const statusColors: Record<string, string> = {
+                                            FINANCED: "#16a34a",
+                                            TOKENIZED: "#2563eb",
+                                            ISSUED: "#64748b",
+                                            REPAID: "#22c55e",
+                                            DEFAULTED: "#ef4444"
+                                        };
+                                        const statusBgColors: Record<string, string> = {
+                                            FINANCED: "rgba(22, 163, 74, 0.1)",
+                                            TOKENIZED: "rgba(37, 99, 235, 0.1)",
+                                            ISSUED: "rgba(100, 116, 139, 0.1)",
+                                            REPAID: "rgba(34, 197, 94, 0.1)",
+                                            DEFAULTED: "rgba(239, 68, 68, 0.1)"
+                                        };
+                                        const statusColor = statusColors[inv.status] || "#64748b";
+                                        const statusBgColor = statusBgColors[inv.status] || "rgba(100, 116, 139, 0.1)";
+
+                                        return (
+                                            <Link
+                                                key={inv.id}
+                                                href={`/invoices/${inv.id}`}
+                                                style={{
+                                                    display: "block",
+                                                    padding: "12px 0",
+                                                    borderBottom: idx < 4 ? "1px solid #f0f0f0" : "none",
+                                                    textDecoration: "none",
+                                                    color: "#1a1a1a",
+                                                    transition: "background 0.2s ease"
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = "#f8f9fa";
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = "transparent";
+                                                }}
+                                            >
+                                                <div style={{
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    alignItems: "center"
+                                                }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{
+                                                            fontWeight: 600,
+                                                            fontSize: "13px",
                                                             color: "#1a1a1a",
-                                                            transition: "background 0.2s ease"
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.background = "#f8f9fa";
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.background = "transparent";
-                                                        }}
-                                                    >
+                                                            marginBottom: "4px"
+                                                        }}>
+                                                            {inv.externalId}
+                                                        </div>
                                                         <div style={{
                                                             display: "flex",
-                                                            justifyContent: "space-between",
-                                                            alignItems: "center"
+                                                            alignItems: "center",
+                                                            gap: "8px",
+                                                            flexWrap: "wrap" as const
                                                         }}>
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div style={{
-                                                                    fontWeight: 600,
-                                                                    fontSize: "13px",
-                                                                    color: "#1a1a1a",
-                                                                    marginBottom: "4px"
-                                                                }}>
-                                                                    {inv.externalId}
-                                                                </div>
-                                                                <div style={{
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    gap: "8px",
-                                                                    flexWrap: "wrap" as const
-                                                                }}>
-                                                                    <span style={{
-                                                                        fontSize: "12px",
-                                                                        color: "#666"
-                                                                    }}>
-                                                                        {formatAmount(inv.amount, inv.currency)}
-                                                                    </span>
-                                                                    <span style={{
-                                                                        display: "inline-flex",
-                                                                        alignItems: "center",
-                                                                        padding: "2px 6px",
-                                                                        borderRadius: "3px",
-                                                                        fontSize: "10px",
-                                                                        fontWeight: 600,
-                                                                        color: statusColor,
-                                                                        background: statusBgColor,
-                                                                        textTransform: "uppercase" as const
-                                                                    }}>
-                                                                        {inv.status}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <div style={{
-                                                                textAlign: "right",
-                                                                marginLeft: "16px",
-                                                                flexShrink: 0
+                                                            <span style={{
+                                                                fontSize: "12px",
+                                                                color: "#666"
                                                             }}>
-                                                                <div style={{
-                                                                    fontWeight: 600,
-                                                                    fontSize: "12px",
-                                                                    color: isUrgent ? "#ef4444" : "#666",
-                                                                    marginBottom: "2px"
-                                                                }}>
-                                                                    {inv.daysUntilDue === 0 ? "Today" : inv.daysUntilDue === 1 ? "1 day" : `${inv.daysUntilDue} days`}
-                                                                </div>
-                                                                <div style={{
-                                                                    fontSize: "11px",
-                                                                    color: "#999"
-                                                                }}>
-                                                                    {formatDate(inv.dueDate)}
-                                                                </div>
-                                                            </div>
+                                                                {formatAmount(inv.amount, inv.currency)}
+                                                            </span>
+                                                            <span style={{
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                padding: "2px 6px",
+                                                                borderRadius: "3px",
+                                                                fontSize: "10px",
+                                                                fontWeight: 600,
+                                                                color: statusColor,
+                                                                background: statusBgColor,
+                                                                textTransform: "uppercase" as const
+                                                            }}>
+                                                                {inv.status}
+                                                            </span>
                                                         </div>
-                                                    </Link>
-                                                );
-                                            })}
-                                            {metrics.upcomingMaturitiesList.length > 5 && (
-                                                <div style={{
-                                                    fontSize: "12px",
-                                                    color: "#666",
-                                                    textAlign: "center",
-                                                    marginTop: "12px",
-                                                    paddingTop: "12px"
-                                                }}>
-                                                    +{metrics.upcomingMaturitiesList.length - 5} more invoices
+                                                    </div>
+                                                    <div style={{
+                                                        textAlign: "right",
+                                                        marginLeft: "16px",
+                                                        flexShrink: 0
+                                                    }}>
+                                                        <div style={{
+                                                            fontWeight: 600,
+                                                            fontSize: "12px",
+                                                            color: isUrgent ? "#ef4444" : "#666",
+                                                            marginBottom: "2px"
+                                                        }}>
+                                                            {inv.daysUntilDue === 0 ? "Today" : inv.daysUntilDue === 1 ? "1 day" : `${inv.daysUntilDue} days`}
+                                                        </div>
+                                                        <div style={{
+                                                            fontSize: "11px",
+                                                            color: "#999"
+                                                        }}>
+                                                            {formatDate(inv.dueDate)}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    ) : (
+                                            </Link>
+                                        );
+                                    })}
+                                    {metrics.upcomingMaturitiesList.length > 5 && (
                                         <div style={{
-                                            marginTop: "16px",
-                                            padding: "32px",
+                                            fontSize: "12px",
+                                            color: "#666",
                                             textAlign: "center",
-                                            fontSize: "13px",
-                                            color: "#94a3b8",
-                                            fontStyle: "italic",
-                                            background: "#f8fafc",
-                                            borderRadius: "8px",
-                                            border: "1px dashed #e2e8f0"
+                                            marginTop: "12px",
+                                            paddingTop: "12px"
                                         }}>
-                                            No invoices maturing in the next 7 days
+                                            +{metrics.upcomingMaturitiesList.length - 5} more invoices
                                         </div>
                                     )}
                                 </div>
+                            ) : (
+                                <div style={{
+                                    marginTop: "16px",
+                                    padding: "32px",
+                                    textAlign: "center",
+                                    fontSize: "13px",
+                                    color: "#94a3b8",
+                                    fontStyle: "italic",
+                                    background: "#f8fafc",
+                                    borderRadius: "8px",
+                                    border: "1px dashed #e2e8f0"
+                                }}>
+                                    No invoices maturing in the next 7 days
+                                </div>
+                            ))}
+                        </div>
 
-                                {/* Pool Utilization Snapshot */}
-                                <div style={{ ...styles.sectionCard, marginTop: "20px" }}>
-                                    <div style={{ marginBottom: "20px" }}>
-                                        <div style={{
-                                            fontSize: "18px",
-                                            fontWeight: 600,
-                                            color: "#0f172a",
-                                            marginBottom: "4px",
-                                            letterSpacing: "-0.01em"
-                                        }}>
-                                            Pool Utilization Snapshot
-                                        </div>
-                                        <div style={{
-                                            fontSize: "13px",
-                                            color: "#64748b"
-                                        }}>
-                                            Current allocation status
-                                        </div>
-                                    </div>
+                        {/* Pool Utilization Snapshot */}
+                        <div style={{ ...styles.sectionCard, marginTop: "20px" }}>
+                            <div style={{ marginBottom: "20px" }}>
+                                <div style={{
+                                    fontSize: "18px",
+                                    fontWeight: 600,
+                                    color: "#0f172a",
+                                    marginBottom: "4px",
+                                    letterSpacing: "-0.01em"
+                                }}>
+                                    Pool Utilization Snapshot
+                                </div>
+                                <div style={{
+                                    fontSize: "13px",
+                                    color: "#64748b"
+                                }}>
+                                    Current allocation status
+                                </div>
+                            </div>
 
-                                    <div style={{ marginTop: "24px" }}>
-                                        {/* Pool Label and Value */}
-                                        <div style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            marginBottom: "12px"
-                                        }}>
-                                            <span style={{
-                                                fontSize: "14px",
-                                                fontWeight: 500,
-                                                color: "#1e293b"
-                                            }}>
-                                                Main Pool
-                                            </span>
-                                            <div style={{
-                                                display: "flex",
-                                                alignItems: "baseline",
-                                                gap: "4px"
-                                            }}>
-                                                <span style={{
-                                                    fontSize: "15px",
-                                                    fontWeight: 600,
-                                                    color: "#0f172a"
-                                                }}>
-                                                    {metrics?.utilization.toFixed(1) || "0.0"}%
-                                                </span>
-                                                <span style={{
-                                                    fontSize: "12px",
-                                                    color: "#94a3b8",
-                                                    fontWeight: 400
-                                                }}>
-                                                    / {metrics?.maxUtilization?.toFixed(0) || "80"}% max
-                                                </span>
-                                            </div>
-                                        </div>
+                            <div style={{ marginTop: "24px" }}>
+                                {/* Pool Label and Value */}
+                                <div style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginBottom: "12px"
+                                }}>
+                                    <span style={{
+                                        fontSize: "14px",
+                                        fontWeight: 500,
+                                        color: "#1e293b"
+                                    }}>
+                                        Active Utilization
+                                    </span>
+                                    <span style={{
+                                        fontSize: "16px",
+                                        fontWeight: 600,
+                                        color: "#1e293b"
+                                    }}>
+                                        {metrics ? `${metrics.utilization.toFixed(1)}%` : (poolLoading ? <Skeleton width="50px" /> : "0.0%")}
+                                    </span>
+                                </div>
 
-                                        {/* Progress Bar */}
-                                        <div style={{
-                                            position: "relative",
-                                            width: "100%",
-                                            height: "10px",
-                                            background: "#f1f5f9",
-                                            borderRadius: "6px",
-                                            overflow: "hidden",
-                                            marginBottom: "16px"
-                                        }}>
-                                            <div style={{
-                                                position: "absolute",
-                                                left: 0,
-                                                top: 0,
-                                                height: "100%",
-                                                width: `${Math.min(metrics?.utilization || 0, 100)}%`,
-                                                background: metrics?.utilization
-                                                    ? (metrics.utilization < 50
-                                                        ? "linear-gradient(90deg, #22c55e 0%, #16a34a 100%)"
-                                                        : metrics.utilization < 75
-                                                            ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
-                                                            : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)")
-                                                    : "linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)",
-                                                borderRadius: "6px",
-                                                transition: "width 0.3s ease, background 0.3s ease",
-                                                boxShadow: metrics?.utilization && metrics.utilization > 0
-                                                    ? "0 2px 4px rgba(0, 0, 0, 0.1)"
-                                                    : "none"
-                                            }}></div>
-
-                                            {/* Threshold markers */}
-                                            {metrics?.maxUtilization && (
-                                                <>
-                                                    <div style={{
-                                                        position: "absolute",
-                                                        left: `${(metrics.maxUtilization * 0.75)}%`,
-                                                        top: 0,
-                                                        bottom: 0,
-                                                        width: "2px",
-                                                        background: "#f59e0b",
-                                                        opacity: 0.3
-                                                    }} />
-                                                    <div style={{
-                                                        position: "absolute",
-                                                        left: `${metrics.maxUtilization}%`,
-                                                        top: 0,
-                                                        bottom: 0,
-                                                        width: "2px",
-                                                        background: "#ef4444",
-                                                        opacity: 0.3
-                                                    }} />
-                                                </>
-                                            )}
-                                        </div>
-
-                                        {/* Available Capacity */}
-                                        {metrics && metrics.availableCapacity !== undefined && (
-                                            <div style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                paddingTop: "12px",
-                                                borderTop: "1px solid #f0f0f0"
-                                            }}>
-                                                <span style={{
-                                                    fontSize: "12px",
-                                                    color: "#666"
-                                                }}>
-                                                    Available Capacity
-                                                </span>
-                                                <span style={{
-                                                    fontSize: "13px",
-                                                    fontWeight: 600,
-                                                    color: "#1a1a1a"
-                                                }}>
-                                                    {metrics.availableCapacity.toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
+                                {/* Progress Bar */}
+                                <div style={{
+                                    height: "12px",
+                                    background: "#f1f5f9",
+                                    borderRadius: "6px",
+                                    overflow: "hidden",
+                                    marginBottom: "12px"
+                                }}>
+                                    <div style={{
+                                        height: "100%",
+                                        width: `${Math.min(metrics?.utilization || 0, 100)}%`,
+                                        background: metrics?.utilization
+                                            ? (metrics.utilization > 80 ? "#ef4444" : metrics.utilization > 50 ? "#f59e0b" : "#22c55e")
+                                            : "#2563eb",
+                                        borderRadius: "6px",
+                                        transition: "width 0.5s ease"
+                                    }} />
+                                </div>
+                                <div style={{
+                                    fontSize: "12px",
+                                    color: "#64748b",
+                                    textAlign: "right"
+                                }}>
+                                    Target: 80%
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
 
-                        {/* 4. Recent System Activity */}
-                        <div style={styles.eventTable}>
-                            <div style={styles.tableHeader}>
-                                <div style={styles.tableTitle}>Recent System Activity</div>
-                                <a style={styles.tableLink} href="/analytics">View All Logs</a>
-                            </div>
-                            <table style={styles.table}>
-                                <thead>
-                                    <tr style={styles.tableRow}>
-                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Timestamp</th>
-                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Event Type</th>
-                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Description</th>
-                                        <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Reference ID</th>
+                {/* 4. Recent System Activity */}
+                <div style={styles.eventTable}>
+                    <div style={styles.tableHeader}>
+                        <div style={styles.tableTitle}>Recent System Activity</div>
+                        <a style={styles.tableLink} href="/analytics">View All Logs</a>
+                    </div>
+                    <table style={styles.table}>
+                        <thead>
+                            <tr style={styles.tableRow}>
+                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Timestamp</th>
+                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Event Type</th>
+                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Description</th>
+                                <th style={{ ...styles.tableCell, textAlign: "left", fontWeight: 600 }}>Reference ID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {invoicesLoading && (!recentEvents || recentEvents.length === 0) ? (
+                                [1, 2, 3].map(i => (
+                                    <tr key={i} style={styles.tableRow}>
+                                        <td style={styles.tableCell}><Skeleton width="120px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="80px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="200px" /></td>
+                                        <td style={styles.tableCell}><Skeleton width="100px" /></td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {recentEvents.length > 0 ? (
-                                        recentEvents.map((event, idx) => {
-                                            const badgeStyle =
-                                                event.eventType === "Issuance" ? styles.badgeIssuance :
-                                                    event.eventType === "Tokenization" ? styles.badgeTokenization :
-                                                        event.eventType === "Financing" ? styles.badgeFinancing :
-                                                            event.eventType === "Repayment" ? styles.badgeRepayment :
-                                                                styles.badgeDefault;
+                                ))
+                            ) : (recentEvents.length > 0 ? (
+                                recentEvents.map((event, idx) => {
+                                    const badgeStyle =
+                                        event.eventType === "Issuance" ? styles.badgeIssuance :
+                                            event.eventType === "Tokenization" ? styles.badgeTokenization :
+                                                event.eventType === "Financing" ? styles.badgeFinancing :
+                                                    event.eventType === "Repayment" ? styles.badgeRepayment :
+                                                        styles.badgeDefault;
 
-                                            return (
-                                                <tr key={idx} style={styles.tableRow}>
-                                                    <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
-                                                        {new Date(event.timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                                                    </td>
-                                                    <td style={styles.tableCell}>
-                                                        <span style={{ ...styles.badge, ...badgeStyle }}>
-                                                            {event.eventType}
-                                                        </span>
-                                                    </td>
-                                                    <td style={styles.tableCell}>{event.description}</td>
-                                                    <td style={{ ...styles.tableCell, ...styles.tableCellMuted, fontFamily: "monospace", fontSize: "11px" }}>
-                                                        {event.referenceId.slice(0, 8)}...
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={4} style={{ ...styles.tableCell, textAlign: "center", color: "#666", padding: "40px" }}>
-                                                No recent activity
+                                    return (
+                                        <tr key={idx} style={styles.tableRow}>
+                                            <td style={{ ...styles.tableCell, ...styles.tableCellMuted }}>
+                                                {new Date(event.timestamp).toLocaleString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                            </td>
+                                            <td style={styles.tableCell}>
+                                                <span style={{ ...styles.badge, ...badgeStyle }}>
+                                                    {event.eventType}
+                                                </span>
+                                            </td>
+                                            <td style={styles.tableCell}>{event.description}</td>
+                                            <td style={{ ...styles.tableCell, ...styles.tableCellMuted, fontFamily: "monospace", fontSize: "11px" }}>
+                                                {event.referenceId.slice(0, 8)}...
                                             </td>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
+                                    );
+                                })
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} style={{ ...styles.tableCell, textAlign: "center", color: "#666", padding: "40px" }}>
+                                        No recent activity
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </>
+            )
+}
+        </div >
+        </div >
     );
 }
 
