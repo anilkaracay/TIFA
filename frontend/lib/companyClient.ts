@@ -9,8 +9,15 @@ export type Company = {
 };
 
 export async function fetchCompanies(): Promise<Company[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
     try {
-        const res = await fetch(`${BACKEND_URL}/companies`, { next: { revalidate: 30 } });
+        const res = await fetch(`${BACKEND_URL}/companies`, {
+            next: { revalidate: 30 },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (!res.ok) {
             const errorText = await res.text();
             console.error('[CompanyClient] Failed to fetch companies:', res.status, errorText);
@@ -19,6 +26,7 @@ export async function fetchCompanies(): Promise<Company[]> {
         const data = await res.json();
         return data;
     } catch (error: any) {
+        clearTimeout(timeoutId);
         console.error('[CompanyClient] Error fetching companies:', error);
         throw error;
     }
