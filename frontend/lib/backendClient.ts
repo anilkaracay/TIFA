@@ -381,7 +381,7 @@ export async function fetchPoolLimits(): Promise<PoolLimits> {
 
 export async function fetchIssuerExposure(issuerAddress: string): Promise<IssuerExposure> {
     const res = await fetch(`${BACKEND_URL}/pool/issuer/${issuerAddress}/exposure`, {
-        cache: "no-store"
+        next: { revalidate: 10 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -634,7 +634,7 @@ export async function fetchLPPosition(wallet?: string): Promise<LPPosition> {
         url.searchParams.set("wallet", wallet);
     }
     const res = await fetch(url.toString(), {
-        cache: "no-store"
+        next: { revalidate: 10 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -707,7 +707,7 @@ export async function fetchLPTransactions(wallet?: string, limit = 50, offset = 
 
 export async function fetchPoolMetrics(): Promise<PoolMetrics> {
     const res = await fetch(`${BACKEND_URL}/pool/metrics`, {
-        cache: "no-store"
+        next: { revalidate: 10 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -770,7 +770,7 @@ export interface PortfolioAnalytics {
 
 export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics> {
     const res = await fetch(`${BACKEND_URL}/analytics/portfolio`, {
-        cache: "no-store"
+        next: { revalidate: 60 }
     });
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));

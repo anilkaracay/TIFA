@@ -10,7 +10,7 @@ export type Company = {
 
 export async function fetchCompanies(): Promise<Company[]> {
     try {
-        const res = await fetch(`${BACKEND_URL}/companies`, { cache: "no-store" });
+        const res = await fetch(`${BACKEND_URL}/companies`, { next: { revalidate: 30 } });
         if (!res.ok) {
             const errorText = await res.text();
             console.error('[CompanyClient] Failed to fetch companies:', res.status, errorText);
@@ -45,7 +45,7 @@ export type CashflowResponse = {
 
 export async function fetchCashflow(companyId: string): Promise<CashflowResponse> {
     const res = await fetch(`${BACKEND_URL}/companies/${companyId}/cashflow`, {
-        cache: "no-store",
+        next: { revalidate: 10 },
     });
     if (!res.ok) throw new Error("Failed to fetch cashflow");
     return res.json();
