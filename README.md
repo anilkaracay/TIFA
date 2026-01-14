@@ -154,10 +154,21 @@ Before running the project, ensure you have the following installed:
     pnpm install
     ```
 
-3.  **Start the Ecosystem (One-Click)**
+3.  **Environment Setup**
+    ```bash
+    # Copy example environment files
+    cp .env.example .env
+    cp backend/.env.example backend/.env
+    cp frontend/.env.example frontend/.env
+    ```
+
+4.  **Start the Ecosystem (One-Click)**
     We have prepared a master script that resets the database, deploys smart contracts to the local hardhat node, updates the ABI files, and starts the backend, frontend, and agents.
 
+    > **Important:** Ensure Docker Desktop is running before executing the script.
+
     ```bash
+    chmod +x clean_restart.sh
     ./clean_restart.sh
     ```
     
