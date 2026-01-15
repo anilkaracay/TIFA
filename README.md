@@ -18,7 +18,7 @@
     <a href="#technical-architecture">Architecture</a> •
     <a href="#autonomous-agent-system">Agents</a> •
     <a href="#compliance-and-security-framework">Compliance</a> •
-    <a href="#getting-started">Run Demo</a>
+    <a href="https://youtu.be/ZauPGmckJ1k">Watch Demo</a>
   </p>
 </div>
 
@@ -27,6 +27,7 @@
 ## Executive Summary: The One Pager
 
 > **📄 [View Full Pitch Deck (DocSend)](https://docsend.com/v/dn22h/tifa)**
+> **[View DEMO (Youtube)](https://youtu.be/ZauPGmckJ1k)**
 
 <div align="center">
   <img src="https://github.com/anilkaracay/TIFA/blob/main/frontend/public/one-pager.png?raw=true" alt="TIFA One Pager" width="100%" />
