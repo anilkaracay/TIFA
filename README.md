@@ -27,6 +27,8 @@
 ## Executive Summary: The One Pager
 
 > **📄 [View Full Pitch Deck (DocSend)](https://docsend.com/v/dn22h/tifa)**
+<p/>
+
 > **[View DEMO (Youtube)](https://youtu.be/ZauPGmckJ1k)**
 
 <div align="center">
